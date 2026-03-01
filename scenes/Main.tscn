@@ -11,12 +11,15 @@
 [ext_resource type="AudioStream" uid="uid://b1h0hsbf5yxji" path="res://assets/sound/UI/UI Game Launch Sting/Game Launch Sting.ogg" id="9_ketwq"]
 [ext_resource type="PackedScene" uid="uid://bmp7qk2xnj5vy" path="res://scenes/menu/MultiplayerMenu.tscn" id="10_mpmenu"]
 [ext_resource type="PackedScene" uid="uid://bj7vvqjer0u7e" path="res://scenes/menu/PlayerListOverlay.tscn" id="11_plyrovly"]
-[ext_resource type="PackedScene" uid="uid://cdw3l0qfrg837" path="res://scenes/menu/RaceHUD.tscn" id="12_racehud"]
+[ext_resource type="PackedScene" uid="uid://cdw3l0qfrg837" path="res://scenes/util/RaceHUD.tscn" id="12_racehud"]
 [ext_resource type="PackedScene" path="res://scenes/menu/VictoryScreen.tscn" id="13_victory"]
 [ext_resource type="PackedScene" path="res://scenes/menu/ServerConsoleOverlay.tscn" id="14_srvcon"]
 [ext_resource type="PackedScene" uid="uid://cp2i85wd6xow4" path="res://scenes/menu/ExhibitMapOverlay.tscn" id="15_mapovly"]
 [ext_resource type="PackedScene" uid="uid://fiwhbl6v82c0" path="res://scenes/menu/JournalOverlay.tscn" id="16_ft6cd"]
 [ext_resource type="PackedScene" path="res://scenes/menu/GuestbookOverlay.tscn" id="17_bb450"]
+[ext_resource type="PackedScene" path="res://scenes/menu/VoteHUD.tscn" id="18_votehud"]
+[ext_resource type="PackedScene" uid="uid://crh1ugdfaifsn" path="res://scenes/items/StartLine.tscn" id="19_nfivy"]
+[ext_resource type="PackedScene" path="res://scenes/items/FriendsPlaque.tscn" id="20_1nqs0"]
 
 [node name="Main" type="Node" unique_id=557895252]
 script = ExtResource("1_d7g3n")
@@ -98,6 +101,8 @@ unique_name_in_owner = true
 visible = false
 
 [node name="RaceHUD" parent="TabMenu" unique_id=1376436483 instance=ExtResource("12_racehud")]
+
+[node name="VoteHUD" parent="TabMenu" unique_id=793413369 instance=ExtResource("18_votehud")]
 unique_name_in_owner = true
 
 [node name="ServerConsoleOverlay" parent="TabMenu" unique_id=1406783071 instance=ExtResource("14_srvcon")]
@@ -115,6 +120,13 @@ visible = false
 
 [node name="GuestbookOverlay" parent="TabMenu" unique_id=1573667143 instance=ExtResource("17_bb450")]
 unique_name_in_owner = true
+visible = false
+
+[node name="StartLine" parent="." unique_id=2087091294 instance=ExtResource("19_nfivy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.051032305, 4.035794, 22.947592)
+
+[node name="FriendsPlaque" parent="." unique_id=499791419 instance=ExtResource("20_1nqs0")]
+transform = Transform3D(-0.9999393, 0, -0.0110128205, 0, 1, 0, 0.0110128205, 0, -0.9999393, -0.009682357, 9.944638, 41.95)
 visible = false
 
 [connection signal="resume" from="MenuLayer/Settings" to="." method="_on_settings_back"]

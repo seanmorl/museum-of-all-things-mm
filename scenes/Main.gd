@@ -354,8 +354,10 @@ func _on_start_race_pressed() -> void:
 		return
 
 	if NetworkManager.is_server():
-		_debug_log("Main: Fetching random article for race...")
-		ExhibitFetcher.fetch_random_level4({ "race": true })
+		_debug_log("Main: Fetching random articles for race vote...")
+		_race_candidates.clear()
+		for i in RaceManager.CANDIDATE_COUNT:
+			ExhibitFetcher.fetch_random_level4({ "race": true, "race_role": "candidate" })
 	else:
 		_debug_log("Main: Sending _request_race_start RPC to server (my id: %d, multiplayer active: %s)" % [multiplayer.get_unique_id(), NetworkManager.is_multiplayer_active()])
 		_request_race_start.rpc_id(1)
@@ -368,9 +370,14 @@ func _request_race_start() -> void:
 		return
 	if RaceManager.is_race_active():
 		return
-	_debug_log("Main: Race start requested by peer, fetching random article...")
-	ExhibitFetcher.fetch_random_level4({ "race": true })
+	_debug_log("Main: Race start requested by peer, fetching random articles for vote...")
+	_race_candidates.clear()
+	for i in RaceManager.CANDIDATE_COUNT:
+		ExhibitFetcher.fetch_random_level4({ "race": true, "race_role": "candidate" })
 
+
+## Collects random articles for the vote candidates.
+var _race_candidates: Array = []
 
 func _on_random_article_complete(title: String, context: Dictionary) -> void:
 	if not context or not context.has("race") or not context.race:
@@ -379,21 +386,27 @@ func _on_random_article_complete(title: String, context: Dictionary) -> void:
 	if title == null or title == "":
 		Log.error("Main", "Failed to fetch random article for race")
 		return
-	_debug_log("Main: Starting race to '%s'" % title)
-	RaceManager.start_race(title)
+
+	_race_candidates.append(title)
+	_debug_log("Main: Got race candidate '%s' (%d/%d)" % [title, _race_candidates.size(), RaceManager.CANDIDATE_COUNT])
+	if _race_candidates.size() >= RaceManager.CANDIDATE_COUNT:
+		RaceManager.begin_vote(_race_candidates.duplicate())
+		_race_candidates.clear()
 
 
-func _on_race_started(target_article: String) -> void:
-	_debug_log("Main: Race started, teleporting to lobby")
+func _on_race_started(target_article: String, start_article: String) -> void:
+	_debug_log("Main: Race started, sending all players to '%s'" % start_article)
 	if _player == null:
 		return
 	_menu_controller.close_menus()
 
-	# Teleport local player to starting point
-	_player.position = starting_point
-
-	# Reset to lobby
+	# Reset to lobby first
 	_museum.reset_to_lobby()
+
+	# Open the search door to the starting exhibit for all players
+	if start_article != "":
+		UIEvents.emit_set_custom_door(start_article)
+		_sync_race_start_article.rpc(start_article)
 
 	# Start game (close menus, capture mouse)
 	_start_game()
@@ -638,3 +651,11 @@ func _eat_anim_cancel_sync(peer_id: int) -> void:
 func _reaction_sync(peer_id: int, reaction_index: int, target: Vector3) -> void:
 	if peer_id != NetworkManager.get_unique_id():
 		_pointing_controller.spawn_reaction(reaction_index, target)
+
+## Syncs the race starting exhibit to all non-server peers so they also
+## open the search door and load the starting article.
+@rpc("authority", "call_remote", "reliable")
+func _sync_race_start_article(start_article: String) -> void:
+	_museum.reset_to_lobby()
+	UIEvents.emit_set_custom_door(start_article)
+	_start_game()

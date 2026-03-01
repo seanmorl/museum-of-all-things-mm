@@ -1,20 +1,15 @@
 extends Node
 
-signal race_started(target_article: String, start_article: String)
+signal race_started(target_article: String)
 signal race_ended(winner_peer_id: int, winner_name: String)
 signal race_cancelled
 ## Emitted every second while a race is active. Connect to update a HUD timer.
 signal race_timer_updated(elapsed_seconds: float)
-## Emitted on all peers when a vote round begins.
-signal vote_started(candidates: Array)
-## Emitted on all peers when vote results are in, just before race_started.
-signal vote_ended(winner: String)
 
 enum State { IDLE, ACTIVE }
 
 var _state: State = State.IDLE
 var _target_article: String = ""
-var _start_article: String = ""
 var _winner_peer_id: int = -1
 var _winner_name: String = ""
 
@@ -27,29 +22,12 @@ var _elapsed_time: float = 0.0
 ## Accumulated time for the once-per-second signal emit.
 var _timer_signal_accumulator: float = 0.0
 
-# --- Voting ---
-## Candidate articles shown to players to vote for start exhibit.
-var _vote_candidates: Array = []
-## peer_id -> candidate index voted for.
-var _votes: Dictionary = {}
-## Seconds remaining in the vote window.
-var _vote_timer: float = 0.0
-var _vote_active: bool = false
-const VOTE_DURATION: float = 30.0
-const CANDIDATE_COUNT: int = 5
-
 func _ready() -> void:
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
 	NetworkManager.peer_connected.connect(_on_peer_connected)
 
 
 func _process(delta: float) -> void:
-	if _vote_active:
-		_vote_timer -= delta
-		if _vote_timer <= 0.0 and NetworkManager.is_server():
-			_finish_vote()
-		return
-
 	if _state != State.ACTIVE:
 		return
 
@@ -68,9 +46,6 @@ func is_race_active() -> bool:
 func get_target_article() -> String:
 	return _target_article
 
-func get_start_article() -> String:
-	return _start_article
-
 func get_state() -> State:
 	return _state
 
@@ -85,90 +60,7 @@ func get_elapsed_time_string() -> String:
 	var secs: int = int(_elapsed_time)
 	return "%02d:%02d" % [secs / 60, secs % 60]
 
-## Called by server once candidates are ready. Winner becomes the race target.
-func begin_vote(candidates: Array) -> void:
-	if not NetworkManager.is_server():
-		return
-	_vote_candidates = candidates
-	_votes.clear()
-	_vote_active = true
-	_vote_timer = VOTE_DURATION
-	_sync_vote_start.rpc(candidates)
-
-## Called by any peer to cast or change their vote (index into candidates array).
-func cast_vote(candidate_index: int) -> void:
-	if not _vote_active:
-		return
-	if NetworkManager.is_server():
-		_receive_vote(multiplayer.get_unique_id(), candidate_index)
-	else:
-		_send_vote.rpc_id(1, candidate_index)
-
-func _finish_vote() -> void:
-	if not _vote_active:
-		return
-	_vote_active = false
-	# Tally votes
-	var tally: Dictionary = {}
-	for idx in range(_vote_candidates.size()):
-		tally[idx] = 0
-	for pid in _votes:
-		var v: int = _votes[pid]
-		if tally.has(v):
-			tally[v] += 1
-	# Find winner (random tiebreak)
-	var max_votes: int = 0
-	for idx in tally:
-		if tally[idx] > max_votes:
-			max_votes = tally[idx]
-	var winners: Array = []
-	for idx in tally:
-		if tally[idx] == max_votes:
-			winners.append(idx)
-	winners.shuffle()
-	var winning_idx: int = winners[0]
-	var winning_article: String = _vote_candidates[winning_idx]
-	if OS.is_debug_build():
-		print("RaceManager: Vote ended, target: ", winning_article)
-	_sync_vote_end.rpc(winning_idx)
-	start_race(winning_article, "")
-
-func get_vote_candidates() -> Array:
-	return _vote_candidates
-
-func get_vote_time_remaining() -> float:
-	return _vote_timer
-
-func is_vote_active() -> bool:
-	return _vote_active
-
-@rpc("authority", "call_local", "reliable")
-func _sync_vote_start(candidates: Array) -> void:
-	_vote_candidates = candidates
-	_votes.clear()
-	_vote_active = true
-	_vote_timer = VOTE_DURATION
-	vote_started.emit(candidates)
-
-@rpc("authority", "call_local", "reliable")
-func _sync_vote_end(winning_idx: int) -> void:
-	_vote_active = false
-	vote_ended.emit(_vote_candidates[winning_idx])
-
-@rpc("any_peer", "call_remote", "reliable")
-func _send_vote(candidate_index: int) -> void:
-	if not NetworkManager.is_server():
-		return
-	_receive_vote(multiplayer.get_remote_sender_id(), candidate_index)
-
-func _receive_vote(peer_id: int, candidate_index: int) -> void:
-	if candidate_index < 0 or candidate_index >= _vote_candidates.size():
-		return
-	_votes[peer_id] = candidate_index
-	if OS.is_debug_build():
-		print("RaceManager: Vote from peer ", peer_id, " for ", _vote_candidates[candidate_index])
-
-func start_race(target_article: String, start_article: String) -> void:
+func start_race(target_article: String) -> void:
 	if not NetworkManager.is_server():
 		Log.error("RaceManager", "Only the host can start a race")
 		return
@@ -178,7 +70,6 @@ func start_race(target_article: String, start_article: String) -> void:
 		return
 
 	_target_article = target_article
-	_start_article = start_article
 	_state = State.ACTIVE
 	_winner_peer_id = -1
 	_winner_name = ""
@@ -189,8 +80,8 @@ func start_race(target_article: String, start_article: String) -> void:
 	if OS.is_debug_build():
 		print("RaceManager: Starting race to find '", target_article, "'")
 
-	_sync_race_start.rpc(target_article, start_article, _race_start_time)
-	race_started.emit(target_article, start_article)
+	_sync_race_start.rpc(target_article, _race_start_time)
+	race_started.emit(target_article)
 
 func notify_article_reached(peer_id: int, article_title: String) -> void:
 	if _state != State.ACTIVE:
@@ -211,7 +102,6 @@ func _handle_win(peer_id: int) -> void:
 	_state = State.IDLE
 	_winner_peer_id = peer_id
 	_winner_name = NetworkManager.get_player_name(peer_id)
-	_start_article = ""
 
 	var final_time: float = _elapsed_time
 	_elapsed_time = 0.0
@@ -230,7 +120,6 @@ func cancel_race() -> void:
 	if NetworkManager.is_server():
 		_state = State.IDLE
 		_target_article = ""
-		_start_article = ""
 		_winner_peer_id = -1
 		_winner_name = ""
 		_elapsed_time = 0.0
@@ -246,12 +135,11 @@ func _on_server_disconnected() -> void:
 
 func _on_peer_connected(peer_id: int) -> void:
 	if NetworkManager.is_server() and _state == State.ACTIVE:
-		_sync_race_state_to_peer.rpc_id(peer_id, _target_article, _start_article, _race_start_time)
+		_sync_race_state_to_peer.rpc_id(peer_id, _target_article, _race_start_time)
 
 @rpc("authority", "call_local", "reliable")
-func _sync_race_start(target_article: String, start_article: String, start_time: float) -> void:
+func _sync_race_start(target_article: String, start_time: float) -> void:
 	_target_article = target_article
-	_start_article = start_article
 	_state = State.ACTIVE
 	_winner_peer_id = -1
 	_winner_name = ""
@@ -264,7 +152,7 @@ func _sync_race_start(target_article: String, start_article: String, start_time:
 		print("RaceManager: Race started, target: ", target_article)
 
 	if not NetworkManager.is_server():
-		race_started.emit(target_article, start_article)
+		race_started.emit(target_article)
 
 @rpc("authority", "call_local", "reliable")
 func _sync_race_end(winner_peer_id: int, winner_name: String, final_time: float) -> void:
@@ -284,7 +172,6 @@ func _sync_race_end(winner_peer_id: int, winner_name: String, final_time: float)
 func _sync_race_cancel() -> void:
 	_state = State.IDLE
 	_target_article = ""
-	_start_article = ""
 	_winner_peer_id = -1
 	_winner_name = ""
 	_elapsed_time = 0.0
@@ -294,9 +181,8 @@ func _sync_race_cancel() -> void:
 		race_cancelled.emit()
 
 @rpc("authority", "call_remote", "reliable")
-func _sync_race_state_to_peer(target_article: String, start_article: String, start_time: float) -> void:
+func _sync_race_state_to_peer(target_article: String, start_time: float) -> void:
 	_target_article = target_article
-	_start_article = start_article
 	_state = State.ACTIVE
 	_winner_peer_id = -1
 	_winner_name = ""
@@ -308,7 +194,7 @@ func _sync_race_state_to_peer(target_article: String, start_article: String, sta
 	if OS.is_debug_build():
 		print("RaceManager: Late join - synced to race for '", target_article, "' (already ", "%.1f" % _elapsed_time, "s in)")
 
-	race_started.emit(target_article, start_article)
+	race_started.emit(target_article)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_win_validation(peer_id: int, article_title: String) -> void:

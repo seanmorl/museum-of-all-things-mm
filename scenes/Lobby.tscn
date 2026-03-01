@@ -28,6 +28,7 @@
 [ext_resource type="PackedScene" uid="uid://c5wpeqr3s3lw4" path="res://scenes/items/Sign.tscn" id="28_v471r"]
 [ext_resource type="PackedScene" uid="uid://brfwcf0et4c42" path="res://scenes/items/LobbyInfo.tscn" id="29_fj722"]
 [ext_resource type="Texture2D" uid="uid://crmsq8a4sjtb8" path="res://assets/logo/moat_logo_large.png" id="29_kkkm5"]
+[ext_resource type="PackedScene" path="res://scenes/items/SimpleLeaderboard.tscn" id="40_slb"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_rlv5a"]
 size = Vector3(5, 5, 5)
@@ -353,3 +354,6 @@ text = "[b]Museum Exhibits[/b]
 Furthermore, each exhibit contains many hallways connecting it to other exhibits. These hallways are determined based on the links in the current exhibit's Wikipedia article. You can move from exhibit to exhibit endlessly, following your curiosity.
 
 If you prefer to go straight to a particular subject, you may access the search terminal, at the end of the entry hall directly behind you. Simply enter your topic of interest into the terminal's interface, and it will create a hallway for you to walk straight there.[/fill]"
+
+[node name="SimpleLeaderboard" parent="." instance=ExtResource("40_slb")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 13, 41)
