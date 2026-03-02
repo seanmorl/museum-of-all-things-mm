@@ -35,7 +35,7 @@ var _votes: Dictionary = {}
 ## Seconds remaining in the vote window.
 var _vote_timer: float = 0.0
 var _vote_active: bool = false
-const VOTE_DURATION: float = 30.0
+const VOTE_DURATION: float = 15.0
 const CANDIDATE_COUNT: int = 5
 
 func _ready() -> void:
@@ -131,7 +131,20 @@ func _finish_vote() -> void:
 	if OS.is_debug_build():
 		print("RaceManager: Vote ended, target: ", winning_article)
 	_sync_vote_end.rpc(winning_idx)
-	start_race(winning_article, "")
+
+	_target_article = winning_article
+
+	## request a random starting article
+	ExhibitFetcher.random_complete.connect(_on_start_article_fetched, CONNECT_ONE_SHOT)
+	ExhibitFetcher.fetch_random_level4({ "race": true, "race_role": "start" })
+
+func _on_start_article_fetched(title: String, context: Dictionary) -> void:
+	if not context.get("race_role", "") == "start":
+		return
+	print("Received random start article: ", title)
+	print("The target article is still: ", _target_article)
+	var start_article: String = title if title else "Happy Meal"
+	start_race(_target_article, start_article)
 
 func get_vote_candidates() -> Array:
 	return _vote_candidates

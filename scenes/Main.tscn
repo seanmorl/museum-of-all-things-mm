@@ -123,7 +123,7 @@ unique_name_in_owner = true
 visible = false
 
 [node name="StartLine" parent="." unique_id=2087091294 instance=ExtResource("19_nfivy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.051032305, 4.035794, 22.947592)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.051032305, 4.035794, 23.076677)
 
 [node name="FriendsPlaque" parent="." unique_id=499791419 instance=ExtResource("20_1nqs0")]
 transform = Transform3D(-0.9999393, 0, -0.0110128205, 0, 1, 0, 0.0110128205, 0, -0.9999393, -0.009682357, 9.944638, 41.95)

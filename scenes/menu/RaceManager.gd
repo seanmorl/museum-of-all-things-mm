@@ -69,6 +69,8 @@ func start_race(target_article: String) -> void:
 		Log.error("RaceManager", "Race already active")
 		return
 
+	print("At this point (start_race) the target article is: ", target_article)
+
 	_target_article = target_article
 	_state = State.ACTIVE
 	_winner_peer_id = -1
