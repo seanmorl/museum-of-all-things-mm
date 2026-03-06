@@ -1,9 +1,28 @@
-.godot
-dist/
+# Godot 4 generated files
+.godot/
+
+# Godot 3 generated files
+.import/
 *.import
 *.translation
+
+# Export/build output
+dist/
+export/
+Test Export/
+
+# Mono/C# (if applicable)
 .mono/
-CLAUDE.md
+data_*/
+mono_crash.*.json
+
+# OS/IDE files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
 # Flatpak
 .flatpak-builder/
 repo/
@@ -11,5 +30,5 @@ repo/
 # CI
 tools/
 
-# ignore build files
-Test Export/
+# Project-specific
+CLAUDE.md
