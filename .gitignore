@@ -11,5 +11,5 @@ repo/
 # CI
 tools/
 
-# Export Folder
+# ignore build files
 Test Export/
