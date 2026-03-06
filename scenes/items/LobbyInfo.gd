@@ -10,6 +10,8 @@ func _ready() -> void:
 		SettingsEvents.language_changed.connect(_generate_mipmaps)
 		
 func _exit_tree() -> void:
+	if Engine.is_editor_hint():
+		return
 	if SettingsEvents.language_changed.is_connected(_generate_mipmaps):
 		SettingsEvents.language_changed.disconnect(_generate_mipmaps)
 

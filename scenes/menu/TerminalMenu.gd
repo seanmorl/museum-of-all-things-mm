@@ -2,9 +2,6 @@ extends Control
 
 signal resume
 
-## True only when this terminal initiated a fetch, so we ignore race/other fetches.
-var _waiting_for_result: bool = false
-
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	UIEvents.open_terminal_menu.connect(reset)
@@ -19,7 +16,6 @@ func _resume() -> void:
 	resume.emit()
 
 func reset() -> void:
-	_waiting_for_result = false
 	$MarginContainer/StartPage/RandomExhibit.disabled = false
 	$MarginContainer/SearchPage/SearchExhibit.disabled = false
 	_switch_to_page("StartPage")
@@ -38,7 +34,6 @@ func _go_to_search_page() -> void:
 func _get_random_page() -> void:
 	$MarginContainer/StartPage/RandomExhibit.disabled = true
 	UIEvents.emit_reset_custom_door()
-	_waiting_for_result = true
 	ExhibitFetcher.fetch_random(null)
 
 func _handle_accept() -> void:
@@ -49,14 +44,9 @@ func _search_exhibit() -> void:
 	var search_text = $MarginContainer/SearchPage/ExhibitTitle.text
 	if len(search_text) > 0:
 		$MarginContainer/SearchPage/SearchExhibit.disabled = true
-		_waiting_for_result = true
 		ExhibitFetcher.fetch_search($MarginContainer/SearchPage/ExhibitTitle.text, null)
 
 func _show_page_result(page: Variant, _ctx: Variant) -> void:
-	# Ignore fetches not initiated by this terminal (e.g. race article fetches)
-	if not _waiting_for_result:
-		return
-	_waiting_for_result = false
 	$MarginContainer/SearchPage/ExhibitTitle.text = ""
 	_on_terminal_result_ready(not page, page)
 
@@ -67,6 +57,10 @@ func _on_terminal_result_ready(error: bool, page: String) -> void:
 	else:
 		_switch_to_page("ResultPage")
 		UIEvents.emit_set_custom_door(page)
+		# Sync the custom door to all multiplayer peers
+		var main := get_tree().get_first_node_in_group("main")
+		if main and main.has_method("sync_custom_door"):
+			main.sync_custom_door(page)
 		$MarginContainer/ResultPage/ResultLabel.text = "Exhibit Found: \"%s\"" % page
 		$MarginContainer/ResultPage/Reset.grab_focus()
 

@@ -151,6 +151,10 @@ layout_mode = 2
 [node name="Spacer2" type="Label" parent="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent" unique_id=1373460283]
 layout_mode = 2
 
+[node name="DarkMode" type="Button" parent="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent"]
+layout_mode = 2
+text = "☾  Dark Mode"
+
 [node name="AskQuit" type="Button" parent="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent" unique_id=19863420]
 unique_name_in_owner = true
 layout_mode = 2
@@ -166,3 +170,4 @@ text = "Quit"
 [connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent/Lobby" to="." method="_on_lobby_pressed"]
 [connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent/Settings" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent/AskQuit" to="." method="_on_ask_quit_pressed"]
+[connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent/DarkMode" to="." method="_on_dark_mode_pressed"]

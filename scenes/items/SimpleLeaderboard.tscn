@@ -4,7 +4,6 @@
 [ext_resource type="FontFile" uid="uid://bxph8sc2vndn" path="res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf" id="2_serif"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_frame"]
-custom_aabb = AABB(0, 0, -0.135, 0, 0, 0)
 size = Vector3(5.4, 3.6, 0.08)
 subdivide_width = 331
 
@@ -22,6 +21,7 @@ shading_mode = 0
 size = Vector3(5.4, 3.6, 0.1)
 
 [node name="SimpleLeaderboard" type="Node3D" unique_id=963879042]
+visible = false
 script = ExtResource("1_script")
 
 [node name="Frame" type="MeshInstance3D" parent="." unique_id=1985069130]

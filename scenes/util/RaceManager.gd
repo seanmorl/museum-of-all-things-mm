@@ -15,6 +15,7 @@ enum State { IDLE, ACTIVE }
 var _state: State = State.IDLE
 var _target_article: String = ""
 var _start_article: String = ""
+var _vote_start_article: String = ""
 var _winner_peer_id: int = -1
 var _winner_name: String = ""
 
@@ -35,7 +36,7 @@ var _votes: Dictionary = {}
 ## Seconds remaining in the vote window.
 var _vote_timer: float = 0.0
 var _vote_active: bool = false
-const VOTE_DURATION: float = 15.0
+const VOTE_DURATION: float = 20.0
 const CANDIDATE_COUNT: int = 5
 
 func _ready() -> void:
@@ -86,10 +87,11 @@ func get_elapsed_time_string() -> String:
 	return "%02d:%02d" % [secs / 60, secs % 60]
 
 ## Called by server once candidates are ready. Winner becomes the race target.
-func begin_vote(candidates: Array) -> void:
+func begin_vote(candidates: Array, start_article: String = "") -> void:
 	if not NetworkManager.is_server():
 		return
 	_vote_candidates = candidates
+	_vote_start_article = start_article
 	_votes.clear()
 	_vote_active = true
 	_vote_timer = VOTE_DURATION
@@ -131,20 +133,7 @@ func _finish_vote() -> void:
 	if OS.is_debug_build():
 		print("RaceManager: Vote ended, target: ", winning_article)
 	_sync_vote_end.rpc(winning_idx)
-
-	_target_article = winning_article
-
-	## request a random starting article
-	ExhibitFetcher.random_complete.connect(_on_start_article_fetched, CONNECT_ONE_SHOT)
-	ExhibitFetcher.fetch_random_level4({ "race": true, "race_role": "start" })
-
-func _on_start_article_fetched(title: String, context: Dictionary) -> void:
-	if not context.get("race_role", "") == "start":
-		return
-	print("Received random start article: ", title)
-	print("The target article is still: ", _target_article)
-	var start_article: String = title if title else "Happy Meal"
-	start_race(_target_article, start_article)
+	start_race(winning_article, _vote_start_article)
 
 func get_vote_candidates() -> Array:
 	return _vote_candidates

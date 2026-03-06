@@ -31,24 +31,37 @@ func _on_skin_image_loaded(url: String, texture: ImageTexture, _ctx: Variant) ->
 
 func _apply_skin_texture(texture: ImageTexture) -> void:
 	_skin_texture = texture
-	if not _player or not _player.has_method("get_owned_body_material"):
+	if not _player:
 		return
 
-	var material: Material = _player.get_owned_body_material()
-	if material and material is ShaderMaterial:
-		material.set_shader_parameter("texture_albedo", texture)
-		material.set_shader_parameter("has_texture", true)
+	if _player.has_method("get_owned_body_material"):
+		var body_mat: Material = _player.get_owned_body_material()
+		if body_mat and body_mat is ShaderMaterial:
+			body_mat.set_shader_parameter("texture_albedo", texture)
+			body_mat.set_shader_parameter("has_texture", true)
+
+	if _player.has_method("get_owned_head_material"):
+		var head_mat: Material = _player.get_owned_head_material()
+		if head_mat and head_mat is ShaderMaterial:
+			head_mat.set_shader_parameter("texture_albedo", texture)
+			head_mat.set_shader_parameter("has_texture", true)
 
 
 func clear_player_skin() -> void:
 	skin_url = ""
 	_skin_texture = null
-	if not _player or not _player.has_method("get_owned_body_material"):
+	if not _player:
 		return
 
-	var material: Material = _player.get_owned_body_material()
-	if material and material is ShaderMaterial:
-		material.set_shader_parameter("has_texture", false)
+	if _player.has_method("get_owned_body_material"):
+		var body_mat: Material = _player.get_owned_body_material()
+		if body_mat and body_mat is ShaderMaterial:
+			body_mat.set_shader_parameter("has_texture", false)
+
+	if _player.has_method("get_owned_head_material"):
+		var head_mat: Material = _player.get_owned_head_material()
+		if head_mat and head_mat is ShaderMaterial:
+			head_mat.set_shader_parameter("has_texture", false)
 
 
 func get_skin_url() -> String:

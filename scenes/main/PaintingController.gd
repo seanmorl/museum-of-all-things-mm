@@ -91,7 +91,8 @@ func _apply_steal(peer_id: int, exhibit_title: String, image_title: String, imag
 		# If texture wasn't available locally, request it from DataManager
 		if not texture and image_url != "":
 			var cb: Callable = _on_carry_image_loaded.bind(player, image_url)
-			DataManager.loaded_image.connect(cb)
+			if not DataManager.loaded_image.is_connected(cb):
+				DataManager.loaded_image.connect(cb, CONNECT_ONE_SHOT)
 			DataManager.request_image(image_url)
 
 
@@ -229,7 +230,8 @@ func _create_placed_painting(wall_position: Vector3, wall_normal: Vector3, image
 		material.set_shader_parameter("texture_albedo", texture)
 	elif not texture and image_url != "":
 		var cb: Callable = _on_placed_painting_image_loaded.bind(painting, material, image_url)
-		DataManager.loaded_image.connect(cb)
+		if not DataManager.loaded_image.is_connected(cb):
+			DataManager.loaded_image.connect(cb, CONNECT_ONE_SHOT)
 		DataManager.request_image(image_url)
 
 	painting.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -292,8 +294,10 @@ func _create_placed_painting(wall_position: Vector3, wall_normal: Vector3, image
 
 func _on_carry_image_loaded(url: String, image: Texture2D, _ctx: Variant, player: Node, target_url: String) -> void:
 	if url != Util.normalize_url(target_url):
+		# URL didn't match - re-register for next signal (CONNECT_ONE_SHOT consumed it)
+		var cb: Callable = _on_carry_image_loaded.bind(player, target_url)
+		DataManager.loaded_image.connect(cb, CONNECT_ONE_SHOT)
 		return
-	DataManager.loaded_image.disconnect(_on_carry_image_loaded.bind(player, target_url))
 	if is_instance_valid(player) and "_painting_system" in player and player._painting_system:
 		if player._painting_system._carry_material is ShaderMaterial:
 			player._painting_system._carry_material.set_shader_parameter("texture_albedo", image)
@@ -302,10 +306,13 @@ func _on_carry_image_loaded(url: String, image: Texture2D, _ctx: Variant, player
 
 func _on_placed_painting_image_loaded(url: String, image: Texture2D, _ctx: Variant, painting: MeshInstance3D, material: Material, target_url: String) -> void:
 	if url != Util.normalize_url(target_url):
+		# URL didn't match - re-register for next signal (CONNECT_ONE_SHOT consumed it)
+		if is_instance_valid(painting):
+			var cb: Callable = _on_placed_painting_image_loaded.bind(painting, material, target_url)
+			DataManager.loaded_image.connect(cb, CONNECT_ONE_SHOT)
 		return
 	if is_instance_valid(painting) and is_instance_valid(material) and material is ShaderMaterial:
 		material.set_shader_parameter("texture_albedo", image)
-	DataManager.loaded_image.disconnect(_on_placed_painting_image_loaded.bind(painting, material, target_url))
 
 
 # =============================================================================

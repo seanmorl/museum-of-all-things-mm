@@ -4,7 +4,7 @@ class_name MultiplayerMenu
 signal back
 signal start_game
 
-static var default_server_address := "frogwizard.online"
+static var default_server_address := "responsible-interactions.gl.at.ply.gg:18964"
 const DEFAULT_HOST_NAME := "Host"
 const DEFAULT_PLAYER_NAME := "Player"
 
@@ -36,6 +36,12 @@ func _ready() -> void:
 	NetworkManager.connection_failed.connect(_on_connection_failed)
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
 
+	# When the server notifies us the game is already running,
+	# Main.gd emits multiplayer_started — we listen here to close
+	# the lobby and enter the game without waiting for a Start button press.
+	MultiplayerEvents.multiplayer_started.connect(_on_multiplayer_started)
+
+	_load_saved_names()
 	_show_state(MenuState.MAIN)
 
 func _on_visibility_changed() -> void:
@@ -85,8 +91,9 @@ func _on_host_pressed() -> void:
 
 func _on_join_pressed() -> void:
 	_show_state(MenuState.JOIN)
-	_join_address_input.text = default_server_address
-	_join_port_input.text = str(NetworkManager.DEFAULT_PORT)
+	_join_address_input.text = default_server_address  # paste "host:port" directly
+	_join_address_input.placeholder_text = "host:port  or  hostname"
+	_join_port_input.text = ""  # not needed when address contains the port
 	_join_name_input.text = DEFAULT_PLAYER_NAME
 
 func _on_back_pressed() -> void:
@@ -104,6 +111,7 @@ func _on_host_start_pressed() -> void:
 
 	NetworkManager.set_local_player_name(_host_name_input.text)
 	NetworkManager.set_local_player_color(_host_color_picker.color)
+	_save_names(_host_name_input.text, _host_color_picker.color)
 	var error = NetworkManager.host_game(port)
 	if error != OK:
 		_show_error("Failed to start server: " + str(error))
@@ -119,25 +127,56 @@ func _on_host_back_pressed() -> void:
 
 # Join menu buttons
 func _on_join_connect_pressed() -> void:
-	var address = _join_address_input.text
-	var port = int(_join_port_input.text)
+	var raw: String = _join_address_input.text.strip_edges()
+
+	if raw.is_empty():
+		_show_error("Please enter an address")
+		return
+
+	# Support pasting the full playit.gg address directly as "hostname:port"
+	# e.g. "among-enabling.gl.at.ply.gg:18854"
+	# Split on the LAST colon so IPv6 addresses still work.
+	var address: String
+	var port: int
+
+	if ":" in raw and not raw.begins_with("["):
+		var colon := raw.rfind(":")
+		address = raw.substr(0, colon).strip_edges()
+		port    = int(raw.substr(colon + 1).strip_edges())
+	else:
+		address = raw
+		port    = int(_join_port_input.text)
 
 	if address.is_empty():
 		_show_error("Please enter an address")
 		return
 
 	if port <= 0 or port > 65535:
-		_show_error("Invalid port number")
+		_show_error("Invalid port number (got %d)" % port)
 		return
 
 	NetworkManager.set_local_player_name(_join_name_input.text)
 	NetworkManager.set_local_player_color(_join_color_picker.color)
-	var error = NetworkManager.join_game(address, port)
+	_save_names(_join_name_input.text, _join_color_picker.color)
+
+	# Show a connecting indicator while DNS resolves (can take ~1-2 seconds)
+	%JoinConnectButton.disabled = true
+	_error_label.text    = "Resolving %s…" % address
+	_error_label.visible = true
+	_error_label.modulate = Color(0.7, 0.7, 0.7, 1.0)
+
+	# join_game uses await internally for async DNS — must await here or
+	# the return value is a coroutine object, not an Error code.
+	var error: Error = await NetworkManager.join_game(address, port)
+
+	%JoinConnectButton.disabled = false
+	_error_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
+
 	if error != OK:
-		_show_error("Failed to connect: " + str(error))
+		_show_error("Failed to connect: " + error_string(error))
 		return
 
-	# Wait for connection result - will be handled by signals
+	# Connection pending — result handled by _on_connection_succeeded / _on_connection_failed
 
 func _on_join_back_pressed() -> void:
 	_show_state(MenuState.MAIN)
@@ -168,9 +207,41 @@ func _on_connection_failed() -> void:
 	_show_error("Connection failed")
 	_show_state(MenuState.JOIN)
 
+func show_disconnected_message() -> void:
+	_show_error("Disconnected from host")
+
 func _on_server_disconnected() -> void:
 	_show_error("Disconnected from server")
 	_show_state(MenuState.MAIN)
+
+func _save_names(player_name: String, color: Color) -> void:
+	SettingsManager.save_settings("multiplayer_identity", {
+		"host_name": _host_name_input.text,
+		"join_name": _join_name_input.text,
+		"color": color.to_html()
+	})
+
+func _load_saved_names() -> void:
+	var saved = SettingsManager.get_settings("multiplayer_identity")
+	if not saved or not saved is Dictionary:
+		return
+	if saved.has("host_name") and _host_name_input:
+		_host_name_input.text = saved.host_name
+	if saved.has("join_name") and _join_name_input:
+		_join_name_input.text = saved.join_name
+	if saved.has("color"):
+		var c := Color.html(saved.color)
+		if _host_color_picker:
+			_host_color_picker.color = c
+		if _join_color_picker:
+			_join_color_picker.color = c
+
+func _on_multiplayer_started() -> void:
+	# Fired by Main.gd when the server tells us the game is already running.
+	# Only act if we're a client in the lobby — not if we're the host who
+	# just started their own game (which also emits multiplayer_started).
+	if current_state == MenuState.LOBBY and not NetworkManager.is_server():
+		start_game.emit()
 
 @rpc("authority", "call_local", "reliable")
 func _start_multiplayer_game() -> void:

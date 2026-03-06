@@ -9,6 +9,7 @@ const POSITION_SYNC_INTERVAL: float = 0.05  # 20 updates per second
 
 var _main: Node = null
 var _network_players: Dictionary = {}  # peer_id -> player node
+var _peer_rooms: Dictionary = {}  # peer_id -> current_room (updated every position sync)
 var _is_multiplayer_game: bool = false
 var _position_sync_timer: float = 0.0
 var _server_mode: bool = false
@@ -95,6 +96,7 @@ func remove_network_player(peer_id: int, local_player: Node, mount_state: Dictio
 
 			player_node.queue_free()
 			_network_players.erase(peer_id)
+			_peer_rooms.erase(peer_id)
 
 		# Clear mount state tracking
 		if mount_state.has(peer_id):
@@ -186,18 +188,22 @@ func apply_network_position(peer_id: int, pos: Vector3, rot_y: float, pivot_rot_
 						if can_transition:
 							local_player.current_room = current_room
 
-			# Check if player is in the same room before showing
-			var local_room: String = local_player.current_room if local_player and "current_room" in local_player else "Lobby"
+			# Update live room cache
+			_peer_rooms[peer_id] = current_room
 
-			# For mounted players, also check mount's room in case of sync timing issues
+			# Determine which room to use for visibility check
+			var local_room: String = local_player.current_room if local_player and "current_room" in local_player else "Lobby"
 			var effective_room: String = current_room
 			if is_mounted and mounted_peer_id > 0:
-				var mount_room: String = NetworkManager.get_player_room(mounted_peer_id)
+				var mount_room: String = _peer_rooms.get(mounted_peer_id, NetworkManager.get_player_room(mounted_peer_id))
 				if mount_room != "" and mount_room != current_room:
 					effective_room = mount_room
 
-			# Always show mount if local player is riding them, even if rooms differ
-			if effective_room != local_room and not local_riding_this_player:
+			# Show if same room, or if either party is in a hall (corridor transition)
+			var in_corridor: bool = _is_corridor_room(effective_room) or _is_corridor_room(local_room)
+			var rooms_match: bool = effective_room == local_room
+
+			if not rooms_match and not in_corridor and not local_riding_this_player:
 				net_player.set_body_visible(false)
 				return
 
@@ -231,12 +237,13 @@ func _update_player_visibility(peer_id: int) -> void:
 	if not is_instance_valid(net_player):
 		return
 
-	var remote_room: String = NetworkManager.get_player_room(peer_id)
+	var remote_room: String = _peer_rooms.get(peer_id, NetworkManager.get_player_room(peer_id))
 
 	# If mounted, use mount's room to handle room transition sync timing
 	if "is_mounted" in net_player and net_player.is_mounted:
 		if "mount_peer_id" in net_player and net_player.mount_peer_id > 0:
-			var mount_room: String = NetworkManager.get_player_room(net_player.mount_peer_id)
+			var mount_id: int = net_player.mount_peer_id
+			var mount_room: String = _peer_rooms.get(mount_id, NetworkManager.get_player_room(mount_id))
 			if mount_room != "":
 				remote_room = mount_room
 
@@ -246,7 +253,8 @@ func _update_player_visibility(peer_id: int) -> void:
 		if local_player and "current_room" in local_player:
 			local_room = local_player.current_room
 
-	net_player.set_body_visible(remote_room == local_room)
+	var in_corridor: bool = _is_corridor_room(remote_room) or _is_corridor_room(local_room)
+	net_player.set_body_visible(remote_room == local_room or in_corridor)
 
 
 func update_all_player_visibility(local_player: Node) -> void:
@@ -254,13 +262,21 @@ func update_all_player_visibility(local_player: Node) -> void:
 	for peer_id: int in _network_players:
 		var net_player: Node = _network_players[peer_id]
 		if is_instance_valid(net_player):
-			var remote_room: String = NetworkManager.get_player_room(peer_id)
+			var remote_room: String = _peer_rooms.get(peer_id, NetworkManager.get_player_room(peer_id))
 
 			# If mounted, use mount's room to handle room transition sync timing
 			if "is_mounted" in net_player and net_player.is_mounted:
 				if "mount_peer_id" in net_player and net_player.mount_peer_id > 0:
-					var mount_room: String = NetworkManager.get_player_room(net_player.mount_peer_id)
+					var mount_id: int = net_player.mount_peer_id
+					var mount_room: String = _peer_rooms.get(mount_id, NetworkManager.get_player_room(mount_id))
 					if mount_room != "":
 						remote_room = mount_room
 
-			net_player.set_body_visible(remote_room == local_room)
+			var in_corridor: bool = _is_corridor_room(remote_room) or _is_corridor_room(local_room)
+			net_player.set_body_visible(remote_room == local_room or in_corridor)
+
+
+func _is_corridor_room(room: String) -> bool:
+	## Halls/corridors use names like "ArticleA → ArticleB" or are just "Hall".
+	## While a player is transitioning, keep them visible to avoid pop-in.
+	return room == "" or room == "Lobby" or "Hall" in room or " → " in room

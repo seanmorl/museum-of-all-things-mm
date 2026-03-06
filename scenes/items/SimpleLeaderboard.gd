@@ -8,31 +8,6 @@ var _results: Array = []
 func _ready() -> void:
 	_font = load(FONT_PATH)
 	RaceManager.race_ended.connect(_on_race_ended)
-	RaceManager.race_cancelled.connect(_clear_board)
-	GameplayEvents.return_to_lobby.connect(_clear_board)
-	if get_node_or_null("/root/NetworkManager"):
-		NetworkManager.server_disconnected.connect(_clear_board)
-		NetworkManager.peer_connected.connect(_on_peer_connected)
-	_refresh()
-
-
-func _on_peer_connected(peer_id: int) -> void:
-	# Only the host syncs results to new joiners
-	if not multiplayer.is_server():
-		return
-	if _results.is_empty():
-		return
-	# Serialise results as a JSON string and send to the new peer
-	var data := JSON.stringify(_results)
-	_sync_results.rpc_id(peer_id, data)
-
-
-@rpc("authority", "call_remote", "reliable")
-func _sync_results(data: String) -> void:
-	var parsed = JSON.parse_string(data)
-	if parsed is Array:
-		_results = parsed
-		_refresh()
 
 
 func _on_race_ended(_peer_id: int, winner_name: String) -> void:
@@ -42,11 +17,6 @@ func _on_race_ended(_peer_id: int, winner_name: String) -> void:
 	})
 	if _results.size() > 8:
 		_results = _results.slice(0, 8)
-	_refresh()
-
-
-func _clear_board() -> void:
-	_results.clear()
 	_refresh()
 
 

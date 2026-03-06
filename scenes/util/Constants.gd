@@ -7,7 +7,7 @@ const FLOOR_CARPET := 11
 const FLOOR_MARBLE := 12
 
 # Network
-const DEFAULT_PORT := 7777
+const DEFAULT_PORT := 7777  # Primary port (as requested)
 const MAX_PLAYERS := 8
 
 # Grid

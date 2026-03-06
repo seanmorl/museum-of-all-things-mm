@@ -25,10 +25,19 @@ func _ready() -> void:
 		$Subtitle.modulate = title_color
 		$Subtitle.text = subtitle_text
 		if not Engine.is_editor_hint():
-			SettingsEvents.language_changed.connect(_resize_text)
-			_resize_text()
+			call_deferred("_connect_language")
+		_resize_text()
+
+func _connect_language() -> void:
+	if Engine.is_editor_hint():
+		return
+	SettingsEvents.language_changed.connect(_resize_text)
+	_resize_text()
+
 
 func _exit_tree() -> void:
+	if Engine.is_editor_hint():
+		return
 	if SettingsEvents.language_changed.is_connected(_resize_text):
 		SettingsEvents.language_changed.disconnect(_resize_text)
 

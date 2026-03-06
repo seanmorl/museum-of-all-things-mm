@@ -2,35 +2,156 @@
 
 [ext_resource type="Script" uid="uid://dqky84kumckns" path="res://scenes/menu/RaceHUD.gd" id="1_racehud"]
 [ext_resource type="Theme" uid="uid://dgt5fjkytx07d" path="res://assets/resources/menu_theme.tres" id="2_theme"]
+[ext_resource type="FontFile" uid="uid://bxph8sc2vndn" path="res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf" id="3_serif"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_timer"]
+font = ExtResource("3_serif")
+font_size = 48
+font_color = Color(0, 0, 0, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_target"]
-font_size = 32
+font = ExtResource("3_serif")
+font_size = 20
+font_color = Color(0.2, 0.2, 0.2, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_win"]
+font = ExtResource("3_serif")
+font_size = 28
+font_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(1, 1, 1, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.635, 0.663, 0.694, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+content_margin_left = 14.0
+content_margin_top = 12.0
+content_margin_right = 14.0
+content_margin_bottom = 12.0
 
 [node name="RaceHUD" type="Control" unique_id=1700099757]
+visible = false
 layout_mode = 3
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -1280.0
-offset_bottom = 60.0
-grow_horizontal = 0
-theme = ExtResource("2_theme")
-script = ExtResource("1_racehud")
-
-[node name="MarginContainer" type="MarginContainer" parent="." unique_id=2049217558]
-layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 10
-theme_override_constants/margin_bottom = 10
+mouse_filter = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_racehud")
 
-[node name="TargetLabel" type="Label" parent="MarginContainer" unique_id=1759612061]
+[node name="RacePanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 0.0
+anchor_bottom = 0.0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 300.0
+offset_bottom = 20.0
+grow_horizontal = 1
+grow_vertical = 1
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBox" type="VBoxContainer" parent="RacePanel"]
 layout_mode = 2
-text = "Target: Article Name"
+theme_override_constants/separation = 4
+
+[node name="TimerLabel" type="Label" parent="RacePanel/VBox"]
+layout_mode = 2
+text = "00:00"
+label_settings = SubResource("LabelSettings_timer")
+
+[node name="TargetLabel" type="Label" parent="RacePanel/VBox" unique_id=1759612061]
+layout_mode = 2
+text = "Find: Article"
 label_settings = SubResource("LabelSettings_target")
-horizontal_alignment = 2
+autowrap_mode = 2
+
+[node name="TimelineDivider" type="HSeparator" parent="RacePanel/VBox"]
+layout_mode = 2
+modulate = Color(0.7, 0.7, 0.7, 1)
+
+[node name="TimelineLabel" type="Label" parent="RacePanel/VBox"]
+layout_mode = 2
+text = "Path so far"
+theme_override_font_sizes/font_size = 11
+modulate = Color(0.55, 0.55, 0.55, 1)
+
+[node name="TimelineScroll" type="ScrollContainer" parent="RacePanel/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 0)
+vertical_scroll_mode = 1
+horizontal_scroll_mode = 0
+
+[node name="TimelineList" type="VBoxContainer" parent="RacePanel/VBox/TimelineScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 1
+
+[node name="MiniLeaderboard" type="VBoxContainer" parent="RacePanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="WinPopup" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -360.0
+offset_top = -300.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBox" type="VBoxContainer" parent="WinPopup"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="WinLabel" type="Label" parent="WinPopup/VBox"]
+layout_mode = 2
+text = "Player wins!"
+label_settings = SubResource("LabelSettings_win")
+horizontal_alignment = 0
+autowrap_mode = 2
+
+[node name="TimeLabel" type="Label" parent="WinPopup/VBox"]
+layout_mode = 2
+text = "Time: 00:00"
+theme_override_font_sizes/font_size = 13
+modulate = Color(0.45, 0.45, 0.45, 1)
+
+[node name="WinDivider" type="HSeparator" parent="WinPopup/VBox"]
+layout_mode = 2
+modulate = Color(0.7, 0.7, 0.7, 1)
+
+[node name="PathLabel" type="Label" parent="WinPopup/VBox"]
+layout_mode = 2
+text = "Path taken"
+theme_override_font_sizes/font_size = 11
+modulate = Color(0.55, 0.55, 0.55, 1)
+
+[node name="WinTimeline" type="VBoxContainer" parent="WinPopup/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="SubLabel" type="Label" parent="WinPopup/VBox"]
+layout_mode = 2
+text = "Returning in 6s..."
+modulate = Color(0.5, 0.5, 0.5, 1)
+theme_override_font_sizes/font_size = 12

@@ -26,3 +26,6 @@ func emit_set_mouse_sensitivity(factor: float) -> void:
 
 func emit_set_joypad_deadzone(value: float) -> void:
 	set_joypad_deadzone.emit(value)
+
+func emit_language_changed(language: String) -> void:
+	language_changed.emit(language)

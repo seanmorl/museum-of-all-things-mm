@@ -23,8 +23,7 @@ var search_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?acti
 var random_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&generator=random&grnnamespace=0&prop=info&origin=*"
 
 ## URL returns random wikipedia article specified by Class + Level
-## old, and proper, but loads slowly const RANDOM_LEVEL4_ENDPOINT: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-3%20vital%20articles&category2=B-Class%20level-3%20vital%20articles&category3=C-Class%20level-3%20vital%20articles&category4=FA-Class%20level-3%20vital%20articles&category5=FL-Class%20level-3%20vital%20articles&category6=GA-Class%20level-3%20vital%20articles&category7=List-Class%20level-3%20vital%20articles&category8=Start-Class%20level-3%20vital%20articles&category9=Stub-Class%20level-3%20vital%20articles&category10=A-Class%20level-4%20vital%20articles&category11=B-Class%20level-4%20vital%20articles&category12=C-Class%20level-4%20vital%20articles&category13=FA-Class%20level-4%20vital%20articles&category14=FL-Class%20level-4%20vital%20articles&category15=GA-Class%20level-4%20vital%20articles&category16=List-Class%20level-4%20vital%20articles&category17=Start-Class%20level-4%20vital%20articles&category18=Stub-Class%20level-4%20vital%20articles&category19=A-Class%20level-5%20vital%20articles&category20=B-Class%20level-5%20vital%20articles&category21=C-Class%20level-5%20vital%20articles&category22=FA-Class%20level-5%20vital%20articles&category23=FL-Class%20level-5%20vital%20articles&category24=GA-Class%20level-5%20vital%20articles&category25=List-Class%20level-5%20vital%20articles&category26=Start-Class%20level-5%20vital%20articles&category27=Stub-Class%20level-5%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
-const RANDOM_LEVEL4_ENDPOINT: String = "https://en.wikipedia.org/wiki/Special:Random/Wikipedia,"
+const RANDOM_LEVEL4_ENDPOINT: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-3%20vital%20articles&category2=B-Class%20level-3%20vital%20articles&category3=C-Class%20level-3%20vital%20articles&category4=FA-Class%20level-3%20vital%20articles&category5=FL-Class%20level-3%20vital%20articles&category6=GA-Class%20level-3%20vital%20articles&category7=List-Class%20level-3%20vital%20articles&category8=Start-Class%20level-3%20vital%20articles&category9=Stub-Class%20level-3%20vital%20articles&category10=A-Class%20level-4%20vital%20articles&category11=B-Class%20level-4%20vital%20articles&category12=C-Class%20level-4%20vital%20articles&category13=FA-Class%20level-4%20vital%20articles&category14=FL-Class%20level-4%20vital%20articles&category15=GA-Class%20level-4%20vital%20articles&category16=List-Class%20level-4%20vital%20articles&category17=Start-Class%20level-4%20vital%20articles&category18=Stub-Class%20level-4%20vital%20articles&category19=A-Class%20level-5%20vital%20articles&category20=B-Class%20level-5%20vital%20articles&category21=C-Class%20level-5%20vital%20articles&category22=FA-Class%20level-5%20vital%20articles&category23=FL-Class%20level-5%20vital%20articles&category24=GA-Class%20level-5%20vital%20articles&category25=List-Class%20level-5%20vital%20articles&category26=Start-Class%20level-5%20vital%20articles&category27=Stub-Class%20level-5%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
 
 var wikitext_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=revisions|extracts|pageprops|categories&ppprop=wikibase_item&explaintext=true&rvprop=content&cllimit=50&clshow=!hidden&format=json&redirects=1&origin=*&titles="
 var images_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=imageinfo&iiprop=extmetadata|url&iiurlwidth=640&iiextmetadatafilter=LicenseShortName|Artist&format=json&redirects=1&origin=*&titles="
@@ -243,7 +242,7 @@ func _fetch_wikitext(titles: Array, context: Variant) -> void:
 	var new_titles := _get_uncached_titles(titles)
 
 	if len(new_titles) == 0:
-		wikitext_complete.emit.call_deferred(titles, context)
+		wikitext_complete.emit.call_deferred(titles, context if context != null else {})
 		return
 
 	if len(new_titles) > MAX_BATCH_SIZE:
@@ -454,7 +453,7 @@ func _on_wikitext_request_complete(res: Dictionary, ctx: Dictionary, caller_ctx:
 		return _dispatch_continue(res.continue, wikitext_endpoint, ctx.new_titles, ctx, caller_ctx)
 	else:
 		_cache_all(ctx.new_titles)
-		wikitext_complete.emit.call_deferred(ctx.titles, caller_ctx)
+		wikitext_complete.emit.call_deferred(ctx.titles, caller_ctx if caller_ctx != null else {})
 		# wikitext ignores queue, so return false to prevent queue advance after completion
 		return false
 

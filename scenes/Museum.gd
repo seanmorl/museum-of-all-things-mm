@@ -242,7 +242,7 @@ func _set_custom_door(title: String) -> void:
 		_custom_door.entry_door.set_open(true)
 
 
-func _reset_custom_door(_title: String) -> void:
+func _reset_custom_door() -> void:
 	if _custom_door and is_instance_valid(_custom_door):
 		_custom_door.entry_door.set_open(false)
 
@@ -348,7 +348,9 @@ func _load_exhibit_from_exit(exit: Hall) -> void:
 	_exhibit_loader.load_exhibit_from_exit(exit)
 
 
-func _on_fetch_complete(titles: Array, context: Dictionary) -> void:
+func _on_fetch_complete(titles: Array, context: Variant) -> void:
+	if not context or not (context is Dictionary):
+		return
 	clear_rider_loading(context.get("title", ""))
 	_exhibit_loader.on_fetch_complete(titles, context)
 

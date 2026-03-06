@@ -1,5 +1,7 @@
 extends Control
 
+const FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
+
 signal continue_pressed
 
 @onready var winner_label: Label = $CenterContainer/PanelContainer/VBoxContainer/WinnerLabel
@@ -7,7 +9,8 @@ signal continue_pressed
 
 func _ready() -> void:
 	visible = false
-	RaceManager.race_ended.connect(_on_race_ended)
+	# Disabled - replaced by RaceHUD bottom-left toast
+	# RaceManager.race_ended.connect(_on_race_ended)
 	continue_button.pressed.connect(_on_continue_pressed)
 
 func _on_race_ended(winner_peer_id: int, winner_name: String) -> void:
