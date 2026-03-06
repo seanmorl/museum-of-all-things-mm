@@ -151,9 +151,7 @@ func _change_post_processing(post_processing: String) -> void:
 
 
 func _start_game() -> void:
-	var vote_hud := get_node_or_null("TabMenu/VoteHUD")
-	var vote_visible: bool = vote_hud != null and vote_hud.visible
-	if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE and not vote_visible:
+	if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	_player.start()
 	_menu_controller.close_menus()
@@ -192,6 +190,9 @@ func _on_main_menu_multiplayer() -> void:
 
 
 func _on_multiplayer_menu_back() -> void:
+	if NetworkManager.is_multiplayer_active() or _multiplayer_controller.is_multiplayer_game():
+		_leave_multiplayer_session()
+		return
 	_menu_controller.on_multiplayer_menu_back()
 
 
@@ -392,8 +393,8 @@ var _race_candidates: Array = []
 var _race_target_article: String = ""
 var _race_fetches_pending: int = 0
 
-func _on_random_article_complete(title: Variant, context: Variant) -> void:
-	if not context or not (context is Dictionary) or not context.has("race") or not context.race:
+func _on_random_article_complete(title: String, context: Dictionary) -> void:
+	if not context or not context.has("race") or not context.race:
 		return
 
 	if title == null or title == "":
@@ -455,8 +456,7 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 	# Open the search door to the starting exhibit for all players
 	if start_article != "":
 		UIEvents.emit_set_custom_door(start_article)
-		if NetworkManager.is_server():
-			_sync_race_start_article.rpc(start_article)
+		_sync_race_start_article.rpc(start_article)
 
 	# Start game (close menus, capture mouse)
 	_start_game()
@@ -512,8 +512,8 @@ func _on_network_peer_connected(peer_id: int) -> void:
 	if _multiplayer_controller.is_multiplayer_game() and game_started:
 		_multiplayer_controller.spawn_network_player(peer_id)
 
-	if NetworkManager.is_server() and game_started:
-		_notify_game_started.rpc_id(peer_id)
+		if NetworkManager.is_server():
+			_notify_game_started.rpc_id(peer_id)
 
 
 func _on_network_peer_disconnected(peer_id: int) -> void:
@@ -524,22 +524,27 @@ func _on_network_peer_disconnected(peer_id: int) -> void:
 
 func _on_network_server_disconnected() -> void:
 	# Only fires on clients — means the host quit or connection dropped.
-	game_started = false
-	_multiplayer_controller.end_multiplayer_session()
-	NetworkManager.disconnect_from_game()
+	_leave_multiplayer_session()
 	var mp_menu = _menu_layer.get_node_or_null("MultiplayerMenu")
 	if mp_menu and mp_menu.has_method("show_disconnected_message"):
 		_menu_controller.open_multiplayer_menu()
 		mp_menu.show_disconnected_message()
-	else:
-		_menu_controller.open_main_menu()
+
+
+func _leave_multiplayer_session() -> void:
+	## Shared teardown for any path that returns to the main menu from
+	## a multiplayer session — lobby leave, pause menu quit, server disconnect.
+	game_started = false
+	_multiplayer_controller.end_multiplayer_session()
+	NetworkManager.disconnect_from_game()
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	_player.pause()
+	_menu_controller.open_main_menu()
 
 
 func _on_quit_requested() -> void:
-	if _multiplayer_controller.is_multiplayer_game():
-		NetworkManager.disconnect_from_game()
-		_multiplayer_controller.end_multiplayer_session()
-		_menu_controller.open_main_menu()
+	if _multiplayer_controller.is_multiplayer_game() or NetworkManager.is_multiplayer_active():
+		_leave_multiplayer_session()
 	else:
 		get_tree().quit()
 
@@ -644,30 +649,6 @@ func _notify_game_started() -> void:
 		if start_article != "":
 			UIEvents.emit_set_custom_door(start_article)
 		GameplayEvents.emit_race_started(RaceManager.get_target_article())
-
-
-
-func sync_custom_door(page: String) -> void:
-	## Called by TerminalMenu when a result is confirmed. Syncs to all peers.
-	if not NetworkManager.is_multiplayer_active():
-		UIEvents.emit_set_custom_door(page)
-		return
-	if NetworkManager.is_server():
-		_rpc_broadcast_custom_door.rpc(page)
-	else:
-		_rpc_request_custom_door.rpc_id(1, page)
-
-
-@rpc("any_peer", "call_remote", "reliable")
-func _rpc_request_custom_door(page: String) -> void:
-	if not NetworkManager.is_server():
-		return
-	_rpc_broadcast_custom_door.rpc(page)
-
-
-@rpc("authority", "call_local", "reliable")
-func _rpc_broadcast_custom_door(page: String) -> void:
-	UIEvents.emit_set_custom_door(page)
 
 
 @rpc("authority", "call_remote", "reliable")

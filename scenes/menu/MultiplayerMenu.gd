@@ -41,7 +41,6 @@ func _ready() -> void:
 	# the lobby and enter the game without waiting for a Start button press.
 	MultiplayerEvents.multiplayer_started.connect(_on_multiplayer_started)
 
-	_load_saved_names()
 	_show_state(MenuState.MAIN)
 
 func _on_visibility_changed() -> void:
@@ -111,7 +110,6 @@ func _on_host_start_pressed() -> void:
 
 	NetworkManager.set_local_player_name(_host_name_input.text)
 	NetworkManager.set_local_player_color(_host_color_picker.color)
-	_save_names(_host_name_input.text, _host_color_picker.color)
 	var error = NetworkManager.host_game(port)
 	if error != OK:
 		_show_error("Failed to start server: " + str(error))
@@ -157,7 +155,6 @@ func _on_join_connect_pressed() -> void:
 
 	NetworkManager.set_local_player_name(_join_name_input.text)
 	NetworkManager.set_local_player_color(_join_color_picker.color)
-	_save_names(_join_name_input.text, _join_color_picker.color)
 
 	# Show a connecting indicator while DNS resolves (can take ~1-2 seconds)
 	%JoinConnectButton.disabled = true
@@ -187,8 +184,9 @@ func _on_lobby_start_pressed() -> void:
 		_start_multiplayer_game.rpc()
 
 func _on_lobby_leave_pressed() -> void:
-	NetworkManager.disconnect_from_game()
-	_show_state(MenuState.MAIN)
+	# Emit back so Main._on_multiplayer_menu_back handles full session teardown.
+	# Do NOT disconnect here directly — Main owns that cleanup.
+	back.emit()
 
 # Network callbacks
 func _on_peer_connected(_id: int) -> void:
@@ -207,34 +205,9 @@ func _on_connection_failed() -> void:
 	_show_error("Connection failed")
 	_show_state(MenuState.JOIN)
 
-func show_disconnected_message() -> void:
-	_show_error("Disconnected from host")
-
 func _on_server_disconnected() -> void:
 	_show_error("Disconnected from server")
 	_show_state(MenuState.MAIN)
-
-func _save_names(player_name: String, color: Color) -> void:
-	SettingsManager.save_settings("multiplayer_identity", {
-		"host_name": _host_name_input.text,
-		"join_name": _join_name_input.text,
-		"color": color.to_html()
-	})
-
-func _load_saved_names() -> void:
-	var saved = SettingsManager.get_settings("multiplayer_identity")
-	if not saved or not saved is Dictionary:
-		return
-	if saved.has("host_name") and _host_name_input:
-		_host_name_input.text = saved.host_name
-	if saved.has("join_name") and _join_name_input:
-		_join_name_input.text = saved.join_name
-	if saved.has("color"):
-		var c := Color.html(saved.color)
-		if _host_color_picker:
-			_host_color_picker.color = c
-		if _join_color_picker:
-			_join_color_picker.color = c
 
 func _on_multiplayer_started() -> void:
 	# Fired by Main.gd when the server tells us the game is already running.
