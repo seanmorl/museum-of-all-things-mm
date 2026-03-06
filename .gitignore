@@ -1,6 +1,6 @@
 .godot
 dist/
-.import/
+*.import
 *.translation
 .mono/
 CLAUDE.md
