@@ -275,13 +275,17 @@ func _create_placed_painting(wall_position: Vector3, wall_normal: Vector3, image
 	body.add_child(shape)
 	painting.add_child(body)
 
-	_main.add_child(painting)
+	# Parent to the exhibit node so the painting stays in its room when
+	# the museum geometry moves or the room reloads. Fall back to _main
+	# only if the exhibit can't be found (e.g. lobby placement).
+	var parent_node: Node = _get_exhibit_node(exhibit_title)
+	if not is_instance_valid(parent_node):
+		parent_node = _main
+
+	parent_node.add_child(painting)
 	_placed_paintings.append(painting)
 
-	# Position off the wall enough for the frame to clear
-	painting.global_position = wall_position + wall_normal * 0.13
-
-	# Orient so PlaneMesh lies flat against wall (PlaneMesh face normal is +Y)
+	# Orient first (basis must be set before position for local-space placement)
 	var y_axis: Vector3 = wall_normal
 	var x_axis: Vector3
 	if abs(wall_normal.dot(Vector3.UP)) > 0.9:
@@ -290,6 +294,10 @@ func _create_placed_painting(wall_position: Vector3, wall_normal: Vector3, image
 		x_axis = Vector3.UP.cross(wall_normal).normalized()
 	var z_axis: Vector3 = x_axis.cross(y_axis)
 	painting.basis = Basis(x_axis, y_axis, z_axis)
+
+	# Position off the wall — use global_position so world-space coords work
+	# regardless of where the parent node's origin is.
+	painting.global_position = wall_position + wall_normal * 0.13
 
 
 func _on_carry_image_loaded(url: String, image: Texture2D, _ctx: Variant, player: Node, target_url: String) -> void:
@@ -412,6 +420,16 @@ func _find_and_remove_placed_painting(image_title: String) -> Node:
 		if p.has_meta("image_title") and p.get_meta("image_title") == image_title:
 			_placed_paintings.remove_at(i)
 			return p
+	return null
+
+
+func _get_exhibit_node(exhibit_title: String) -> Node:
+	## Returns the 3D exhibit node for a given title, or null if not found/loaded.
+	if not _main.has_node("Museum"):
+		return null
+	var museum: Node = _main.get_node("Museum")
+	if museum.has_method("get_exhibit_node"):
+		return museum.get_exhibit_node(exhibit_title)
 	return null
 
 

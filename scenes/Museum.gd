@@ -56,6 +56,13 @@ func has_exhibit(title: String) -> bool:
 	return _exhibits.has(title)
 
 
+func get_exhibit_node(title: String) -> Node:
+	## Returns the 3D exhibit node for a given article title, or null.
+	if not _exhibits.has(title):
+		return null
+	return _exhibits[title].get("exhibit")
+
+
 func clear_rider_loading(title: String) -> void:
 	_rider_loading_exhibits.erase(title)
 
@@ -348,9 +355,7 @@ func _load_exhibit_from_exit(exit: Hall) -> void:
 	_exhibit_loader.load_exhibit_from_exit(exit)
 
 
-func _on_fetch_complete(titles: Array, context: Variant) -> void:
-	if not context or not (context is Dictionary):
-		return
+func _on_fetch_complete(titles: Array, context: Dictionary) -> void:
 	clear_rider_loading(context.get("title", ""))
 	_exhibit_loader.on_fetch_complete(titles, context)
 
