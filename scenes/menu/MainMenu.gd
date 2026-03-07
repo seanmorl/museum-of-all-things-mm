@@ -3,6 +3,7 @@ extends Control
 signal start
 signal settings
 signal start_multiplayer
+signal start_dedicated_host
 
 var fade_in_start: Color = Color(0.973, 0.976, 0.98, 1.0)
 var fade_in_end: Color = Color(0.973, 0.976, 0.98, 0.0)
@@ -14,6 +15,15 @@ func _ready() -> void:
 
 	if Platform.is_web():
 		%Quit.visible = false
+
+	# Add dedicated host button after Multiplayer button
+	var btn := Button.new()
+	btn.text = "Host Server"
+	btn.name = "DedicatedHost"
+	btn.pressed.connect(_on_dedicated_host_pressed)
+	var container := %Quit.get_parent()
+	container.add_child(btn)
+	container.move_child(btn, %Quit.get_index())
 
 func _on_visibility_changed() -> void:
 	if visible and is_inside_tree():
@@ -36,6 +46,9 @@ func _on_settings_pressed() -> void:
 
 func _on_multiplayer_pressed() -> void:
 	start_multiplayer.emit()
+
+func _on_dedicated_host_pressed() -> void:
+	start_dedicated_host.emit()
 
 func _on_quit_button_pressed() -> void:
 	get_tree().quit()

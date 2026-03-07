@@ -59,6 +59,7 @@ var _footprint_system: PlayerFootprintSystem = null
 @onready var _raycast: RayCast3D = $Pivot/Camera3D/RayCast3D
 @onready var _multiplayer_sync: MultiplayerSynchronizer = get_node_or_null("MultiplayerSynchronizer")
 @onready var _name_label: Label3D = get_node_or_null("NameLabel")
+var _pronoun_label: Label3D = null
 @onready var _body_mesh: MeshInstance3D = get_node_or_null("BodyMesh")
 @onready var _head_mesh: MeshInstance3D = get_node_or_null("Pivot/HeadMesh")
 
@@ -70,6 +71,10 @@ func _ready() -> void:
 	SettingsEvents.set_invert_y.connect(_set_invert_y)
 	SettingsEvents.set_mouse_sensitivity.connect(_set_mouse_sensitivity)
 	SettingsEvents.set_joypad_deadzone.connect(_set_joy_deadzone)
+
+	# Override nameplate font to match the rest of the HUD
+	if _name_label:
+		_name_label.font = load("res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf")
 
 	if _body_mesh:
 		_body_mesh_base_y = _body_mesh.position.y
@@ -422,6 +427,49 @@ func set_player_name(new_name: String) -> void:
 		_name_label.text = new_name
 
 
+func set_player_pronouns(pronouns: String) -> void:
+	if pronouns == "":
+		# Hide and clear if no pronouns set
+		if _pronoun_label and is_instance_valid(_pronoun_label):
+			_pronoun_label.visible = false
+		return
+	var lbl := _get_or_create_pronoun_label()
+	lbl.text = pronouns
+	lbl.visible = (_name_label == null or _name_label.visible)
+
+
+func _get_or_create_pronoun_label() -> Label3D:
+	if _pronoun_label and is_instance_valid(_pronoun_label):
+		return _pronoun_label
+	_pronoun_label = Label3D.new()
+	_pronoun_label.name = "PronounLabel"
+	# Copy billboard/render settings from NameLabel if available
+	if _name_label:
+		_pronoun_label.billboard = _name_label.billboard
+		_pronoun_label.no_depth_test = _name_label.no_depth_test
+		_pronoun_label.render_priority = _name_label.render_priority
+		_pronoun_label.modulate = _name_label.modulate
+		_pronoun_label.pixel_size = _name_label.pixel_size
+		_pronoun_label.font = load("res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf")
+		# Smaller font — roughly half the name size, min 10px
+		_pronoun_label.font_size = max(int(_name_label.font_size * 0.5), 10)
+		_pronoun_label.outline_size = max(int(_name_label.outline_size * 0.5), 2)
+		_pronoun_label.outline_modulate = _name_label.outline_modulate
+		# NameLabel uses vertical_alignment BOTTOM, so text hangs downward from its Y position.
+		# Offset upward enough to clear the full name text height plus a generous gap.
+		var name_height: float = _name_label.font_size * _name_label.pixel_size
+		var gap: float = name_height * 0.6
+		_pronoun_label.position = _name_label.position + Vector3(0, name_height + gap, 0)
+	else:
+		_pronoun_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_pronoun_label.no_depth_test = true
+		_pronoun_label.font = load("res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf")
+		_pronoun_label.font_size = 10
+		_pronoun_label.position = Vector3(0, 2.1, 0)
+	add_child(_pronoun_label)
+	return _pronoun_label
+
+
 func set_body_visible(is_visible: bool) -> void:
 	if _body_mesh:
 		_body_mesh.visible = is_visible
@@ -433,6 +481,11 @@ func set_body_visible(is_visible: bool) -> void:
 			_name_label.visible = false
 		else:
 			_name_label.visible = is_visible
+	if _pronoun_label and is_instance_valid(_pronoun_label):
+		if is_visible and has_rider:
+			_pronoun_label.visible = false
+		else:
+			_pronoun_label.visible = is_visible and _pronoun_label.text != ""
 
 
 func get_owned_body_material() -> Material:

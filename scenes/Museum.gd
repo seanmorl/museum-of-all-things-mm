@@ -56,13 +56,6 @@ func has_exhibit(title: String) -> bool:
 	return _exhibits.has(title)
 
 
-func get_exhibit_node(title: String) -> Node:
-	## Returns the 3D exhibit node for a given article title, or null.
-	if not _exhibits.has(title):
-		return null
-	return _exhibits[title].get("exhibit")
-
-
 func clear_rider_loading(title: String) -> void:
 	_rider_loading_exhibits.erase(title)
 
@@ -240,7 +233,8 @@ func _set_up_lobby(lobby: Node) -> void:
 			_custom_door.entry_door.set_open(false, true)
 			_custom_door.to_sign.visible = false
 
-		exit.loader.body_entered.connect(_on_loader_body_entered.bind(exit))
+		if not exit.loader.body_entered.is_connected(_on_loader_body_entered.bind(exit)):
+			exit.loader.body_entered.connect(_on_loader_body_entered.bind(exit))
 
 
 func _set_custom_door(title: String) -> void:

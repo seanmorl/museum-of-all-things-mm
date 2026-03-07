@@ -66,6 +66,8 @@ func spawn_network_player(peer_id: int) -> Node:
 	var skin_url: String = NetworkManager.get_player_skin(peer_id)
 	if skin_url != "":
 		net_player.set_player_skin(skin_url)
+	if net_player.has_method("set_player_pronouns"):
+		net_player.set_player_pronouns(NetworkManager.get_player_pronouns(peer_id))
 	net_player.position = _starting_point
 
 	_network_players[peer_id] = net_player
@@ -119,6 +121,8 @@ func update_player_info(peer_id: int) -> void:
 				net_player.set_player_skin(skin_url)
 			else:
 				net_player.clear_player_skin()
+			if net_player.has_method("set_player_pronouns"):
+				net_player.set_player_pronouns(NetworkManager.get_player_pronouns(peer_id))
 
 
 func end_multiplayer_session() -> void:

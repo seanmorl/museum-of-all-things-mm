@@ -2,6 +2,8 @@ extends Node
 
 signal search_complete(title: Variant, context: Variant)
 signal random_complete(title: Variant, context: Variant)
+signal category_search_complete(categories: Array, context: Variant)  ## Array of category name strings
+signal category_random_complete(title: Variant, context: Variant)     ## one random article from a category
 signal wikitext_complete(titles: Array, context: Variant)
 signal wikitext_failed(titles: Array, message: String)
 signal wikidata_complete(ids: Variant, context: Variant)
@@ -20,10 +22,34 @@ const WIKIDATA_COMMONS_GALLERY: String = "P935"
 var lang: String = TranslationServer.get_locale()
 var wikipedia_prefix: String = "https://" + lang + ".wikipedia.org/wiki/"
 var search_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srprop=title&origin=*&srsearch="
+## Category article search: uses incategory: operator for exact Wikipedia category membership
+## srlimit=500, random sroffset for variety. Falls back to offset 0 if empty.
+var topic_search_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=0&srprop=title&srlimit=500&origin=*&srsearch="
 var random_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&generator=random&grnnamespace=0&prop=info&origin=*"
+var category_search_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=14&srprop=title&srlimit=8&origin=*&srsearch="
 
 ## URL returns random wikipedia article specified by Class + Level
 const RANDOM_LEVEL4_ENDPOINT: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-3%20vital%20articles&category2=B-Class%20level-3%20vital%20articles&category3=C-Class%20level-3%20vital%20articles&category4=FA-Class%20level-3%20vital%20articles&category5=FL-Class%20level-3%20vital%20articles&category6=GA-Class%20level-3%20vital%20articles&category7=List-Class%20level-3%20vital%20articles&category8=Start-Class%20level-3%20vital%20articles&category9=Stub-Class%20level-3%20vital%20articles&category10=A-Class%20level-4%20vital%20articles&category11=B-Class%20level-4%20vital%20articles&category12=C-Class%20level-4%20vital%20articles&category13=FA-Class%20level-4%20vital%20articles&category14=FL-Class%20level-4%20vital%20articles&category15=GA-Class%20level-4%20vital%20articles&category16=List-Class%20level-4%20vital%20articles&category17=Start-Class%20level-4%20vital%20articles&category18=Stub-Class%20level-4%20vital%20articles&category19=A-Class%20level-5%20vital%20articles&category20=B-Class%20level-5%20vital%20articles&category21=C-Class%20level-5%20vital%20articles&category22=FA-Class%20level-5%20vital%20articles&category23=FL-Class%20level-5%20vital%20articles&category24=GA-Class%20level-5%20vital%20articles&category25=List-Class%20level-5%20vital%20articles&category26=Start-Class%20level-5%20vital%20articles&category27=Stub-Class%20level-5%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
+
+## Very Easy — hardcoded pool of Wikipedia's 10 Level-1 vital articles plus
+## a Toolforge draw from Level-2 (~100 articles).
+## Level 1: the absolute most-linked articles on Wikipedia (Earth, Life, etc.)
+## Level 2: things like Europe, Science, Water, Human — still trivially reachable.
+const VERY_EASY_LEVEL1_ARTICLES: Array = [
+	"Earth", "Life", "Human", "History", "Geography",
+	"Science", "Technology", "Arts", "Society", "Philosophy"
+]
+## Toolforge endpoint for Level-2 vital articles (~100 well-known topics)
+const TARGET_ENDPOINT_VERY_EASY: String = "https://randomincategory.toolforge.org/?category=FA-Class%20level-2%20vital%20articles&category2=GA-Class%20level-2%20vital%20articles&category3=B-Class%20level-2%20vital%20articles&category4=A-Class%20level-2%20vital%20articles&category5=Start-Class%20level-2%20vital%20articles&category6=Stub-Class%20level-2%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
+
+## Easy — only Wikipedia vital articles at level 3 (~1,000 very well-known topics)
+const TARGET_ENDPOINT_EASY: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-3%20vital%20articles&category2=B-Class%20level-3%20vital%20articles&category3=C-Class%20level-3%20vital%20articles&category4=FA-Class%20level-3%20vital%20articles&category5=FL-Class%20level-3%20vital%20articles&category6=GA-Class%20level-3%20vital%20articles&category7=List-Class%20level-3%20vital%20articles&category8=Start-Class%20level-3%20vital%20articles&category9=Stub-Class%20level-3%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
+
+## Medium — level 3 + 4 (~10,000 topics, default)
+const TARGET_ENDPOINT_MEDIUM: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-3%20vital%20articles&category2=B-Class%20level-3%20vital%20articles&category3=C-Class%20level-3%20vital%20articles&category4=FA-Class%20level-3%20vital%20articles&category5=FL-Class%20level-3%20vital%20articles&category6=GA-Class%20level-3%20vital%20articles&category7=List-Class%20level-3%20vital%20articles&category8=Start-Class%20level-3%20vital%20articles&category9=Stub-Class%20level-3%20vital%20articles&category10=A-Class%20level-4%20vital%20articles&category11=B-Class%20level-4%20vital%20articles&category12=C-Class%20level-4%20vital%20articles&category13=FA-Class%20level-4%20vital%20articles&category14=FL-Class%20level-4%20vital%20articles&category15=GA-Class%20level-4%20vital%20articles&category16=List-Class%20level-4%20vital%20articles&category17=Start-Class%20level-4%20vital%20articles&category18=Stub-Class%20level-4%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
+
+## Hard — only level-5 vital articles (~50,000 topics, many obscure)
+const TARGET_ENDPOINT_HARD: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-5%20vital%20articles&category2=B-Class%20level-5%20vital%20articles&category3=C-Class%20level-5%20vital%20articles&category4=FA-Class%20level-5%20vital%20articles&category5=FL-Class%20level-5%20vital%20articles&category6=GA-Class%20level-5%20vital%20articles&category7=List-Class%20level-5%20vital%20articles&category8=Start-Class%20level-5%20vital%20articles&category9=Stub-Class%20level-5%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
 
 var wikitext_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=revisions|extracts|pageprops|categories&ppprop=wikibase_item&explaintext=true&rvprop=content&cllimit=50&clshow=!hidden&format=json&redirects=1&origin=*&titles="
 var images_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=imageinfo&iiprop=extmetadata|url&iiurlwidth=640&iiextmetadatafilter=LicenseShortName|Artist&format=json&redirects=1&origin=*&titles="
@@ -68,10 +94,20 @@ func _network_request_item() -> void:
 		_fetch_wikitext(item[1], item[2])
 	elif item[0] == "fetch_search":
 		_fetch_search(item[1], item[2])
+	elif item[0] == "fetch_category_search":
+		_fetch_category_search(item[1], item[2])
+	elif item[0] == "fetch_random_from_category":
+		_fetch_random_from_category(item[1], item[2])
+	elif item[0] == "fetch_random_category_article":
+		_fetch_random_category_article(item[1])
 	elif item[0] == "fetch_random":
 		_fetch_random(item[1])
 	elif item[0] == "fetch_random_level4":
 		_fetch_random_level4(item[1])
+	elif item[0] == "fetch_random_target":
+		_fetch_random_target(item[1], item[2])
+	elif item[0] == "fetch_random_batch":
+		_fetch_random_batch(item[1])
 	elif item[0] == "fetch_images":
 		_fetch_images(item[1], item[2])
 	elif item[0] == "fetch_commons_images":
@@ -84,7 +120,9 @@ func _network_request_item() -> void:
 func set_language(language: String) -> void:
 	wikipedia_prefix = "https://" + language + ".wikipedia.org/wiki/"
 	search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srprop=title&srsearch="
+	topic_search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=0&srprop=title&srlimit=500&origin=*&srsearch="
 	random_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&generator=random&grnnamespace=0&prop=info"
+	category_search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=14&srprop=title&srlimit=8&srsearch="
 	wikitext_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&prop=revisions|extracts|pageprops|categories&ppprop=wikibase_item&explaintext=true&rvprop=content&cllimit=50&clshow=!hidden&format=json&redirects=1&titles="
 	images_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&prop=imageinfo&iiprop=extmetadata|url&iiurlwidth=640&iiextmetadatafilter=LicenseShortName|Artist&format=json&redirects=1&titles="
 	wikidata_endpoint = "https://www.wikidata.org/w/api.php?action=wbgetclaims&uselang=" + language + "&format=json&entity="
@@ -103,6 +141,29 @@ func fetch_random(ctx: Variant) -> void:
 
 func fetch_random_level4(ctx: Variant) -> void:
 	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_random_level4", ctx], null, true)
+
+## Searches Wikipedia for category names matching [query]. Emits category_search_complete.
+func fetch_category_search(query: String, ctx: Variant) -> void:
+	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_category_search", query, ctx], null, true)
+
+## Picks a random article from the given Wikipedia category name. Emits category_random_complete.
+func fetch_random_from_category(category_name: String, ctx: Variant) -> void:
+	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_random_from_category", category_name, ctx], null, true)
+
+## Fetches a random Wikipedia category and then picks a random article from it. Emits category_random_complete.
+func fetch_random_category_article(ctx: Variant) -> void:
+	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_random_category_article", ctx], null, true)
+
+## Fetches a target article at the specified difficulty.
+## difficulty: "easy" | "medium" | "hard"  (default "medium")
+func fetch_random_target(ctx: Variant, difficulty: String = "medium") -> void:
+	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_random_target", ctx, difficulty], null, true)
+
+## Fetches [count] random articles in a single API call instead of [count] separate calls.
+## Emits random_complete once per article found, with the caller context for each.
+## [contexts] must be an Array of ctx values, one per desired article.
+func fetch_random_batch(contexts: Array) -> void:
+	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_random_batch", contexts], null, true)
 
 func fetch_images(titles: Array, ctx: Variant) -> void:
 	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_images", titles, ctx])
@@ -228,6 +289,30 @@ func _fetch_search(title: String, context: Variant) -> void:
 	var ctx := {}
 	_dispatch_request(url, ctx, context)
 
+func _fetch_category_search(query: String, context: Variant) -> void:
+	## Searches srnamespace=14 (Category namespace) for matching category names.
+	var url := category_search_endpoint + query.uri_encode()
+	var ctx := {"category_search": true}
+	_dispatch_request(url, ctx, context)
+
+func _fetch_random_from_category(category_name: String, context: Variant) -> void:
+	## Uses Wikipedia's incategory: search operator which matches exact category membership.
+	## Unlike intitle:, this won't match "New South Wales" when searching for "Wales" —
+	## it only finds articles actually filed under Category:Wales (or its subcategories
+	## when combined with depth, which the API handles automatically up to ~2 levels).
+	## Random sroffset (0–4500 in steps of 500) gives variety; falls back to 0 if empty.
+	var cat: String = category_name.replace("Category:", "").strip_edges()
+	var query: String = 'incategory:"' + cat + '"'
+	var random_offset: int = (randi() % 10) * 500
+	var url := topic_search_endpoint + query.uri_encode()
+	if random_offset > 0:
+		url += "&sroffset=%d" % random_offset
+	if context is Dictionary:
+		context["_topic_query"] = query
+		context["_topic_fallback_offset"] = true
+	var ctx := {"topic_search": true, "topic_first_pass": false}
+	_dispatch_request(url, ctx, context)
+
 func _fetch_random(context: Variant) -> void:
 	var url := random_endpoint
 	var ctx := {}
@@ -238,11 +323,47 @@ func _fetch_random_level4(context: Variant) -> void:
 	var ctx := {"random_level4": true}
 	_dispatch_request(url, ctx, context)
 
+func _fetch_random_target(context: Variant, difficulty: String) -> void:
+	if difficulty == "very_easy":
+		# 50% chance: pick directly from the 10 Level-1 vital articles (instant, no HTTP)
+		# 50% chance: use Toolforge to draw from ~100 Level-2 vital articles
+		if randi() % 2 == 0:
+			var pick: String = VERY_EASY_LEVEL1_ARTICLES[randi() % VERY_EASY_LEVEL1_ARTICLES.size()]
+			random_complete.emit.call_deferred(pick, context)
+			return
+		var ctx := {"random_level4": true}
+		_dispatch_request(TARGET_ENDPOINT_VERY_EASY, ctx, context)
+		return
+	var url: String
+	match difficulty:
+		"easy":  url = TARGET_ENDPOINT_EASY
+		"hard":  url = TARGET_ENDPOINT_HARD
+		_:       url = TARGET_ENDPOINT_MEDIUM
+	var ctx := {"random_level4": true}
+	_dispatch_request(url, ctx, context)
+
+func _fetch_random_category_article(context: Variant) -> void:
+	## Step 1: get a random category name from Wikipedia (namespace 14).
+	## Step 2 passes that name straight to Toolforge — no member fetching needed.
+	var url := "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=random&rnnamespace=14&rnlimit=1&origin=*"
+	var ctx := {"random_category_step1": true}
+	_dispatch_request(url, ctx, context)
+
+## Single Wikipedia API call that returns [contexts.size()] random mainspace articles.
+## Fires random_complete once per article, pairing each result with a context entry.
+func _fetch_random_batch(contexts: Array) -> void:
+	if contexts.is_empty():
+		return
+	var count: int = contexts.size()
+	var url := "https://en.wikipedia.org/w/api.php?action=query&format=json&list=random&rnnamespace=0&origin=*&rnlimit=" + str(count)
+	var ctx := {"random_batch": true, "contexts": contexts}
+	_dispatch_request(url, ctx, null)
+
 func _fetch_wikitext(titles: Array, context: Variant) -> void:
 	var new_titles := _get_uncached_titles(titles)
 
 	if len(new_titles) == 0:
-		wikitext_complete.emit.call_deferred(titles, context if context != null else {})
+		wikitext_complete.emit.call_deferred(titles, context)
 		return
 
 	if len(new_titles) > MAX_BATCH_SIZE:
@@ -336,6 +457,22 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 				var title := _extract_title_from_wiki_url(location)
 				random_complete.emit.call_deferred(title, caller_ctx)
 				return true
+		elif response_code == 200:
+			# HTTPRequest node (web) follows redirects — try to extract title from body
+			var body_str := body.get_string_from_utf8()
+			var title := _extract_title_from_wiki_url(body_str)
+			if title != "":
+				random_complete.emit.call_deferred(title, caller_ctx)
+				return true
+			# Body might be a plain redirect URL
+			var trimmed := body_str.strip_edges()
+			if trimmed.begins_with("http"):
+				title = _extract_title_from_wiki_url(trimmed)
+				if title != "":
+					random_complete.emit.call_deferred(title, caller_ctx)
+					return true
+		else:
+			Log.error("ExhibitFetcher", "Toolforge random_level4 unexpected response %d for %s" % [response_code, ctx.url])
 		random_complete.emit.call_deferred(null, caller_ctx)
 		return true
 
@@ -364,6 +501,8 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 
 	# wikipedia request must have "query" object.
 	# wikidata does not need to have it
+	elif ctx.get("random_category_step1", false):
+		return _on_random_category_step1_complete(res, ctx, caller_ctx)
 	elif not ctx.url.begins_with(wikidata_endpoint):
 		return true
 
@@ -377,10 +516,16 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		return _on_commons_images_request_complete(res, ctx, caller_ctx)
 	elif ctx.url.begins_with(wikimedia_commons_gallery_images_endpoint):
 		return _on_commons_images_request_complete(res, ctx, caller_ctx)
-	elif ctx.url.begins_with(search_endpoint):
+	elif ctx.url.begins_with(search_endpoint) and not ctx.get("category_search", false):
 		return _on_search_request_complete(res, ctx, caller_ctx)
+	elif ctx.get("category_search", false):
+		return _on_category_search_complete(res, ctx, caller_ctx)
+	elif ctx.get("topic_search", false):
+		return _on_topic_search_complete(res, ctx, caller_ctx)
 	elif ctx.url.begins_with(random_endpoint):
 		return _on_random_request_complete(res, ctx, caller_ctx)
+	elif ctx.get("random_batch", false):
+		return _on_random_batch_complete(res, ctx)
 	return false
 
 func _dispatch_continue(continue_fields: Dictionary, base_url: String, titles: Variant, ctx: Dictionary, caller_ctx: Variant) -> bool:
@@ -453,7 +598,7 @@ func _on_wikitext_request_complete(res: Dictionary, ctx: Dictionary, caller_ctx:
 		return _dispatch_continue(res.continue, wikitext_endpoint, ctx.new_titles, ctx, caller_ctx)
 	else:
 		_cache_all(ctx.new_titles)
-		wikitext_complete.emit.call_deferred(ctx.titles, caller_ctx if caller_ctx != null else {})
+		wikitext_complete.emit.call_deferred(ctx.titles, caller_ctx)
 		# wikitext ignores queue, so return false to prevent queue advance after completion
 		return false
 
@@ -551,6 +696,62 @@ func _on_search_request_complete(res: Dictionary, ctx: Dictionary, caller_ctx: V
 	search_complete.emit.call_deferred(null, caller_ctx)
 	return true
 
+func _on_category_search_complete(res: Dictionary, _ctx: Dictionary, caller_ctx: Variant) -> bool:
+	## Returns up to 8 category name strings (stripped of "Category:" prefix for display).
+	var names: Array = []
+	if res.has("query") and res.query.has("search"):
+		for item in res.query.search:
+			var title: String = item.get("title", "")
+			if title != "":
+				names.append(title)  # keep full "Category:X" name for use in fetch
+	category_search_complete.emit.call_deferred(names, caller_ctx)
+	return true
+
+func _on_topic_search_complete(res: Dictionary, ctx: Dictionary, caller_ctx: Variant) -> bool:
+	## Picks a random article title from the incategory: search results.
+	## If the random offset returned nothing, retries once at offset 0.
+	if res.has("query") and res.query.has("search"):
+		var results: Array = res.query.search
+		if not results.is_empty():
+			var pick: Dictionary = results[randi() % results.size()]
+			var title: String = pick.get("title", "")
+			if title != "":
+				random_complete.emit.call_deferred(title, caller_ctx)
+				return true
+	# Empty result — if we haven't fallen back yet, retry at offset 0
+	if ctx.get("topic_first_pass", false) == false and caller_ctx is Dictionary and caller_ctx.get("_topic_fallback_offset", false):
+		caller_ctx["_topic_fallback_offset"] = false  # only one retry
+		var query: String = caller_ctx.get("_topic_query", "")
+		if query != "":
+			var url := topic_search_endpoint + query.uri_encode()
+			var retry_ctx := {"topic_search": true, "topic_first_pass": true}
+			_dispatch_request(url, retry_ctx, caller_ctx)
+			return true
+	random_complete.emit.call_deferred(null, caller_ctx)
+	return true
+
+func _on_random_category_step1_complete(res: Dictionary, _ctx: Dictionary, caller_ctx: Variant) -> bool:
+	## Got a random category name — search for articles in it using incategory: operator.
+	if res.has("query") and res.query.has("random"):
+		var items: Array = res.query.random
+		if not items.is_empty():
+			var cat_title: String = items[0].get("title", "")
+			var cat_name: String = cat_title.replace("Category:", "").strip_edges()
+			if cat_name != "":
+				var query: String = 'incategory:"' + cat_name + '"'
+				var random_offset: int = (randi() % 10) * 500
+				var url := topic_search_endpoint + query.uri_encode()
+				if random_offset > 0:
+					url += "&sroffset=%d" % random_offset
+				if caller_ctx is Dictionary:
+					caller_ctx["_topic_query"] = query
+					caller_ctx["_topic_fallback_offset"] = true
+				var ctx := {"topic_search": true, "topic_first_pass": false}
+				_dispatch_request(url, ctx, caller_ctx)
+				return true
+	category_random_complete.emit.call_deferred("", caller_ctx)
+	return true
+
 func _on_random_request_complete(res: Dictionary, ctx: Dictionary, caller_ctx: Variant) -> bool:
 	if res.query.has("pages"):
 		var pages = res.query.pages
@@ -559,4 +760,24 @@ func _on_random_request_complete(res: Dictionary, ctx: Dictionary, caller_ctx: V
 			random_complete.emit.call_deferred(result_title, caller_ctx)
 			return true
 	random_complete.emit.call_deferred(null, caller_ctx)
+	return true
+
+## Handles the batch random response. Wikipedia returns an Array under query.random.
+## We pair each result title with its matching context from ctx.contexts.
+func _on_random_batch_complete(res: Dictionary, ctx: Dictionary) -> bool:
+	var contexts: Array = ctx.get("contexts", [])
+	if res.has("query") and res.query.has("random"):
+		var results: Array = res.query.random
+		for i in range(min(results.size(), contexts.size())):
+			var title: String = results[i].get("title", "")
+			if title != "":
+				random_complete.emit.call_deferred(title, contexts[i])
+			else:
+				random_complete.emit.call_deferred(null, contexts[i])
+		# Fire null for any contexts that didn't get a result
+		for i in range(results.size(), contexts.size()):
+			random_complete.emit.call_deferred(null, contexts[i])
+	else:
+		for c in contexts:
+			random_complete.emit.call_deferred(null, c)
 	return true

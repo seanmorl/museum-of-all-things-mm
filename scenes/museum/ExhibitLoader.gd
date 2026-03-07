@@ -124,9 +124,7 @@ func load_exhibit_for_rider_without_hall(to_room: String, from_room: String) -> 
 	})
 
 
-func on_fetch_complete(_titles: Array, context: Variant) -> void:
-	if not context or not (context is Dictionary):
-		return
+func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	# we don't need to do anything to handle a prefetch
 	if context.has("prefetch"):
 		_loading_exhibits.erase(context.get("title", ""))
@@ -140,7 +138,7 @@ func on_fetch_complete(_titles: Array, context: Variant) -> void:
 	var backlink: bool = context.has("backlink") and context.backlink
 	var rider_load: bool = context.has("rider_load") and context.rider_load
 	var hall: Hall = context.entry if backlink else context.get("exit")
-	var result: Variant = ExhibitFetcher.get_result(context.title)
+	var result: Dictionary = ExhibitFetcher.get_result(context.title)
 
 	# For rider_load, we don't require a hall - we'll use defaults
 	if not result or (not rider_load and not is_instance_valid(hall)):
@@ -167,6 +165,14 @@ func on_fetch_complete(_titles: Array, context: Variant) -> void:
 	var items: Array = data.items
 	var extra_text: Array = data.extra_text
 	var mood: int = data.get("mood", ExhibitMood.Mood.DEFAULT)
+
+	# During a race, guarantee the target article is reachable from this room by
+	# ensuring it appears in the doors list. We insert it at index 0 so it takes
+	# the first available exit slot and cannot be shuffled out.
+	if RaceManager.is_race_active():
+		var target: String = RaceManager.get_target_article()
+		if target != "" and target != context.title and not doors.has(target):
+			doors.insert(0, target)
 	var exhibit_height: int = get_free_exhibit_height()
 
 	var new_exhibit: Node3D = TiledExhibitGenerator.instantiate()
@@ -326,7 +332,7 @@ func _cleanup_old_exhibits(new_title: String) -> void:
 
 
 func _on_secret_room_fetch_complete(context: Dictionary) -> void:
-	var result: Variant = ExhibitFetcher.get_result(context.title)
+	var result: Dictionary = ExhibitFetcher.get_result(context.title)
 	if not result:
 		return
 	var exhibit: Node3D = context.get("exhibit")

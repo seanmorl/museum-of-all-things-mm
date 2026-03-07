@@ -15,6 +15,7 @@ signal start_race
 
 var _panel_style: StyleBoxFlat
 var _closing: bool = false
+var _race_control_override: bool = false
 
 
 func _on_visibility_changed() -> void:
@@ -142,6 +143,12 @@ func _on_race_state_changed(_arg1 = null, _arg2 = null) -> void:
 func _update_race_button_visibility() -> void:
 	if not race_button:
 		return
-	race_button.visible = NetworkManager.is_multiplayer_active() and not RaceManager.is_race_active()
+	var in_mp_as_host := NetworkManager.is_multiplayer_active() and (NetworkManager.is_server() or _race_control_override)
+	race_button.visible = in_mp_as_host and not RaceManager.is_race_active()
 	if cancel_race_button:
-		cancel_race_button.visible = NetworkManager.is_multiplayer_active() and RaceManager.is_race_active()
+		cancel_race_button.visible = in_mp_as_host and RaceManager.is_race_active()
+
+## Called via RPC in dedicated host mode to grant this client race control.
+func set_race_control_override(enabled: bool) -> void:
+	_race_control_override = enabled
+	_update_race_button_visibility()

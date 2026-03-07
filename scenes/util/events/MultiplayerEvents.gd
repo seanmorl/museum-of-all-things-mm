@@ -2,6 +2,7 @@ extends Node
 
 signal player_joined(peer_id: int, player_name: String)
 signal player_left(peer_id: int)
+signal chat_message_received(sender_name: String, pronouns: String, message: String, color: Color)
 signal multiplayer_started
 signal multiplayer_ended
 signal skin_selected(url: String, texture: ImageTexture)
@@ -12,6 +13,10 @@ func emit_player_joined(peer_id: int, player_name: String) -> void:
 
 func emit_player_left(peer_id: int) -> void:
 	player_left.emit(peer_id)
+
+
+func emit_chat_message(sender_name: String, pronouns: String, message: String, color: Color) -> void:
+	chat_message_received.emit(sender_name, pronouns, message, color)
 
 func emit_multiplayer_started() -> void:
 	multiplayer_started.emit()

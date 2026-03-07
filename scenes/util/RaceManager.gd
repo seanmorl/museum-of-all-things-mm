@@ -5,10 +5,16 @@ signal race_ended(winner_peer_id: int, winner_name: String)
 signal race_cancelled
 ## Emitted every second while a race is active. Connect to update a HUD timer.
 signal race_timer_updated(elapsed_seconds: float)
+## Emitted on all peers when the host cancels the vote.
+signal vote_cancelled
 ## Emitted on all peers when a vote round begins.
 signal vote_started(candidates: Array)
 ## Emitted on all peers when vote results are in, just before race_started.
 signal vote_ended(winner: String)
+## Emitted on all peers when the host changes target difficulty.
+signal difficulty_changed(difficulty: String)
+## Emitted on all peers when the host sets or clears a category override.
+signal category_override_changed(category_name: String)  ## empty string = no override
 
 enum State { IDLE, ACTIVE }
 
@@ -35,9 +41,15 @@ var _vote_candidates: Array = []
 var _votes: Dictionary = {}
 ## Seconds remaining in the vote window.
 var _vote_timer: float = 0.0
+var _vote_timer_paused: bool = false
 var _vote_active: bool = false
 const VOTE_DURATION: float = 20.0
 const CANDIDATE_COUNT: int = 5
+
+## Target difficulty: "easy" | "medium" | "hard". Set by host, synced to all clients.
+var _difficulty: String = "medium"
+## When non-empty, target is drawn from this Wikipedia category instead of difficulty pool.
+var _category_override: String = ""
 
 func _ready() -> void:
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
@@ -46,7 +58,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if _vote_active:
-		_vote_timer -= delta
+		if not _vote_timer_paused:
+			_vote_timer -= delta
 		if _vote_timer <= 0.0 and NetworkManager.is_server():
 			_finish_vote()
 		return
@@ -95,6 +108,7 @@ func begin_vote(candidates: Array, start_article: String = "") -> void:
 	_votes.clear()
 	_vote_active = true
 	_vote_timer = VOTE_DURATION
+	_vote_timer_paused = false  # always clear pause on new/rerolled vote
 	_sync_vote_start.rpc(candidates)
 
 ## Called by any peer to cast or change their vote (index into candidates array).
@@ -141,6 +155,60 @@ func get_vote_candidates() -> Array:
 func get_vote_time_remaining() -> float:
 	return _vote_timer
 
+func set_vote_timer_paused(paused: bool) -> void:
+	if NetworkManager.is_server():
+		_vote_timer_paused = paused
+	else:
+		_rpc_set_vote_timer_paused.rpc_id(1, paused)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_set_vote_timer_paused(paused: bool) -> void:
+	_vote_timer_paused = paused
+
+## Host only. Cancels the active vote and notifies all peers.
+func cancel_vote() -> void:
+	if not NetworkManager.is_server():
+		return
+	if not _vote_active:
+		return
+	_sync_vote_cancel.rpc()
+
+@rpc("authority", "call_local", "reliable")
+func _sync_vote_cancel() -> void:
+	_vote_active = false
+	_vote_candidates.clear()
+	_votes.clear()
+	_vote_timer = 0.0
+	vote_cancelled.emit()
+
+func get_difficulty() -> String:
+	return _difficulty
+
+## Called by host only. Syncs the new difficulty to all peers.
+func set_difficulty(difficulty: String) -> void:
+	if not NetworkManager.is_server():
+		return
+	_sync_difficulty.rpc(difficulty)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_difficulty(difficulty: String) -> void:
+	_difficulty = difficulty
+	difficulty_changed.emit(difficulty)
+
+func get_category_override() -> String:
+	return _category_override
+
+## Set a Wikipedia category name to draw the target from. Empty string clears the override.
+func set_category_override(category_name: String) -> void:
+	if not NetworkManager.is_server():
+		return
+	_sync_category_override.rpc(category_name)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_category_override(category_name: String) -> void:
+	_category_override = category_name
+	category_override_changed.emit(category_name)
+
 func is_vote_active() -> bool:
 	return _vote_active
 
@@ -150,6 +218,7 @@ func _sync_vote_start(candidates: Array) -> void:
 	_votes.clear()
 	_vote_active = true
 	_vote_timer = VOTE_DURATION
+	_vote_timer_paused = false  # clear on all peers, not just server
 	vote_started.emit(candidates)
 
 @rpc("authority", "call_local", "reliable")

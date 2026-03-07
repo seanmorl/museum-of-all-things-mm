@@ -21,6 +21,7 @@ var player_info: Dictionary = {}
 var local_player_name: String = "Player"
 var local_player_color: Color = Color(0.2, 0.5, 0.8, 1.0)
 var local_player_skin: String = ""
+var local_player_pronouns: String = ""
 var is_hosting: bool = false
 var is_dedicated_server: bool = false
 
@@ -33,8 +34,6 @@ const _KEEPALIVE_INTERVAL: float = 5.0
 
 func _process(delta: float) -> void:
 	if not is_multiplayer_active():
-		return
-	if multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
 		return
 	_keepalive_timer += delta
 	if _keepalive_timer >= _KEEPALIVE_INTERVAL:
@@ -71,6 +70,7 @@ func host_game(port: int = DEFAULT_PORT, dedicated: bool = false) -> Error:
 			"name": local_player_name,
 			"color": local_player_color,
 			"skin_url": local_player_skin,
+			"pronouns": local_player_pronouns,
 			"current_room": "Lobby"
 		}
 
@@ -187,6 +187,21 @@ func get_player_skin(peer_id: int) -> String:
 		return player_info[peer_id].skin_url
 	return ""
 
+func get_player_pronouns(peer_id: int) -> String:
+	if player_info.has(peer_id) and player_info[peer_id].has("pronouns"):
+		return player_info[peer_id].pronouns
+	return ""
+
+
+func set_local_player_pronouns(pronouns: String) -> void:
+	local_player_pronouns = pronouns
+	var my_id = get_unique_id()
+	if player_info.has(my_id):
+		player_info[my_id].pronouns = pronouns
+		if is_multiplayer_active():
+			_broadcast_player_info.rpc(my_id, local_player_name, local_player_color.to_html(), local_player_skin, local_player_pronouns)
+
+
 func set_local_player_room(room: String) -> void:
 	var my_id = get_unique_id()
 	if player_info.has(my_id):
@@ -211,7 +226,7 @@ func set_local_player_name(player_name: String) -> void:
 	if player_info.has(my_id):
 		player_info[my_id].name = player_name
 		if is_multiplayer_active():
-			_broadcast_player_info.rpc(my_id, player_name, local_player_color.to_html(), local_player_skin)
+			_broadcast_player_info.rpc(my_id, player_name, local_player_color.to_html(), local_player_skin, local_player_pronouns)
 
 func set_local_player_color(color: Color) -> void:
 	local_player_color = color
@@ -219,7 +234,7 @@ func set_local_player_color(color: Color) -> void:
 	if player_info.has(my_id):
 		player_info[my_id].color = color
 		if is_multiplayer_active():
-			_broadcast_player_info.rpc(my_id, local_player_name, color.to_html(), local_player_skin)
+			_broadcast_player_info.rpc(my_id, local_player_name, color.to_html(), local_player_skin, local_player_pronouns)
 
 func set_local_player_skin(skin_url: String) -> void:
 	local_player_skin = skin_url
@@ -227,10 +242,10 @@ func set_local_player_skin(skin_url: String) -> void:
 	if player_info.has(my_id):
 		player_info[my_id].skin_url = skin_url
 		if is_multiplayer_active():
-			_broadcast_player_info.rpc(my_id, local_player_name, local_player_color.to_html(), skin_url)
+			_broadcast_player_info.rpc(my_id, local_player_name, local_player_color.to_html(), skin_url, local_player_pronouns)
 
 @rpc("any_peer", "call_local", "reliable")
-func _broadcast_player_info(peer_id: int, player_name: String, color_html: String, skin_url: String = "") -> void:
+func _broadcast_player_info(peer_id: int, player_name: String, color_html: String, skin_url: String = "", pronouns: String = "") -> void:
 	var current_room: String = "Lobby"
 	if player_info.has(peer_id) and player_info[peer_id].has("current_room"):
 		current_room = player_info[peer_id].current_room
@@ -238,6 +253,7 @@ func _broadcast_player_info(peer_id: int, player_name: String, color_html: Strin
 		"name": player_name,
 		"color": Color.html(color_html),
 		"skin_url": skin_url,
+		"pronouns": pronouns,
 		"current_room": current_room
 	}
 	player_info_updated.emit(peer_id)
@@ -246,10 +262,10 @@ func _broadcast_player_info(peer_id: int, player_name: String, color_html: Strin
 func _request_player_info(from_peer: int) -> void:
 	if is_dedicated_server:
 		return
-	_receive_player_info.rpc_id(from_peer, multiplayer.get_unique_id(), local_player_name, local_player_color.to_html(), local_player_skin)
+	_receive_player_info.rpc_id(from_peer, multiplayer.get_unique_id(), local_player_name, local_player_color.to_html(), local_player_skin, local_player_pronouns)
 
 @rpc("any_peer", "reliable")
-func _receive_player_info(peer_id: int, player_name: String, color_html: String, skin_url: String = "") -> void:
+func _receive_player_info(peer_id: int, player_name: String, color_html: String, skin_url: String = "", pronouns: String = "") -> void:
 	var current_room: String = "Lobby"
 	if player_info.has(peer_id) and player_info[peer_id].has("current_room"):
 		current_room = player_info[peer_id].current_room
@@ -257,6 +273,7 @@ func _receive_player_info(peer_id: int, player_name: String, color_html: String,
 		"name": player_name,
 		"color": Color.html(color_html),
 		"skin_url": skin_url,
+		"pronouns": pronouns,
 		"current_room": current_room
 	}
 	player_info_updated.emit(peer_id)
@@ -274,7 +291,7 @@ func _on_peer_connected(id: int) -> void:
 
 	_request_player_info.rpc_id(id, multiplayer.get_unique_id())
 	if not is_dedicated_server:
-		_receive_player_info.rpc_id(id, multiplayer.get_unique_id(), local_player_name, local_player_color.to_html(), local_player_skin)
+		_receive_player_info.rpc_id(id, multiplayer.get_unique_id(), local_player_name, local_player_color.to_html(), local_player_skin, local_player_pronouns)
 		var my_id := multiplayer.get_unique_id()
 		var my_room := get_player_room(my_id)
 		_broadcast_player_room.rpc_id(id, my_id, my_room)

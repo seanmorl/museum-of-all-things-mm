@@ -22,6 +22,8 @@ var _multiplayer_controller: MultiplayerController = null
 var _mount_controller: MountController = null
 var _painting_controller: PaintingController = null
 var _pointing_controller: PointingController = null
+var _chat_system: Node = null
+var _chat_hud: Node = null
 
 @onready var _journal_overlay: JournalOverlay = %JournalOverlay
 @onready var player_list_overlay: Control = %PlayerListOverlay
@@ -36,6 +38,10 @@ var _pointing_controller: PointingController = null
 @onready var _world_light: DirectionalLight3D = %WorldLight
 @onready var _pause_menu: Control = %PauseMenu
 var game_started: bool = false
+## True when running as a UI-based dedicated host (no local player spawned)
+var _is_ui_dedicated_host: bool = false
+## The peer_id who currently has race control (host by default, first joiner in dedicated host mode)
+var _race_controller_peer_id: int = 1
 
 
 func _debug_log(message: String) -> void:
@@ -67,6 +73,11 @@ func _ready() -> void:
 	_menu_controller.multiplayer_start_requested.connect(_on_multiplayer_start_game)
 	add_child(_menu_controller)
 
+	# Connect dedicated host button from MainMenu
+	var main_menu_node := _menu_layer.get_node_or_null("MainMenu")
+	if main_menu_node and main_menu_node.has_signal("start_dedicated_host"):
+		main_menu_node.start_dedicated_host.connect(_on_dedicated_host_pressed)
+
 	_multiplayer_controller = MultiplayerController.new()
 	_multiplayer_controller.init(self, NetworkPlayer, starting_point)
 	add_child(_multiplayer_controller)
@@ -82,6 +93,16 @@ func _ready() -> void:
 	_pointing_controller = PointingController.new()
 	_pointing_controller.init(self)
 	add_child(_pointing_controller)
+
+	_chat_system = ChatSystem.new()
+	_chat_system.name = "ChatSystem"
+	add_child(_chat_system)
+	_chat_system.init(self)
+
+	_chat_hud = ChatHUD.new()
+	_chat_hud.name = "ChatHUD"
+	add_child(_chat_hud)
+	_chat_hud.init(_chat_system)
 
 	_parse_command_line()
 
@@ -107,7 +128,9 @@ func _ready() -> void:
 	_pause_menu.start_race.connect(_on_start_race_pressed)
 	add_to_group("main")
 	RaceManager.race_started.connect(_on_race_started)
+	RaceManager.vote_cancelled.connect(_on_vote_cancelled)
 	ExhibitFetcher.random_complete.connect(_on_random_article_complete)
+	ExhibitFetcher.category_random_complete.connect(_on_random_article_complete)
 
 	# Load saved skin
 	_load_saved_skin()
@@ -190,15 +213,86 @@ func _on_main_menu_multiplayer() -> void:
 
 
 func _on_multiplayer_menu_back() -> void:
-	if NetworkManager.is_multiplayer_active() or _multiplayer_controller.is_multiplayer_game():
-		_leave_multiplayer_session()
-		return
 	_menu_controller.on_multiplayer_menu_back()
 
 
 func _on_multiplayer_start_game() -> void:
 	_multiplayer_controller.set_multiplayer_game(true)
 	_start_multiplayer_game()
+
+
+func _on_dedicated_host_pressed() -> void:
+	_start_ui_dedicated_host()
+
+
+func _start_ui_dedicated_host() -> void:
+	## Starts the server while keeping the host in the main menu UI.
+	## No local player is spawned. The first player to join gets race control.
+	_is_ui_dedicated_host = true
+	_race_controller_peer_id = -1  # not yet assigned
+
+	_multiplayer_controller.set_server_mode(true)
+	_multiplayer_controller.set_multiplayer_game(true)
+
+	# Signals are already connected in _ready() — no reconnection needed
+
+	var error: Error = NetworkManager.host_game(_multiplayer_controller.get_server_port(), true)
+	if error != OK:
+		Log.error("Main", "Dedicated host failed: %s" % str(error))
+		_is_ui_dedicated_host = false
+		return
+
+	game_started = true
+	_museum.init(null)
+
+	# Update main menu to show hosting status + stop button
+	var main_menu_node := _menu_layer.get_node_or_null("MainMenu")
+	if main_menu_node:
+		var lbl := Label.new()
+		lbl.name = "HostStatusLabel"
+		lbl.text = "Hosting on port %d — waiting for players..." % _multiplayer_controller.get_server_port()
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.add_theme_color_override("font_color", Color(0.4, 0.7, 0.4))
+		var container := main_menu_node.get_node("%Quit").get_parent()
+		container.add_child(lbl)
+
+		var stop_btn := Button.new()
+		stop_btn.name = "StopHostingButton"
+		stop_btn.text = "Stop Hosting"
+		stop_btn.pressed.connect(_on_stop_hosting_pressed)
+		container.add_child(stop_btn)
+
+		# Hide the Host Server button while hosting
+		var host_btn := main_menu_node.get_node_or_null("DedicatedHost")
+		if host_btn:
+			host_btn.visible = false
+
+	Log.info("Main", "UI dedicated host started on port %d" % _multiplayer_controller.get_server_port())
+
+
+func _on_stop_hosting_pressed() -> void:
+	Log.info("Main", "Stopping dedicated host...")
+	_multiplayer_controller.end_multiplayer_session()
+	NetworkManager.disconnect_from_game()
+	_multiplayer_controller.set_server_mode(false)
+	_multiplayer_controller.set_multiplayer_game(false)
+	_is_ui_dedicated_host = false
+	_race_controller_peer_id = 1
+	game_started = false
+
+	# Restore main menu UI
+	var main_menu_node := _menu_layer.get_node_or_null("MainMenu")
+	if main_menu_node:
+		var container := main_menu_node.get_node("%Quit").get_parent()
+		var lbl := container.get_node_or_null("HostStatusLabel")
+		if lbl:
+			lbl.queue_free()
+		var stop_btn := container.get_node_or_null("StopHostingButton")
+		if stop_btn:
+			stop_btn.queue_free()
+		var host_btn := main_menu_node.get_node_or_null("DedicatedHost")
+		if host_btn:
+			host_btn.visible = true
 
 
 func _on_main_menu_settings() -> void:
@@ -230,49 +324,53 @@ func _input(event: InputEvent) -> void:
 	if not game_started:
 		return
 
-	if Input.is_action_just_pressed("ui_accept"):
-		UIEvents.emit_ui_accept_pressed()
+	# Don't process game inputs while the chat input is open
+	var chat_open: bool = _chat_hud != null and _chat_hud.is_input_open()
+	if not chat_open:
+		if Input.is_action_just_pressed("ui_accept"):
+			UIEvents.emit_ui_accept_pressed()
 
-	if Input.is_action_just_pressed("ui_cancel") and _menu_layer.visible:
-		UIEvents.emit_ui_cancel_pressed()
+		if Input.is_action_just_pressed("ui_cancel") and _menu_layer.visible:
+			UIEvents.emit_ui_cancel_pressed()
 
-	if Input.is_action_just_pressed("show_fps"):
-		_fps_label.visible = not _fps_label.visible
+		if Input.is_action_just_pressed("show_fps"):
+			_fps_label.visible = not _fps_label.visible
 
-	if Input.is_action_just_pressed("toggle_server_console"):
-		if _multiplayer_controller.is_multiplayer_game():
-			_server_console_overlay.toggle()
+		if Input.is_action_just_pressed("toggle_server_console"):
+			if _multiplayer_controller.is_multiplayer_game():
+				_server_console_overlay.toggle()
 
-	if event.is_action_pressed("toggle_journal"):
-		if _journal_overlay:
-			if _journal_overlay.is_open():
-				_journal_overlay.close()
-			else:
-				_journal_overlay.open()
-				Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-				_player.pause()
+		if event.is_action_pressed("toggle_journal"):
+			if _journal_overlay:
+				if _journal_overlay.is_open():
+					_journal_overlay.close()
+				else:
+					_journal_overlay.open()
+					Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+					_player.pause()
 
-	if event.is_action_pressed("toggle_map") and not _menu_layer.visible:
-		_map_overlay.cycle_mode()
+		if event.is_action_pressed("toggle_map") and not _menu_layer.visible:
+			_map_overlay.cycle_mode()
 
-	if event.is_action_pressed("pause"):
-		_map_overlay.set_hidden()
-		_pause_game()
+		if event.is_action_pressed("pause"):
+			_map_overlay.set_hidden()
+			_pause_game()
 
-	if event.is_action_pressed("free_pointer"):
-		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-	if event.is_action_pressed("click") and not _menu_layer.visible:
-		if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
-			var overlay_open: bool = (_journal_overlay and _journal_overlay.is_open()) or (_guestbook_overlay and _guestbook_overlay.is_open())
-			if not overlay_open:
-				Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+		if event.is_action_pressed("free_pointer"):
+			Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
-	# Tab key for player list overlay
-	if _multiplayer_controller.is_multiplayer_game() and not _menu_layer.visible:
-		if event.is_action_pressed("show_player_list"):
-			player_list_overlay.visible = true
-		elif event.is_action_released("show_player_list"):
-			player_list_overlay.visible = false
+		if event.is_action_pressed("click") and not _menu_layer.visible:
+			if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
+				var overlay_open: bool = (_journal_overlay and _journal_overlay.is_open()) or (_guestbook_overlay and _guestbook_overlay.is_open())
+				if not overlay_open:
+					Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+		# Tab key for player list overlay
+		if _multiplayer_controller.is_multiplayer_game() and not _menu_layer.visible:
+			if event.is_action_pressed("show_player_list"):
+				player_list_overlay.visible = true
+			elif event.is_action_released("show_player_list"):
+				player_list_overlay.visible = false
 
 
 func _process(delta: float) -> void:
@@ -363,9 +461,10 @@ func _on_start_race_pressed() -> void:
 		_race_target_article = ""
 		_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
 		_show_vote_loading()
-		for i in RaceManager.CANDIDATE_COUNT:
-			ExhibitFetcher.fetch_random_level4({ "race": true, "race_role": "candidate" })
-		ExhibitFetcher.fetch_random_level4({ "race": true, "race_role": "target" })
+		# Fetch all candidates in a single Wikipedia API call
+		_fetch_race_candidates()
+		# Target still uses Toolforge for quality filtering
+		_fetch_race_target()
 	else:
 		_debug_log("Main: Sending _request_race_start RPC to server (my id: %d, multiplayer active: %s)" % [multiplayer.get_unique_id(), NetworkManager.is_multiplayer_active()])
 		_request_race_start.rpc_id(1)
@@ -383,9 +482,8 @@ func _request_race_start() -> void:
 	_race_target_article = ""
 	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
 	_show_vote_loading()
-	for i in RaceManager.CANDIDATE_COUNT:
-		ExhibitFetcher.fetch_random_level4({ "race": true, "race_role": "candidate" })
-	ExhibitFetcher.fetch_random_level4({ "race": true, "race_role": "target" })
+	_fetch_race_candidates()
+	_fetch_race_target()
 
 
 ## Collects random articles for the vote pool + target.
@@ -393,16 +491,37 @@ var _race_candidates: Array = []
 var _race_target_article: String = ""
 var _race_fetches_pending: int = 0
 
-func _on_random_article_complete(title: String, context: Dictionary) -> void:
+var _race_retry_count: int = 0
+const MAX_RACE_RETRIES: int = 10
+
+func _on_random_article_complete(title: Variant, context: Dictionary) -> void:
 	if not context or not context.has("race") or not context.race:
 		return
 
 	if title == null or title == "":
-		Log.error("Main", "Failed to fetch random article for race")
+		_race_retry_count += 1
+		if _race_retry_count > MAX_RACE_RETRIES:
+			Log.error("Main", "Too many fetch failures — giving up and launching with what we have")
+			_race_retry_count = 0
+			if _race_candidates.size() > 0:
+				_launch_vote()
+			return
+		Log.error("Main", "Failed to fetch random article for race — retrying (%d/%d)" % [_race_retry_count, MAX_RACE_RETRIES])
+		var role: String = context.get("race_role", "candidate")
+		if role == "candidate":
+			_fetch_one_candidate()
+		else:
+			_fetch_race_target()
 		return
 
+	_race_retry_count = 0
 	var role: String = context.get("race_role", "candidate")
 	if role == "candidate":
+		# Deduplicate: if this title is already in the pool, fetch a replacement
+		if title in _race_candidates or title == _race_target_article:
+			_debug_log("Main: Duplicate candidate '%s' — retrying" % title)
+			_fetch_one_candidate()
+			return
 		_race_candidates.append(title)
 		_race_fetches_pending -= 1
 		_debug_log("Main: Got candidate '%s' (%d remaining)" % [title, _race_fetches_pending])
@@ -415,6 +534,52 @@ func _on_random_article_complete(title: String, context: Dictionary) -> void:
 		if _race_fetches_pending <= 0 and _race_candidates.size() >= RaceManager.CANDIDATE_COUNT:
 			_launch_vote()
 
+func _fetch_race_target() -> void:
+	## Category override takes priority over difficulty setting.
+	var cat := RaceManager.get_category_override()
+	if cat != "":
+		ExhibitFetcher.fetch_random_from_category(cat, { "race": true, "race_role": "target" })
+	elif RaceManager.get_difficulty() == "random_category":
+		ExhibitFetcher.fetch_random_category_article({ "race": true, "race_role": "target" })
+	else:
+		ExhibitFetcher.fetch_random_target({ "race": true, "race_role": "target" }, RaceManager.get_difficulty())
+
+func _fetch_one_candidate() -> void:
+	## Fetches a single replacement candidate, respecting category/difficulty settings.
+	var cat := RaceManager.get_category_override()
+	if cat != "":
+		ExhibitFetcher.fetch_random_from_category(cat, { "race": true, "race_role": "candidate" })
+	elif RaceManager.get_difficulty() == "random_category":
+		ExhibitFetcher.fetch_random_category_article({ "race": true, "race_role": "candidate" })
+	else:
+		ExhibitFetcher.fetch_random_batch([{ "race": true, "race_role": "candidate" }])
+
+
+func _fetch_race_candidates() -> void:
+	## When a category override is set, candidates also come from that category.
+	## Otherwise use the fast batch random endpoint.
+	var cat := RaceManager.get_category_override()
+	if cat != "":
+		for i in RaceManager.CANDIDATE_COUNT:
+			ExhibitFetcher.fetch_random_from_category(cat, { "race": true, "race_role": "candidate" })
+	elif RaceManager.get_difficulty() == "random_category":
+		for i in RaceManager.CANDIDATE_COUNT:
+			ExhibitFetcher.fetch_random_category_article({ "race": true, "race_role": "candidate" })
+	else:
+		var candidate_contexts: Array = []
+		for i in RaceManager.CANDIDATE_COUNT:
+			candidate_contexts.append({ "race": true, "race_role": "candidate" })
+		ExhibitFetcher.fetch_random_batch(candidate_contexts)
+
+
+func _on_vote_cancelled() -> void:
+	## Host cancelled the vote — clear pending fetch state and return all players to pause menu.
+	_race_candidates.clear()
+	_race_target_article = ""
+	_race_fetches_pending = 0
+	_pause_game()
+
+
 func _show_vote_loading() -> void:
 	var vote_hud := get_node_or_null("TabMenu/VoteHUD")
 	if vote_hud and vote_hud.has_method("show_loading"):
@@ -425,16 +590,17 @@ func reroll_vote() -> void:
 	## Called by VoteHUD reroll button (host only). Re-fetches all candidates.
 	if not NetworkManager.is_server():
 		return
+	RaceManager.set_vote_timer_paused(true)
 	_race_candidates.clear()
 	_race_target_article = ""
 	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
-	for i in RaceManager.CANDIDATE_COUNT:
-		ExhibitFetcher.fetch_random_level4({ "race": true, "race_role": "candidate" })
-	ExhibitFetcher.fetch_random_level4({ "race": true, "race_role": "target" })
+	_fetch_race_candidates()
+	_fetch_race_target()
 
 
 func _launch_vote() -> void:
 	_debug_log("Main: Launching vote with candidates %s, target '%s'" % [str(_race_candidates), _race_target_article])
+	RaceManager.set_vote_timer_paused(false)
 	RaceManager.begin_vote(_race_candidates.duplicate(), _race_target_article)
 	_race_candidates.clear()
 	_race_target_article = ""
@@ -446,6 +612,14 @@ func _launch_vote() -> void:
 
 func _on_race_started(target_article: String, start_article: String) -> void:
 	_debug_log("Main: Race started, sending all players to '%s'" % start_article)
+
+	# In dedicated host mode there is no local player — just sync to clients and return
+	if _is_ui_dedicated_host:
+		if start_article != "" and NetworkManager.is_server():
+			_sync_race_start_article.rpc(start_article)
+		GameplayEvents.emit_race_started(target_article)
+		return
+
 	if _player == null:
 		return
 	_menu_controller.close_menus()
@@ -456,7 +630,8 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 	# Open the search door to the starting exhibit for all players
 	if start_article != "":
 		UIEvents.emit_set_custom_door(start_article)
-		_sync_race_start_article.rpc(start_article)
+		if NetworkManager.is_server():
+			_sync_race_start_article.rpc(start_article)
 
 	# Start game (close menus, capture mouse)
 	_start_game()
@@ -470,14 +645,7 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 func _start_dedicated_server() -> void:
 	Log.info("Main", "Starting dedicated server on port %d..." % _multiplayer_controller.get_server_port())
 
-	# Connect multiplayer signals before hosting
-	NetworkManager.peer_connected.connect(_on_network_peer_connected)
-	NetworkManager.peer_disconnected.connect(_on_network_peer_disconnected)
-	NetworkManager.player_info_updated.connect(_on_network_player_info_updated)
-
-	# Connect race signals (needed for RPC handling)
-	RaceManager.race_started.connect(_on_race_started)
-	ExhibitFetcher.random_complete.connect(_on_random_article_complete)
+	# Signals are already connected in _ready() — no reconnection needed
 
 	var error: Error = NetworkManager.host_game(_multiplayer_controller.get_server_port(), true)
 	if error != OK:
@@ -515,36 +683,40 @@ func _on_network_peer_connected(peer_id: int) -> void:
 		if NetworkManager.is_server():
 			_notify_game_started.rpc_id(peer_id)
 
+			# In dedicated host mode, first joiner gets race control
+			if _is_ui_dedicated_host and _race_controller_peer_id == -1:
+				_race_controller_peer_id = peer_id
+				_grant_race_control.rpc_id(peer_id)
+
 
 func _on_network_peer_disconnected(peer_id: int) -> void:
 	if _painting_controller:
 		_painting_controller.on_player_disconnected(peer_id, _player)
 	_multiplayer_controller.remove_network_player(peer_id, _player, _mount_controller.get_mount_state())
 
+	# If the race controller disconnected in dedicated host mode, assign the next peer
+	if _is_ui_dedicated_host and peer_id == _race_controller_peer_id:
+		_race_controller_peer_id = -1
+		var players := NetworkManager.get_player_list()
+		for p in players:
+			if p != 1:  # skip server peer id
+				_race_controller_peer_id = p
+				_grant_race_control.rpc_id(p)
+				break
+
 
 func _on_network_server_disconnected() -> void:
-	# Only fires on clients — means the host quit or connection dropped.
-	_leave_multiplayer_session()
-	var mp_menu = _menu_layer.get_node_or_null("MultiplayerMenu")
-	if mp_menu and mp_menu.has_method("show_disconnected_message"):
-		_menu_controller.open_multiplayer_menu()
-		mp_menu.show_disconnected_message()
-
-
-func _leave_multiplayer_session() -> void:
-	## Shared teardown for any path that returns to the main menu from
-	## a multiplayer session — lobby leave, pause menu quit, server disconnect.
-	game_started = false
+	# Only fires on clients. In auto-host mode the host is the server so this
+	# never triggers for them. For clients it means the host quit.
 	_multiplayer_controller.end_multiplayer_session()
-	NetworkManager.disconnect_from_game()
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-	_player.pause()
 	_menu_controller.open_main_menu()
 
 
 func _on_quit_requested() -> void:
-	if _multiplayer_controller.is_multiplayer_game() or NetworkManager.is_multiplayer_active():
-		_leave_multiplayer_session()
+	if _multiplayer_controller.is_multiplayer_game():
+		NetworkManager.disconnect_from_game()
+		_multiplayer_controller.end_multiplayer_session()
+		_menu_controller.open_main_menu()
 	else:
 		get_tree().quit()
 
@@ -740,3 +912,11 @@ func _sync_race_start_article(start_article: String) -> void:
 	_museum.reset_to_lobby()
 	UIEvents.emit_set_custom_door(start_article)
 	_start_game()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _grant_race_control() -> void:
+	## Called on the client that should have race control in dedicated host mode.
+	## Overrides the PauseMenu visibility check to show Start Race.
+	if _pause_menu and _pause_menu.has_method("set_race_control_override"):
+		_pause_menu.set_race_control_override(true)

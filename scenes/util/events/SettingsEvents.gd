@@ -29,3 +29,18 @@ func emit_set_joypad_deadzone(value: float) -> void:
 
 func emit_language_changed(language: String) -> void:
 	language_changed.emit(language)
+
+signal chat_enabled_changed(enabled: bool)
+
+func emit_chat_enabled_changed(enabled: bool) -> void:
+	chat_enabled_changed.emit(enabled)
+
+signal chat_typing_sound_changed(enabled: bool)
+
+func emit_chat_typing_sound_changed(enabled: bool) -> void:
+	chat_typing_sound_changed.emit(enabled)
+
+signal chat_key_changed(key_name: String)
+
+func emit_chat_key_changed(key_name: String) -> void:
+	chat_key_changed.emit(key_name)
