@@ -1,7 +1,7 @@
 [gd_resource type="Theme" format=3 uid="uid://dgt5fjkytx07d"]
 
-[ext_resource type="FontFile" uid="uid://ctf5uof6a8cb4" path="res://assets/fonts/NotoSans/NotoSans-Regular.ttf" id="2_noto_reg"]
-[ext_resource type="FontFile" uid="uid://3hk6apvmsbot" path="res://assets/fonts/NotoSans/NotoSans-Medium.ttf" id="3_noto_med"]
+[ext_resource type="FontFile" uid="uid://bounoqqcb0rpt" path="res://assets/fonts/NotoSans/NotoSans-Regular.ttf" id="2_noto_reg"]
+[ext_resource type="FontFile" uid="uid://djr7aa8hujvf" path="res://assets/fonts/NotoSans/NotoSans-Medium.ttf" id="3_noto_med"]
 
 [sub_resource type="StyleBoxFlat" id="btn_disabled"]
 content_margin_left = 16.0
