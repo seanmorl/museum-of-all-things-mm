@@ -27,7 +27,10 @@ multiplayer for up to 16 players.
 
 - **Host or Join**: Start your own server or connect to a friend's game
 - **Player Customization**: Set your name, choose a color, or use a custom skin from any Wikimedia image URL
+- **Player Voting**: Vote for your target article, race to whatever target has the most votes
 - **Explore Together**: See other players in real-time as you walk through exhibits
+- **Modern UI**: Enjoy a clean and consistent UI that fits the original MOAT experience
+- **In Game Chat**: Have some in game trash talking as you race with the newly added text chat
 - **Player Mounting**: Climb on top of other players and ride around the museum together
 - **Room-Based Visibility**: Players are only visible when in the same exhibit, keeping things focused
 
@@ -92,6 +95,8 @@ an issue and we can discuss it before you put too much work in.
 - Support for more media types, such as audio or 3d models
 - ~~Support for more Wikipedia languages other than English~~ [Thank you so much to daviirodrig and all others who helped!](https://github.com/m4ym4y/museum-of-all-things/pull/59)
 - ~~Multiplayer~~ Done!
+- Dark Mode
+- Better Accessibility Options
 
 ## Credits
 
@@ -101,3 +106,5 @@ All exhibit content is sourced from Wikipedia and Wikimedia commons. This game i
 - App Store Publishing and Multi-Platform Support: [David Snopek](https://www.snopekgames.com/)
 - Audio: [Willow Wolf @ Neomoon](https://neomoon.one) (Accepting work on game audio)
 - Dramaturgy: Emma Bee Pernudi-Moon
+
+
