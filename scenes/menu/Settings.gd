@@ -46,6 +46,48 @@ func _build_multiplayer_settings() -> Control:
 	heading.add_theme_font_size_override("font_size", 18)
 	container.add_child(heading)
 
+	# UI Scale row
+	var scale_section_lbl := Label.new()
+	scale_section_lbl.text = "Interface"
+	scale_section_lbl.add_theme_font_size_override("font_size", 18)
+	container.add_child(scale_section_lbl)
+
+	var scale_row := HBoxContainer.new()
+	container.add_child(scale_row)
+
+	var scale_lbl := Label.new()
+	scale_lbl.text = "UI Scale"
+	scale_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scale_row.add_child(scale_lbl)
+
+	var scale_val_lbl := Label.new()
+	scale_val_lbl.custom_minimum_size = Vector2(38, 0)
+
+	var saved_ui = SettingsManager.get_settings("ui")
+	var current_scale: float = 1.0
+	if saved_ui and saved_ui.has("scale"):
+		current_scale = float(saved_ui.scale)
+
+	var scale_slider := HSlider.new()
+	scale_slider.min_value = 0.5
+	scale_slider.max_value = 2.0
+	scale_slider.step = 0.05
+	scale_slider.value = current_scale
+	scale_slider.custom_minimum_size = Vector2(160, 0)
+	scale_val_lbl.text = "%.0f%%" % (current_scale * 100)
+	scale_slider.value_changed.connect(func(v: float):
+		scale_val_lbl.text = "%.0f%%" % (v * 100)
+		_on_ui_scale_changed(v)
+	)
+	scale_row.add_child(scale_slider)
+	scale_row.add_child(scale_val_lbl)
+
+	var scale_hint := Label.new()
+	scale_hint.text = "Adjusts the size of HUD elements. Default is 100%."
+	scale_hint.add_theme_font_size_override("font_size", 12)
+	scale_hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1.0))
+	container.add_child(scale_hint)
+
 	# Chat toggle row
 	var row := HBoxContainer.new()
 	container.add_child(row)
@@ -124,6 +166,16 @@ func _build_multiplayer_settings() -> Control:
 	_tab_bar.add_tab("Multiplayer")
 
 	return container
+
+
+func _on_ui_scale_changed(scale: float) -> void:
+	var saved = SettingsManager.get_settings("ui")
+	var data: Dictionary = saved if saved else {}
+	data["scale"] = scale
+	SettingsManager.save_settings("ui", data)
+	SettingsEvents.emit_ui_scale_changed(scale)
+	# Apply immediately to the main viewport
+	get_tree().root.content_scale_factor = scale
 
 
 func _on_chat_toggle(enabled: bool) -> void:

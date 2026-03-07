@@ -73,3 +73,56 @@ func get_messages(exhibit_title: String) -> Array:
 	if _data.has(exhibit_title) and _data[exhibit_title].has("messages"):
 		return _data[exhibit_title].messages
 	return []
+
+
+# =============================================================================
+# PLACED PAINTINGS PERSISTENCE
+# =============================================================================
+# Placed paintings are stored per exhibit as a list of placement records.
+# Each record: { image_title, image_url, image_size: {x,y},
+#               wall_position: {x,y,z}, wall_normal: {x,y,z} }
+
+const MAX_PAINTINGS_PER_EXHIBIT: int = 20
+
+
+func save_placed_painting(exhibit_title: String, image_title: String, image_url: String,
+		image_size: Vector2, wall_position: Vector3, wall_normal: Vector3) -> void:
+	_ensure_exhibit(exhibit_title)
+	var paintings: Array = _get_paintings(exhibit_title)
+	# Remove any prior placement of the same painting (replace with new spot)
+	for i in range(paintings.size() - 1, -1, -1):
+		if paintings[i].get("image_title", "") == image_title:
+			paintings.remove_at(i)
+	paintings.append({
+		"image_title":  image_title,
+		"image_url":    image_url,
+		"image_size":   {"x": image_size.x, "y": image_size.y},
+		"wall_position": {"x": wall_position.x, "y": wall_position.y, "z": wall_position.z},
+		"wall_normal":  {"x": wall_normal.x,   "y": wall_normal.y,   "z": wall_normal.z},
+	})
+	while paintings.size() > MAX_PAINTINGS_PER_EXHIBIT:
+		paintings.pop_front()
+	_data[exhibit_title]["paintings"] = paintings
+	_save()
+
+
+func remove_placed_painting(exhibit_title: String, image_title: String) -> void:
+	## Called when a painting is picked back up, so it's no longer placed.
+	if not _data.has(exhibit_title):
+		return
+	var paintings: Array = _get_paintings(exhibit_title)
+	for i in range(paintings.size() - 1, -1, -1):
+		if paintings[i].get("image_title", "") == image_title:
+			paintings.remove_at(i)
+	_data[exhibit_title]["paintings"] = paintings
+	_save()
+
+
+func get_placed_paintings(exhibit_title: String) -> Array:
+	return _get_paintings(exhibit_title)
+
+
+func _get_paintings(exhibit_title: String) -> Array:
+	if _data.has(exhibit_title) and _data[exhibit_title].has("paintings"):
+		return _data[exhibit_title]["paintings"]
+	return []

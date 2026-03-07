@@ -155,14 +155,18 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 		$Light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 2
 	elif level == UP:
 		_grid.set_cell_item(hall_start, HALL_STAIRS_UP, ori)
-		_grid.set_cell_item(hall_start + Vector3.UP, -1, ori)
-		_grid.set_cell_item(hall_corner + Vector3.UP, -1, ori)
+		if _grid.get_cell_item(hall_start + Vector3.UP) != -1:
+			_grid.set_cell_item(hall_start + Vector3.UP, -1, ori)
+		if _grid.get_cell_item(hall_corner + Vector3.UP) != -1:
+			_grid.set_cell_item(hall_corner + Vector3.UP, -1, ori)
 		_grid.set_cell_item(hall_corner, HALL_STAIRS_TURN, corner_ori)
 		$Light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 4
 	elif level == DOWN:
 		_grid.set_cell_item(hall_start, HALL_STAIRS_DOWN, ori)
-		_grid.set_cell_item(hall_start + Vector3.UP, -1, ori)
-		_grid.set_cell_item(hall_corner, -1, ori)
+		if _grid.get_cell_item(hall_start + Vector3.UP) != -1:
+			_grid.set_cell_item(hall_start + Vector3.UP, -1, ori)
+		if _grid.get_cell_item(hall_corner) != -1:
+			_grid.set_cell_item(hall_corner, -1, ori)
 		_grid.set_cell_item(hall_corner - Vector3.UP, HALL_STAIRS_TURN, corner_ori)
 		$Light.global_position = GridUtils.grid_to_world(hall_corner)
 
@@ -181,14 +185,19 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 		to_pos = exit_hall
 	elif level == UP:
 		_grid.set_cell_item(exit_hall + Vector3.UP, HALL_STAIRS_DOWN, exit_ori_neg)
-		_grid.set_cell_item(exit_hall + 2 * Vector3.UP, -1, 0)
-		_grid.set_cell_item(exit_hall, -1, 0)
-		_grid.set_cell_item(exit_hall - Vector3.UP, -1, 0)
+		if _grid.get_cell_item(exit_hall + 2 * Vector3.UP) != -1:
+			_grid.set_cell_item(exit_hall + 2 * Vector3.UP, -1, 0)
+		if _grid.get_cell_item(exit_hall) != -1:
+			_grid.set_cell_item(exit_hall, -1, 0)
+		if _grid.get_cell_item(exit_hall - Vector3.UP) != -1:
+			_grid.set_cell_item(exit_hall - Vector3.UP, -1, 0)
 		to_pos = exit_hall + Vector3.UP
 	elif level == DOWN:
 		_grid.set_cell_item(exit_hall - Vector3.UP, HALL_STAIRS_UP, exit_ori_neg)
-		_grid.set_cell_item(exit_hall, -1, 0)
-		_grid.set_cell_item(exit_hall + Vector3.UP, -1, 0)
+		if _grid.get_cell_item(exit_hall) != -1:
+			_grid.set_cell_item(exit_hall, -1, 0)
+		if _grid.get_cell_item(exit_hall + Vector3.UP) != -1:
+			_grid.set_cell_item(exit_hall + Vector3.UP, -1, 0)
 		to_pos = exit_hall - Vector3.UP
 
 
@@ -204,6 +213,8 @@ func _on_fetch_failed(titles: Array, message: String) -> void:
 
 
 func _on_direction_changed(direction: String) -> void:
+	if not is_inside_tree():
+		return
 	player_direction = direction
 	if direction == "exit":
 		on_player_toward_exit.emit()

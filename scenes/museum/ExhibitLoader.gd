@@ -166,13 +166,6 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	var extra_text: Array = data.extra_text
 	var mood: int = data.get("mood", ExhibitMood.Mood.DEFAULT)
 
-	# During a race, guarantee the target article is reachable from this room by
-	# ensuring it appears in the doors list. We insert it at index 0 so it takes
-	# the first available exit slot and cannot be shuffled out.
-	if RaceManager.is_race_active():
-		var target: String = RaceManager.get_target_article()
-		if target != "" and target != context.title and not doors.has(target):
-			doors.insert(0, target)
 	var exhibit_height: int = get_free_exhibit_height()
 
 	var new_exhibit: Node3D = TiledExhibitGenerator.instantiate()
@@ -237,6 +230,23 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	var ghosts: Array = TraceManager.get_ghosts(context.title)
 	for ghost_data: Dictionary in ghosts:
 		GhostSilhouette.spawn_from_data(new_exhibit, ghost_data)
+
+	# Restore persistently placed paintings for this exhibit
+	var placed_paintings: Array = TraceManager.get_placed_paintings(context.title)
+	for pd: Dictionary in placed_paintings:
+		var wp: Dictionary = pd.get("wall_position", {})
+		var wn: Dictionary = pd.get("wall_normal",   {})
+		var sz: Dictionary = pd.get("image_size",    {})
+		if wp.is_empty() or wn.is_empty():
+			continue
+		var wall_pos  := Vector3(wp.get("x", 0), wp.get("y", 0), wp.get("z", 0))
+		var wall_norm := Vector3(wn.get("x", 0), wn.get("y", 0), wn.get("z", 0))
+		var img_size  := Vector2(sz.get("x", 1), sz.get("y", 1))
+		_museum._queue_item(context.title, _restore_placed_painting.bind(
+			new_exhibit, context.title,
+			pd.get("image_title", ""), pd.get("image_url", ""),
+			wall_pos, wall_norm, img_size
+		))
 
 	# Queue secret room content fetch if exhibit has a secret room
 	if new_exhibit.has_secret_room():
@@ -415,3 +425,19 @@ func _init_item(exhibit: Node3D, item: Node3D, data: Dictionary) -> void:
 	if is_instance_valid(exhibit) and is_instance_valid(item):
 		exhibit.add_child(item)
 		item.init(data)
+
+
+func _restore_placed_painting(exhibit: Node3D, exhibit_title: String,
+		image_title: String, image_url: String,
+		wall_position: Vector3, wall_normal: Vector3, image_size: Vector2) -> void:
+	## Recreates a placed painting mesh at the saved position when the exhibit reloads.
+	if not is_instance_valid(exhibit):
+		return
+	if not _museum.has_node(".."):  # safety
+		pass
+
+	# Delegate to PaintingController if available, otherwise build the mesh directly
+	var main: Node = _museum.get_parent()
+	if main and main.has_method("restore_placed_painting"):
+		main.restore_placed_painting(exhibit, exhibit_title, image_title,
+				image_url, wall_position, wall_normal, image_size)

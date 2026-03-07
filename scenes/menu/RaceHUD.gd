@@ -246,16 +246,21 @@ func _populate_win_timeline() -> void:
 		var prefix: String = "★ " if is_tgt else ("▶ " if is_first else "")
 		var role: String   = "target" if is_tgt else ("start" if is_first else "mid")
 		_win_timeline.add_child(_make_label(prefix + page + arrow, role))
+	# Cap height so it doesn't overflow the screen
+	var row_h: float = 22.0
+	var max_rows: int = 16
+	_win_timeline.custom_minimum_size.y = 0
+	if _visited_pages.size() > max_rows:
+		_win_timeline.custom_minimum_size.y = row_h * max_rows
 
 
 func _slide_in(panel: Control, from_top: bool) -> void:
 	if not panel: return
 	panel.visible = true
 	panel.modulate.a = 0.0
-	var offset := -50.0 if from_top else 50.0
-	panel.position.y += offset
+	panel.position.y = -50.0 if from_top else 50.0  # always start from clean offset
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(panel, "position:y", panel.position.y - offset, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(panel, "position:y", 0.0, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(panel, "modulate:a", 1.0, 0.25)
 
 
@@ -263,13 +268,13 @@ func _slide_out(panel: Control, to_top: bool, then_hide: bool = true) -> void:
 	if not panel or not panel.visible: return
 	var offset := -35.0 if to_top else 35.0
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(panel, "position:y", panel.position.y + offset, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tw.tween_property(panel, "position:y", offset, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 	tw.tween_property(panel, "modulate:a", 0.0, 0.2)
 	if then_hide:
 		tw.chain().tween_callback(func():
 			panel.visible = false
 			panel.modulate.a = 1.0
-			panel.position.y -= offset
+			panel.position.y = 0.0  # always reset cleanly
 		)
 
 
@@ -345,5 +350,5 @@ func _on_race_hint_revealed(hint_article: String, hint_number: int) -> void:
 	if not _hint_overlay:
 		return
 	var lbl := _make_label("💡 Hint %d: \"%s\" links here" % [hint_number, hint_article], "hint")
-	lbl.add_theme_color_override("font_color", Color(0.4, 0.7, 1.0) if not ThemeManager.is_dark_mode else Color(0.5, 0.8, 1.0))
+	lbl.add_theme_color_override("font_color", Color(0.35, 0.65, 0.6) if not ThemeManager.is_dark_mode else Color(0.45, 0.75, 0.7))
 	_hint_overlay.add_child(lbl)

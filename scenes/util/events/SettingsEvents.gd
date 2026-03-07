@@ -7,6 +7,7 @@ signal set_invert_y(enabled: bool)
 signal set_mouse_sensitivity(factor: float)
 signal set_joypad_deadzone(value: float)
 signal language_changed(language: String)
+signal ui_scale_changed(scale: float)
 
 func emit_fullscreen_toggled(enabled: bool) -> void:
 	fullscreen_toggled.emit(enabled)
@@ -44,3 +45,6 @@ signal chat_key_changed(key_name: String)
 
 func emit_chat_key_changed(key_name: String) -> void:
 	chat_key_changed.emit(key_name)
+
+func emit_ui_scale_changed(scale: float) -> void:
+	ui_scale_changed.emit(scale)

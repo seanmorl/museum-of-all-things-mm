@@ -141,11 +141,7 @@ func _on_vote_started(candidates: Array) -> void:
 	_candidate_buttons.clear()
 
 	if NetworkManager.is_server():
-		var target := RaceManager.get_vote_target_article()
-		if target != "":
-			_status_label.text = "Find: %s — pick a starting article" % target
-		else:
-			_status_label.text = "Pick a starting article for the race"
+		_status_label.text = "Pick a starting room — vote will begin"
 
 		for i in candidates.size():
 			var btn := Button.new()

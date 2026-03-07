@@ -27,7 +27,6 @@ var _state: State = State.IDLE
 var _target_article: String = ""
 var _start_article: String = ""
 var _vote_start_article: String = ""
-var _vote_target_article: String = ""
 var _winner_peer_id: int = -1
 var _winner_name: String = ""
 
@@ -36,6 +35,7 @@ var _race_start_time: float = 0.0
 
 ## Elapsed seconds since race start. Updated every frame while ACTIVE.
 var _elapsed_time: float = 0.0
+var _final_time: float = 0.0   ## preserved after race ends for journal recording
 
 ## Accumulated time for the once-per-second signal emit.
 var _timer_signal_accumulator: float = 0.0
@@ -116,18 +116,22 @@ func get_elapsed_time() -> float:
 	return _elapsed_time
 
 
+func get_final_time() -> float:
+	## The elapsed time of the last completed race (preserved after end).
+	return _final_time
+
+
 ## Returns elapsed time formatted as "MM:SS" for display in a HUD label.
 func get_elapsed_time_string() -> String:
 	var secs: int = int(_elapsed_time)
 	return "%02d:%02d" % [secs / 60, secs % 60]
 
 ## Called by server once candidates are ready. Winner becomes the race target.
-func begin_vote(candidates: Array, target_article: String = "", start_article: String = "") -> void:
+func begin_vote(candidates: Array, start_article: String = "") -> void:
 	if not NetworkManager.is_server():
 		return
 	_vote_candidates = candidates
 	_vote_start_article = start_article
-	_vote_target_article = target_article
 	_votes.clear()
 	_vote_active = true
 	_vote_timer = VOTE_DURATION
@@ -176,10 +180,6 @@ func _finish_vote() -> void:
 
 func get_vote_candidates() -> Array:
 	return _vote_candidates
-
-func get_vote_target_article() -> String:
-	## The article players are trying to find — known before the vote ends.
-	return _vote_start_article
 
 func get_vote_time_remaining() -> float:
 	return _vote_timer
@@ -381,6 +381,7 @@ func _handle_win(peer_id: int) -> void:
 	_start_article = ""
 
 	var final_time: float = _elapsed_time
+	_final_time = final_time
 	_elapsed_time = 0.0
 	_timer_signal_accumulator = 0.0
 

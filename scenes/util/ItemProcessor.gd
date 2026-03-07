@@ -75,7 +75,7 @@ func _process(_delta: float) -> void:
 func _processor_thread_item() -> void:
 		var item: Variant = WorkQueue.process_queue(PROCESSOR_QUEUE)
 		if item:
-			_create_items(item[0], item[1], item[2])
+			_create_items(item[0], item[1], item[2], item[3] if item.size() > 3 else "")
 
 func _seeded_shuffle(new_seed: String, arr: Array, bias: bool = false) -> void:
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
@@ -276,9 +276,12 @@ func commons_images_to_items(title: String, images: Array, extra_text: Array) ->
 	return items
 
 func create_items(title: String, result: Dictionary, prev_title: String = "") -> void:
-	WorkQueue.add_item(PROCESSOR_QUEUE, [title, result, prev_title])
+	# Capture race target HERE on the main thread — _create_items runs on a worker
+	# thread and cannot safely call RaceManager (a main-thread Node).
+	var race_target: String = RaceManager.get_target_article() if RaceManager.is_race_active() else ""
+	WorkQueue.add_item(PROCESSOR_QUEUE, [title, result, prev_title, race_target])
 
-func _create_items(title: String, result: Dictionary, prev_title: String) -> void:
+func _create_items(title: String, result: Dictionary, prev_title: String, race_target: String = "") -> void:
 	var text_items: Array = []
 	var image_items: Array = []
 	var doors: Array = []
@@ -333,7 +336,9 @@ func _create_items(title: String, result: Dictionary, prev_title: String) -> voi
 
 			elif type == "link" and target and target.find(":") < 0:
 				var door: String = _to_link_case(target.get_slice("#", 0))
-				if not doors_used.has(door) and door != title and door != prev_title and len(door) > 0:
+				# Exclude the race target so it never appears as a door sign — players
+				# must reach it by navigating links, not by walking through a labelled door.
+				if not doors_used.has(door) and door != title and door != prev_title and door != race_target and len(door) > 0:
 					doors.append(door)
 					doors_used[door] = true
 

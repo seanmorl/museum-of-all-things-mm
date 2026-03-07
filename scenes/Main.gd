@@ -66,6 +66,11 @@ func _parse_command_line() -> void:
 
 
 func _ready() -> void:
+	# Restore UI scale from settings before anything else renders
+	var ui_saved = SettingsManager.get_settings("ui")
+	if ui_saved and ui_saved.has("scale"):
+		get_tree().root.content_scale_factor = float(ui_saved.scale)
+
 	# Initialize subsystems first
 	_menu_controller = MainMenuController.new()
 	_menu_controller.init(self, _menu_layer)
@@ -138,6 +143,10 @@ func _ready() -> void:
 	RaceManager.vote_cancelled.connect(_on_vote_cancelled)
 	ExhibitFetcher.random_complete.connect(_on_random_article_complete)
 	ExhibitFetcher.category_random_complete.connect(_on_random_article_complete)
+
+	# Journal
+	if _journal_overlay:
+		_journal_overlay.closed.connect(_on_journal_closed)
 
 	# Load saved skin
 	_load_saved_skin()
@@ -475,12 +484,10 @@ func _on_start_race_pressed() -> void:
 	if NetworkManager.is_server():
 		_debug_log("Main: Fetching random articles for race vote...")
 		_race_candidates.clear()
-		_race_target_article = ""
 		_race_start_article = ""
-		_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 2  # +1 target, +1 start
+		_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1  # +1 start
 		_show_vote_loading()
 		_fetch_race_candidates()
-		_fetch_race_target()
 		_fetch_race_start_article()
 	else:
 		_debug_log("Main: Sending _request_race_start RPC to server (my id: %d, multiplayer active: %s)" % [multiplayer.get_unique_id(), NetworkManager.is_multiplayer_active()])
@@ -496,19 +503,16 @@ func _request_race_start() -> void:
 		return
 	_debug_log("Main: Race start requested by peer, fetching random articles for vote...")
 	_race_candidates.clear()
-	_race_target_article = ""
 	_race_start_article = ""
-	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 2
+	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
 	_show_vote_loading()
 	_fetch_race_candidates()
-	_fetch_race_target()
 	_fetch_race_start_article()
 
 
-## Collects random articles for the vote pool + target.
+## Collects random articles for the vote pool. Winner = race target.
 var _race_candidates: Array = []
-var _race_target_article: String = ""
-var _race_start_article: String = ""  ## completely random article — where players begin
+var _race_start_article: String = ""  ## random article — where the lobby door opens
 var _race_fetches_pending: int = 0
 
 var _race_retry_count: int = 0
@@ -528,49 +532,31 @@ func _on_random_article_complete(title: Variant, context: Variant) -> void:
 			return
 		Log.error("Main", "Failed to fetch random article for race — retrying (%d/%d)" % [_race_retry_count, MAX_RACE_RETRIES])
 		var role: String = context.get("race_role", "candidate")
-		if role == "candidate":
-			_fetch_one_candidate()
-		elif role == "start":
+		if role == "start":
 			_fetch_race_start_article()
 		else:
-			_fetch_race_target()
+			_fetch_one_candidate()
 		return
 
 	_race_retry_count = 0
 	var role: String = context.get("race_role", "candidate")
 	if role == "candidate":
-		# Deduplicate: if this title is already in the pool, fetch a replacement
-		if title in _race_candidates or title == _race_target_article:
+		# Deduplicate
+		if title in _race_candidates:
 			_debug_log("Main: Duplicate candidate '%s' — retrying" % title)
 			_fetch_one_candidate()
 			return
 		_race_candidates.append(title)
 		_race_fetches_pending -= 1
 		_debug_log("Main: Got candidate '%s' (%d remaining)" % [title, _race_fetches_pending])
-		if _race_fetches_pending <= 0 and _race_target_article != "" and _race_start_article != "":
-			_launch_vote()
-	elif role == "target":
-		_race_target_article = title
-		_race_fetches_pending -= 1
-		_debug_log("Main: Got target '%s'" % title)
-		if _race_fetches_pending <= 0 and _race_candidates.size() >= RaceManager.CANDIDATE_COUNT and _race_start_article != "":
+		if _race_fetches_pending <= 0 and _race_start_article != "":
 			_launch_vote()
 	elif role == "start":
 		_race_start_article = title
 		_race_fetches_pending -= 1
 		_debug_log("Main: Got start article '%s'" % title)
-		if _race_fetches_pending <= 0 and _race_candidates.size() >= RaceManager.CANDIDATE_COUNT and _race_target_article != "":
+		if _race_fetches_pending <= 0 and _race_candidates.size() >= RaceManager.CANDIDATE_COUNT:
 			_launch_vote()
-
-func _fetch_race_target() -> void:
-	## Category override takes priority over difficulty setting.
-	var cat := RaceManager.get_category_override()
-	if cat != "":
-		ExhibitFetcher.fetch_random_from_category(cat, { "race": true, "race_role": "target" })
-	elif RaceManager.get_difficulty() == "random_category":
-		ExhibitFetcher.fetch_random_category_article({ "race": true, "race_role": "target" })
-	else:
-		ExhibitFetcher.fetch_random_target({ "race": true, "race_role": "target" }, RaceManager.get_difficulty())
 
 func _fetch_one_candidate() -> void:
 	## Fetches a single replacement candidate, respecting category/difficulty settings.
@@ -604,7 +590,6 @@ func _fetch_race_candidates() -> void:
 func _on_vote_cancelled() -> void:
 	## Host cancelled the vote — clear pending fetch state and return all players to pause menu.
 	_race_candidates.clear()
-	_race_target_article = ""
 	_race_start_article = ""
 	_race_fetches_pending = 0
 	_pause_game()
@@ -622,20 +607,17 @@ func reroll_vote() -> void:
 		return
 	RaceManager.set_vote_timer_paused(true)
 	_race_candidates.clear()
-	_race_target_article = ""
 	_race_start_article = ""
-	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 2
+	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
 	_fetch_race_candidates()
-	_fetch_race_target()
 	_fetch_race_start_article()
 
 
 func _launch_vote() -> void:
-	_debug_log("Main: Launching vote with candidates %s, target '%s', start '%s'" % [str(_race_candidates), _race_target_article, _race_start_article])
+	_debug_log("Main: Launching vote with candidates %s, start '%s'" % [str(_race_candidates), _race_start_article])
 	RaceManager.set_vote_timer_paused(false)
-	RaceManager.begin_vote(_race_candidates.duplicate(), _race_target_article, _race_start_article)
+	RaceManager.begin_vote(_race_candidates.duplicate(), _race_start_article)
 	_race_candidates.clear()
-	_race_target_article = ""
 	_race_start_article = ""
 	# Tell VoteHUD reroll button it can re-enable
 	var vote_hud := get_node_or_null("TabMenu/VoteHUD")
@@ -806,6 +788,15 @@ func _request_steal_painting(exhibit_title: String, image_title: String, image_u
 
 func _request_place_painting(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2) -> void:
 	_painting_controller.request_place(exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, _player)
+
+
+func restore_placed_painting(exhibit: Node3D, exhibit_title: String,
+		image_title: String, image_url: String,
+		wall_position: Vector3, wall_normal: Vector3, image_size: Vector2) -> void:
+	## Called by ExhibitLoader to re-materialise a saved painting when its room reloads.
+	if _painting_controller:
+		_painting_controller.restore_placed_painting(exhibit, exhibit_title,
+				image_title, image_url, wall_position, wall_normal, image_size)
 
 
 func _request_eat_painting(exhibit_title: String, image_title: String) -> void:

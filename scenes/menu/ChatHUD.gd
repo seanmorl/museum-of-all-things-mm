@@ -43,13 +43,14 @@ func _ready() -> void:
 	if ResourceLoader.exists(FONT_PATH):
 		_font = load(FONT_PATH)
 
-	# Root — top-right, 30% width
-	anchor_left   = 0.70
+	# Root — fixed 420px wide, anchored top-right, so it doesn't stretch on widescreen
+	anchor_left   = 1.0
 	anchor_right  = 1.0
 	anchor_top    = 0.0
 	anchor_bottom = 0.55
-	offset_top    = 12
+	offset_left   = -434   # 420px wide + 14px margin
 	offset_right  = -14
+	offset_top    = 12
 	mouse_filter  = Control.MOUSE_FILTER_IGNORE
 
 	var vbox := VBoxContainer.new()
