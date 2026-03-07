@@ -13,18 +13,24 @@ var _candidate_buttons: Array[Button] = []
 var _panel_style: StyleBoxFlat
 var _is_animating: bool = false
 
-# Difficulty UI — created in code, only visible to host
+# Host-only controls panel — difficulty, hints, category, cancel
+var _host_panel: VBoxContainer = null
+var _cancel_vote_button: Button = null
+# Difficulty
 var _difficulty_row: HBoxContainer = null
 var _difficulty_buttons: Dictionary = {}
-var _cancel_vote_button: Button = null   # "easy"|"medium"|"hard" -> Button
-
-# Category override UI
-var _category_row: VBoxContainer = null
+# Category
+var _category_toggle_btn: Button = null
+var _category_section: VBoxContainer = null
 var _category_input: LineEdit = null
 var _category_results: VBoxContainer = null
 var _category_active_label: Label = null
 var _category_search_timer: float = 0.0
 var _category_search_pending: String = ""
+# Hints
+var _hint_buttons: Dictionary = {}
+var _hint_reveal_btn: Button = null
+var _hint_custom_edit: LineEdit = null
 
 func _ready() -> void:
 	visible = false
@@ -43,6 +49,7 @@ func _ready() -> void:
 
 	RaceManager.difficulty_changed.connect(_on_difficulty_changed)
 	RaceManager.category_override_changed.connect(_on_category_override_changed)
+	RaceManager.hint_settings_changed.connect(_on_hint_settings_changed)
 	RaceManager.vote_cancelled.connect(_on_vote_cancelled)
 
 	if RaceManager.is_vote_active():
@@ -126,41 +133,40 @@ func _bounce_out() -> void:
 
 func _on_vote_started(candidates: Array) -> void:
 	_my_vote = -1
-	_status_label.text = "Vote for the race target!"
 	hide_loading()
+	_candidates_container.visible = true
 
 	for child in _candidates_container.get_children():
 		child.queue_free()
 	_candidate_buttons.clear()
 
-	for i in candidates.size():
-		var btn := Button.new()
-		btn.text = candidates[i]
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.add_theme_color_override("font_color", ThemeManager.text_color)
-		btn.pressed.connect(_on_candidate_pressed.bind(i))
-		_candidates_container.add_child(btn)
-		_candidate_buttons.append(btn)
-
-	_reroll_button.visible = NetworkManager.is_server()
-
-	# Build difficulty row lazily on first vote (network state is valid here)
 	if NetworkManager.is_server():
-		if _difficulty_row == null:
-			_build_difficulty_row()
-		_difficulty_row.visible = true
-		if _category_row == null:
-			_build_category_row()
-		_category_row.visible = true
-		if _cancel_vote_button == null:
-			_build_cancel_vote_button()
-		_cancel_vote_button.visible = true
-		_cancel_vote_button.disabled = false
-	elif _difficulty_row:
-		_difficulty_row.visible = false
-		if _category_row:
-			_category_row.visible = false
+		var target := RaceManager.get_vote_target_article()
+		if target != "":
+			_status_label.text = "Find: %s — pick a starting article" % target
+		else:
+			_status_label.text = "Pick a starting article for the race"
+
+		for i in candidates.size():
+			var btn := Button.new()
+			btn.text = candidates[i]
+			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			btn.add_theme_color_override("font_color", ThemeManager.text_color)
+			btn.pressed.connect(_on_candidate_pressed.bind(i))
+			_candidates_container.add_child(btn)
+			_candidate_buttons.append(btn)
+
+		_reroll_button.visible = true
+		if _host_panel == null:
+			_build_host_panel()
+		_host_panel.visible = true
+	else:
+		_status_label.text = "Waiting for host to start the race..."
+		_candidates_container.visible = false
+		_reroll_button.visible = false
+		if _host_panel:
+			_host_panel.visible = false
 
 	_bounce_in()
 
@@ -173,26 +179,36 @@ func _on_candidate_pressed(index: int) -> void:
 	_status_label.text = "Voted for: " + RaceManager.get_vote_candidates()[index]
 
 
-func _build_difficulty_row() -> void:
+## Builds one compact host panel inserted above the reroll button.
+## Row 1: Difficulty buttons
+## Row 2: Hints mode buttons + custom input / reveal button
+## Collapsible: Category filter
+## Bottom: Cancel vote button
+func _build_host_panel() -> void:
 	var content := _reroll_button.get_parent()
 
-	_difficulty_row = HBoxContainer.new()
-	_difficulty_row.add_theme_constant_override("separation", 4)
-	# Insert above the reroll button
-	content.add_child(_difficulty_row)
-	content.move_child(_difficulty_row, _reroll_button.get_index())
+	_host_panel = VBoxContainer.new()
+	_host_panel.add_theme_constant_override("separation", 3)
+	content.add_child(_host_panel)
+	content.move_child(_host_panel, _reroll_button.get_index())
 
-	var lbl := Label.new()
-	lbl.text = "Difficulty:"
-	lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_difficulty_row.add_child(lbl)
+	## — Row 1: Difficulty —
+	_difficulty_row = HBoxContainer.new()
+	_difficulty_row.add_theme_constant_override("separation", 3)
+	_host_panel.add_child(_difficulty_row)
+
+	var diff_lbl := Label.new()
+	diff_lbl.text = "Diff:"
+	diff_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	diff_lbl.custom_minimum_size.x = 32
+	_difficulty_row.add_child(diff_lbl)
 
 	for diff in ["Very Easy", "Easy", "Medium", "Hard", "Random 🎲"]:
 		var btn := Button.new()
 		btn.text = diff
 		btn.toggle_mode = true
 		btn.focus_mode = Control.FOCUS_NONE
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var key: String = diff.to_lower().replace(" 🎲", "").replace(" ", "_")
 		btn.pressed.connect(_on_difficulty_btn_pressed.bind(key))
 		_difficulty_row.add_child(btn)
@@ -200,11 +216,117 @@ func _build_difficulty_row() -> void:
 
 	_refresh_difficulty_buttons(RaceManager.get_difficulty())
 
+	## — Row 2: Hints —
+	var hint_row := HBoxContainer.new()
+	hint_row.add_theme_constant_override("separation", 3)
+	_host_panel.add_child(hint_row)
+
+	var hint_lbl := Label.new()
+	hint_lbl.text = "Hints:"
+	hint_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	hint_lbl.custom_minimum_size.x = 32
+	hint_row.add_child(hint_lbl)
+
+	for opt in [
+		{"label": "Off",    "interval": -1.0,  "manual": false},
+		{"label": "10m",    "interval": 600.0, "manual": false},
+		{"label": "5m",     "interval": 300.0, "manual": false},
+		{"label": "Manual", "interval": -1.0,  "manual": true},
+		{"label": "Custom", "interval": 0.0,   "manual": false},
+	]:
+		var btn := Button.new()
+		btn.text = opt.label
+		btn.toggle_mode = true
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.pressed.connect(_on_hint_btn_pressed.bind(opt.interval, opt.manual, opt.label == "Custom"))
+		hint_row.add_child(btn)
+		_hint_buttons[opt.label] = btn
+
+	# Custom minutes textbox
+	_hint_custom_edit = LineEdit.new()
+	_hint_custom_edit.placeholder_text = "min"
+	_hint_custom_edit.custom_minimum_size.x = 48
+	_hint_custom_edit.max_length = 3
+	_hint_custom_edit.visible = false
+	_hint_custom_edit.focus_mode = Control.FOCUS_CLICK
+	_hint_custom_edit.text_submitted.connect(_on_hint_custom_submitted)
+	hint_row.add_child(_hint_custom_edit)
+
+	# Reveal now button (manual mode)
+	_hint_reveal_btn = Button.new()
+	_hint_reveal_btn.text = "💡 Now"
+	_hint_reveal_btn.focus_mode = Control.FOCUS_NONE
+	_hint_reveal_btn.visible = false
+	_hint_reveal_btn.pressed.connect(_on_hint_reveal_pressed)
+	hint_row.add_child(_hint_reveal_btn)
+
+	_refresh_hint_buttons(RaceManager.get_hint_interval(), RaceManager.get_hint_manual())
+
+	## — Category filter (collapsible) —
+	_category_toggle_btn = Button.new()
+	_category_toggle_btn.text = "▶ Category filter"
+	_category_toggle_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_category_toggle_btn.focus_mode = Control.FOCUS_NONE
+	_category_toggle_btn.flat = true
+	_category_toggle_btn.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	_category_toggle_btn.pressed.connect(_on_category_toggle)
+	_host_panel.add_child(_category_toggle_btn)
+
+	_category_section = VBoxContainer.new()
+	_category_section.add_theme_constant_override("separation", 3)
+	_category_section.visible = false
+	_host_panel.add_child(_category_section)
+
+	var cat_header := HBoxContainer.new()
+	_category_section.add_child(cat_header)
+
+	_category_input = LineEdit.new()
+	_category_input.placeholder_text = "Search Wikipedia category..."
+	_category_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_category_input.text_changed.connect(_on_category_input_changed)
+	cat_header.add_child(_category_input)
+
+	var clear_btn := Button.new()
+	clear_btn.text = "✕"
+	clear_btn.focus_mode = Control.FOCUS_NONE
+	clear_btn.pressed.connect(_on_category_clear_pressed)
+	cat_header.add_child(clear_btn)
+
+	_category_results = VBoxContainer.new()
+	_category_results.add_theme_constant_override("separation", 2)
+	_category_section.add_child(_category_results)
+
+	_category_active_label = Label.new()
+	_category_active_label.text = ""
+	_category_active_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_category_active_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	_category_active_label.add_theme_font_size_override("font_size", 11)
+	_category_section.add_child(_category_active_label)
+
+	ExhibitFetcher.category_search_complete.connect(_on_category_search_results)
+
+	## — Cancel button —
+	_cancel_vote_button = Button.new()
+	_cancel_vote_button.text = "✕  Cancel vote"
+	_cancel_vote_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_cancel_vote_button.focus_mode = Control.FOCUS_NONE
+	_cancel_vote_button.flat = true
+	_cancel_vote_button.add_theme_color_override("font_color", Color(0.85, 0.25, 0.25))
+	_cancel_vote_button.pressed.connect(_on_cancel_vote_pressed)
+	_host_panel.add_child(_cancel_vote_button)
+
+
+func _on_category_toggle() -> void:
+	if not _category_section:
+		return
+	_category_section.visible = not _category_section.visible
+	_category_toggle_btn.text = ("▼ Category filter" if _category_section.visible else "▶ Category filter")
+
 
 func _refresh_difficulty_buttons(difficulty: String) -> void:
 	for key in _difficulty_buttons:
-		var btn: Button = _difficulty_buttons[key]
-		btn.button_pressed = (key == difficulty)
+		_difficulty_buttons[key].button_pressed = (key == difficulty)
 
 
 func _on_difficulty_btn_pressed(difficulty: String) -> void:
@@ -212,65 +334,15 @@ func _on_difficulty_btn_pressed(difficulty: String) -> void:
 
 
 func _on_difficulty_changed(difficulty: String) -> void:
-	if _difficulty_row:
-		_refresh_difficulty_buttons(difficulty)
-
-
-func _build_category_row() -> void:
-	var content := _reroll_button.get_parent()
-
-	_category_row = VBoxContainer.new()
-	_category_row.add_theme_constant_override("separation", 4)
-	content.add_child(_category_row)
-	content.move_child(_category_row, _reroll_button.get_index())
-
-	# Header row: label + clear button
-	var header := HBoxContainer.new()
-	_category_row.add_child(header)
-
-	var lbl := Label.new()
-	lbl.text = "Category filter:"
-	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	header.add_child(lbl)
-
-	var clear_btn := Button.new()
-	clear_btn.text = "✕ Clear"
-	clear_btn.focus_mode = Control.FOCUS_NONE
-	clear_btn.pressed.connect(_on_category_clear_pressed)
-	header.add_child(clear_btn)
-
-	# Search input
-	_category_input = LineEdit.new()
-	_category_input.placeholder_text = "Search a Wikipedia category..."
-	_category_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_category_input.text_changed.connect(_on_category_input_changed)
-	_category_row.add_child(_category_input)
-
-	# Results list (filled dynamically)
-	_category_results = VBoxContainer.new()
-	_category_results.add_theme_constant_override("separation", 2)
-	_category_row.add_child(_category_results)
-
-	# Active category display
-	_category_active_label = Label.new()
-	_category_active_label.text = ""
-	_category_active_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_category_active_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	_category_active_label.add_theme_font_size_override("font_size", 12)
-	_category_row.add_child(_category_active_label)
-
-	ExhibitFetcher.category_search_complete.connect(_on_category_search_results)
+	_refresh_difficulty_buttons(difficulty)
 
 
 func _on_category_input_changed(text: String) -> void:
-	# Clear results immediately on empty
 	if text.strip_edges() == "":
 		_category_search_pending = ""
 		for child in _category_results.get_children():
 			child.queue_free()
 		return
-	# Debounce: wait 0.5s after last keystroke before searching
 	_category_search_pending = text.strip_edges()
 	_category_search_timer = 0.5
 
@@ -293,7 +365,6 @@ func _on_category_search_results(categories: Array, _ctx: Variant) -> void:
 
 func _on_category_selected(cat_name: String) -> void:
 	RaceManager.set_category_override(cat_name)
-	# Clear input and results, resume timer
 	_category_input.text = ""
 	for child in _category_results.get_children():
 		child.queue_free()
@@ -311,24 +382,64 @@ func _on_category_clear_pressed() -> void:
 func _on_category_override_changed(category_name: String) -> void:
 	if not is_instance_valid(_category_active_label):
 		return
-	if category_name == "":
-		_category_active_label.text = ""
+	_category_active_label.text = ("Active: %s" % category_name.replace("Category:", "")) if category_name != "" else ""
+	if _category_toggle_btn and category_name != "":
+		_category_toggle_btn.text = "▼ Category filter"
+		if _category_section:
+			_category_section.visible = true
+
+
+func _refresh_hint_buttons(interval: float, manual: bool) -> void:
+	if _hint_buttons.is_empty():
+		return
+	var active: String
+	if manual:
+		active = "Manual"
+	elif interval <= 0.0:
+		active = "Off"
+	elif interval >= 600.0:
+		active = "10m"
+	elif interval >= 300.0:
+		active = "5m"
 	else:
-		var display: String = category_name.replace("Category:", "")
-		_category_active_label.text = "Active: %s" % display
+		active = "Custom"
+	for lbl in _hint_buttons:
+		_hint_buttons[lbl].button_pressed = (lbl == active)
+	if _hint_reveal_btn:
+		_hint_reveal_btn.visible = manual
+	if _hint_custom_edit:
+		_hint_custom_edit.visible = (active == "Custom")
+		if active == "Custom" and interval > 0.0:
+			_hint_custom_edit.text = str(int(round(interval / 60.0)))
 
 
-func _build_cancel_vote_button() -> void:
-	var content := _reroll_button.get_parent()
-	_cancel_vote_button = Button.new()
-	_cancel_vote_button.text = "✕  Cancel race"
-	_cancel_vote_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_cancel_vote_button.focus_mode = Control.FOCUS_NONE
-	_cancel_vote_button.add_theme_color_override("font_color", Color(0.85, 0.25, 0.25))
-	_cancel_vote_button.pressed.connect(_on_cancel_vote_pressed)
-	content.add_child(_cancel_vote_button)
-	# Place below reroll button
-	content.move_child(_cancel_vote_button, _reroll_button.get_index() + 1)
+func _on_hint_btn_pressed(interval: float, manual: bool, is_custom: bool) -> void:
+	if is_custom:
+		if _hint_custom_edit:
+			_hint_custom_edit.visible = true
+			_hint_custom_edit.grab_focus()
+			var mins := _hint_custom_edit.text.to_int()
+			if mins > 0:
+				RaceManager.set_hint_settings(mins * 60.0, false)
+	else:
+		if _hint_custom_edit:
+			_hint_custom_edit.visible = false
+		RaceManager.set_hint_settings(interval, manual)
+
+
+func _on_hint_custom_submitted(text: String) -> void:
+	var mins := text.to_int()
+	if mins > 0:
+		RaceManager.set_hint_settings(mins * 60.0, false)
+		_hint_custom_edit.release_focus()
+
+
+func _on_hint_settings_changed(interval: float, manual: bool) -> void:
+	_refresh_hint_buttons(interval, manual)
+
+
+func _on_hint_reveal_pressed() -> void:
+	RaceManager.reveal_hint_now()
 
 
 func _on_cancel_vote_pressed() -> void:
@@ -371,12 +482,8 @@ func _on_vote_ended(winner: String) -> void:
 	for btn in _candidate_buttons:
 		btn.disabled = true
 	_reroll_button.visible = false
-	if _difficulty_row:
-		_difficulty_row.visible = false
-	if _category_row:
-		_category_row.visible = false
-	if _cancel_vote_button:
-		_cancel_vote_button.visible = false
+	if _host_panel:
+		_host_panel.visible = false
 
 
 func _on_race_started(_target: String, _start: String) -> void:

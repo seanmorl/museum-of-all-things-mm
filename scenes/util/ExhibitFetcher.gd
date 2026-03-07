@@ -2,6 +2,7 @@ extends Node
 
 signal search_complete(title: Variant, context: Variant)
 signal random_complete(title: Variant, context: Variant)
+signal backlinks_complete(titles: Array, context: Variant)  ## Articles that link TO a given article
 signal category_search_complete(categories: Array, context: Variant)  ## Array of category name strings
 signal category_random_complete(title: Variant, context: Variant)     ## one random article from a category
 signal wikitext_complete(titles: Array, context: Variant)
@@ -22,35 +23,43 @@ const WIKIDATA_COMMONS_GALLERY: String = "P935"
 var lang: String = TranslationServer.get_locale()
 var wikipedia_prefix: String = "https://" + lang + ".wikipedia.org/wiki/"
 var search_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srprop=title&origin=*&srsearch="
-## Category article search: uses incategory: operator for exact Wikipedia category membership
-## srlimit=500, random sroffset for variety. Falls back to offset 0 if empty.
+## User category filter: Toolforge randomincategory, cmnamespace=0&cmtype=page = mainspace articles only
+const TOOLFORGE_USER_CATEGORY_BASE: String = "https://randomincategory.toolforge.org/?server=en.wikipedia.org&cmnamespace=0&cmtype=page&returntype=subject&category="
+## Backlinks fetch endpoint: finds articles that link TO a given title
+var backlinks_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=backlinks&blnamespace=0&bllimit=20&origin=*&bltitle="
 var topic_search_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=0&srprop=title&srlimit=500&origin=*&srsearch="
 var random_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&generator=random&grnnamespace=0&prop=info&origin=*"
 var category_search_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=14&srprop=title&srlimit=8&origin=*&srsearch="
 
 ## URL returns random wikipedia article specified by Class + Level
-const RANDOM_LEVEL4_ENDPOINT: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-3%20vital%20articles&category2=B-Class%20level-3%20vital%20articles&category3=C-Class%20level-3%20vital%20articles&category4=FA-Class%20level-3%20vital%20articles&category5=FL-Class%20level-3%20vital%20articles&category6=GA-Class%20level-3%20vital%20articles&category7=List-Class%20level-3%20vital%20articles&category8=Start-Class%20level-3%20vital%20articles&category9=Stub-Class%20level-3%20vital%20articles&category10=A-Class%20level-4%20vital%20articles&category11=B-Class%20level-4%20vital%20articles&category12=C-Class%20level-4%20vital%20articles&category13=FA-Class%20level-4%20vital%20articles&category14=FL-Class%20level-4%20vital%20articles&category15=GA-Class%20level-4%20vital%20articles&category16=List-Class%20level-4%20vital%20articles&category17=Start-Class%20level-4%20vital%20articles&category18=Stub-Class%20level-4%20vital%20articles&category19=A-Class%20level-5%20vital%20articles&category20=B-Class%20level-5%20vital%20articles&category21=C-Class%20level-5%20vital%20articles&category22=FA-Class%20level-5%20vital%20articles&category23=FL-Class%20level-5%20vital%20articles&category24=GA-Class%20level-5%20vital%20articles&category25=List-Class%20level-5%20vital%20articles&category26=Start-Class%20level-5%20vital%20articles&category27=Stub-Class%20level-5%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
+## Difficulty calibration (Wikipedia Vital Articles):
+##   Level 1 =     10 articles  — Earth, Life, Science (trivially reachable)
+##   Level 2 =    ~100 articles — Europe, Water, Human (very well-known)
+##   Level 3 =  ~1,000 articles — Rome, Jazz, DNA (well-known, moderate challenge)
+##   Level 4 = ~10,000 articles — niche but findable
+##   Level 5 = ~50,000 articles — genuinely obscure (removed from normal play)
 
-## Very Easy — hardcoded pool of Wikipedia's 10 Level-1 vital articles plus
-## a Toolforge draw from Level-2 (~100 articles).
-## Level 1: the absolute most-linked articles on Wikipedia (Earth, Life, etc.)
-## Level 2: things like Europe, Science, Water, Human — still trivially reachable.
+## VERY EASY — Level 1 hardcoded pool + Level 2 Toolforge draw
 const VERY_EASY_LEVEL1_ARTICLES: Array = [
 	"Earth", "Life", "Human", "History", "Geography",
 	"Science", "Technology", "Arts", "Society", "Philosophy"
 ]
-## Toolforge endpoint for Level-2 vital articles (~100 well-known topics)
-const TARGET_ENDPOINT_VERY_EASY: String = "https://randomincategory.toolforge.org/?category=FA-Class%20level-2%20vital%20articles&category2=GA-Class%20level-2%20vital%20articles&category3=B-Class%20level-2%20vital%20articles&category4=A-Class%20level-2%20vital%20articles&category5=Start-Class%20level-2%20vital%20articles&category6=Stub-Class%20level-2%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
+## Level 2 only (~100 very well-known topics)
+const TARGET_ENDPOINT_VERY_EASY: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-2%20vital%20articles&category2=B-Class%20level-2%20vital%20articles&category3=C-Class%20level-2%20vital%20articles&category4=FA-Class%20level-2%20vital%20articles&category5=FL-Class%20level-2%20vital%20articles&category6=GA-Class%20level-2%20vital%20articles&category7=List-Class%20level-2%20vital%20articles&category8=Start-Class%20level-2%20vital%20articles&category9=Stub-Class%20level-2%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
 
-## Easy — only Wikipedia vital articles at level 3 (~1,000 very well-known topics)
-const TARGET_ENDPOINT_EASY: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-3%20vital%20articles&category2=B-Class%20level-3%20vital%20articles&category3=C-Class%20level-3%20vital%20articles&category4=FA-Class%20level-3%20vital%20articles&category5=FL-Class%20level-3%20vital%20articles&category6=GA-Class%20level-3%20vital%20articles&category7=List-Class%20level-3%20vital%20articles&category8=Start-Class%20level-3%20vital%20articles&category9=Stub-Class%20level-3%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
+## EASY — Level 2 + Level 3 overlap: recognisable topics, gentler than L3 alone
+const TARGET_ENDPOINT_EASY: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-2%20vital%20articles&category2=B-Class%20level-2%20vital%20articles&category3=C-Class%20level-2%20vital%20articles&category4=FA-Class%20level-2%20vital%20articles&category5=FL-Class%20level-2%20vital%20articles&category6=GA-Class%20level-2%20vital%20articles&category7=List-Class%20level-2%20vital%20articles&category8=Start-Class%20level-2%20vital%20articles&category9=Stub-Class%20level-2%20vital%20articles&category10=A-Class%20level-3%20vital%20articles&category11=B-Class%20level-3%20vital%20articles&category12=C-Class%20level-3%20vital%20articles&category13=FA-Class%20level-3%20vital%20articles&category14=FL-Class%20level-3%20vital%20articles&category15=GA-Class%20level-3%20vital%20articles&category16=List-Class%20level-3%20vital%20articles&category17=Start-Class%20level-3%20vital%20articles&category18=Stub-Class%20level-3%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
 
-## Medium — level 3 + 4 (~10,000 topics, default)
-const TARGET_ENDPOINT_MEDIUM: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-3%20vital%20articles&category2=B-Class%20level-3%20vital%20articles&category3=C-Class%20level-3%20vital%20articles&category4=FA-Class%20level-3%20vital%20articles&category5=FL-Class%20level-3%20vital%20articles&category6=GA-Class%20level-3%20vital%20articles&category7=List-Class%20level-3%20vital%20articles&category8=Start-Class%20level-3%20vital%20articles&category9=Stub-Class%20level-3%20vital%20articles&category10=A-Class%20level-4%20vital%20articles&category11=B-Class%20level-4%20vital%20articles&category12=C-Class%20level-4%20vital%20articles&category13=FA-Class%20level-4%20vital%20articles&category14=FL-Class%20level-4%20vital%20articles&category15=GA-Class%20level-4%20vital%20articles&category16=List-Class%20level-4%20vital%20articles&category17=Start-Class%20level-4%20vital%20articles&category18=Stub-Class%20level-4%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
+## MEDIUM (default) — Level 3 only: well-known articles, real challenge
+## MEDIUM — Level 4 vital articles only (~10,000): niche but real topics
+const TARGET_ENDPOINT_MEDIUM: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-4%20vital%20articles&category2=B-Class%20level-4%20vital%20articles&category3=C-Class%20level-4%20vital%20articles&category4=FA-Class%20level-4%20vital%20articles&category5=FL-Class%20level-4%20vital%20articles&category6=GA-Class%20level-4%20vital%20articles&category7=List-Class%20level-4%20vital%20articles&category8=Start-Class%20level-4%20vital%20articles&category9=Stub-Class%20level-4%20vital%20articles&server=en.wikipedia.org&cmnamespace=0&cmtype=page&returntype=subject"
 
-## Hard — only level-5 vital articles (~50,000 topics, many obscure)
-const TARGET_ENDPOINT_HARD: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-5%20vital%20articles&category2=B-Class%20level-5%20vital%20articles&category3=C-Class%20level-5%20vital%20articles&category4=FA-Class%20level-5%20vital%20articles&category5=FL-Class%20level-5%20vital%20articles&category6=GA-Class%20level-5%20vital%20articles&category7=List-Class%20level-5%20vital%20articles&category8=Start-Class%20level-5%20vital%20articles&category9=Stub-Class%20level-5%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
+## HARD — Level 3 + Level 4: mixes well-known with niche articles
+## HARD — Level 5 vital articles only (~50,000): genuinely obscure
+const TARGET_ENDPOINT_HARD: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-5%20vital%20articles&category2=B-Class%20level-5%20vital%20articles&category3=C-Class%20level-5%20vital%20articles&category4=FA-Class%20level-5%20vital%20articles&category5=FL-Class%20level-5%20vital%20articles&category6=GA-Class%20level-5%20vital%20articles&category7=List-Class%20level-5%20vital%20articles&category8=Start-Class%20level-5%20vital%20articles&category9=Stub-Class%20level-5%20vital%20articles&server=en.wikipedia.org&cmnamespace=0&cmtype=page&returntype=subject"
 
+## RANDOM_LEVEL4_ENDPOINT used by fetch_random_level4 (Random 🎲 difficulty) — unchanged
+const RANDOM_LEVEL4_ENDPOINT: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-3%20vital%20articles&category2=B-Class%20level-3%20vital%20articles&category3=C-Class%20level-3%20vital%20articles&category4=FA-Class%20level-3%20vital%20articles&category5=FL-Class%20level-3%20vital%20articles&category6=GA-Class%20level-3%20vital%20articles&category7=List-Class%20level-3%20vital%20articles&category8=Start-Class%20level-3%20vital%20articles&category9=Stub-Class%20level-3%20vital%20articles&category10=A-Class%20level-4%20vital%20articles&category11=B-Class%20level-4%20vital%20articles&category12=C-Class%20level-4%20vital%20articles&category13=FA-Class%20level-4%20vital%20articles&category14=FL-Class%20level-4%20vital%20articles&category15=GA-Class%20level-4%20vital%20articles&category16=List-Class%20level-4%20vital%20articles&category17=Start-Class%20level-4%20vital%20articles&category18=Stub-Class%20level-4%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
 var wikitext_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=revisions|extracts|pageprops|categories&ppprop=wikibase_item&explaintext=true&rvprop=content&cllimit=50&clshow=!hidden&format=json&redirects=1&origin=*&titles="
 var images_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=imageinfo&iiprop=extmetadata|url&iiurlwidth=640&iiextmetadatafilter=LicenseShortName|Artist&format=json&redirects=1&origin=*&titles="
 var wikidata_endpoint: String = "https://www.wikidata.org/w/api.php?action=wbgetclaims&uselang=" + lang + "&format=json&origin=*&entity="
@@ -98,6 +107,8 @@ func _network_request_item() -> void:
 		_fetch_category_search(item[1], item[2])
 	elif item[0] == "fetch_random_from_category":
 		_fetch_random_from_category(item[1], item[2])
+	elif item[0] == "fetch_backlinks":
+		_fetch_backlinks(item[1], item[2])
 	elif item[0] == "fetch_random_category_article":
 		_fetch_random_category_article(item[1])
 	elif item[0] == "fetch_random":
@@ -120,6 +131,7 @@ func _network_request_item() -> void:
 func set_language(language: String) -> void:
 	wikipedia_prefix = "https://" + language + ".wikipedia.org/wiki/"
 	search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srprop=title&srsearch="
+	backlinks_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=backlinks&blnamespace=0&bllimit=20&origin=*&bltitle="
 	topic_search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=0&srprop=title&srlimit=500&origin=*&srsearch="
 	random_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&generator=random&grnnamespace=0&prop=info"
 	category_search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=14&srprop=title&srlimit=8&srsearch="
@@ -147,6 +159,11 @@ func fetch_category_search(query: String, ctx: Variant) -> void:
 	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_category_search", query, ctx], null, true)
 
 ## Picks a random article from the given Wikipedia category name. Emits category_random_complete.
+func fetch_backlinks(article_title: String, ctx: Variant) -> void:
+	## Fetches up to 20 mainspace articles that link TO article_title.
+	## Emits backlinks_complete(titles: Array, ctx) when done.
+	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_backlinks", article_title, ctx], null, true)
+
 func fetch_random_from_category(category_name: String, ctx: Variant) -> void:
 	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_random_from_category", category_name, ctx], null, true)
 
@@ -296,21 +313,17 @@ func _fetch_category_search(query: String, context: Variant) -> void:
 	_dispatch_request(url, ctx, context)
 
 func _fetch_random_from_category(category_name: String, context: Variant) -> void:
-	## Uses Wikipedia's incategory: search operator which matches exact category membership.
-	## Unlike intitle:, this won't match "New South Wales" when searching for "Wales" —
-	## it only finds articles actually filed under Category:Wales (or its subcategories
-	## when combined with depth, which the API handles automatically up to ~2 levels).
-	## Random sroffset (0–4500 in steps of 500) gives variety; falls back to 0 if empty.
+	## Uses Toolforge randomincategory with cmnamespace=0&cmtype=page — mainspace articles only.
+	## This prevents Category:, Portal:, and other namespace pages from appearing as candidates.
 	var cat: String = category_name.replace("Category:", "").strip_edges()
-	var query: String = 'incategory:"' + cat + '"'
-	var random_offset: int = (randi() % 10) * 500
-	var url := topic_search_endpoint + query.uri_encode()
-	if random_offset > 0:
-		url += "&sroffset=%d" % random_offset
-	if context is Dictionary:
-		context["_topic_query"] = query
-		context["_topic_fallback_offset"] = true
-	var ctx := {"topic_search": true, "topic_first_pass": false}
+	var url := TOOLFORGE_USER_CATEGORY_BASE + cat.uri_encode()
+	var ctx := {"random_level4": true}
+	_dispatch_request(url, ctx, context)
+
+func _fetch_backlinks(article_title: String, context: Variant) -> void:
+	## Fetches up to 20 mainspace articles that link TO article_title.
+	var url := backlinks_endpoint + article_title.uri_encode()
+	var ctx := {"backlinks_fetch": true}
 	_dispatch_request(url, ctx, context)
 
 func _fetch_random(context: Variant) -> void:
@@ -333,6 +346,10 @@ func _fetch_random_target(context: Variant, difficulty: String) -> void:
 			return
 		var ctx := {"random_level4": true}
 		_dispatch_request(TARGET_ENDPOINT_VERY_EASY, ctx, context)
+		return
+	# "random" difficulty: pull a completely random Wikipedia article
+	if difficulty == "random":
+		_fetch_random(context)
 		return
 	var url: String
 	match difficulty:
@@ -363,7 +380,7 @@ func _fetch_wikitext(titles: Array, context: Variant) -> void:
 	var new_titles := _get_uncached_titles(titles)
 
 	if len(new_titles) == 0:
-		wikitext_complete.emit.call_deferred(titles, context)
+		wikitext_complete.emit.call_deferred(titles, context if context != null else {})
 		return
 
 	if len(new_titles) > MAX_BATCH_SIZE:
@@ -522,6 +539,8 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		return _on_category_search_complete(res, ctx, caller_ctx)
 	elif ctx.get("topic_search", false):
 		return _on_topic_search_complete(res, ctx, caller_ctx)
+	elif ctx.get("backlinks_fetch", false):
+		return _on_backlinks_complete(res, ctx, caller_ctx)
 	elif ctx.url.begins_with(random_endpoint):
 		return _on_random_request_complete(res, ctx, caller_ctx)
 	elif ctx.get("random_batch", false):
@@ -598,7 +617,7 @@ func _on_wikitext_request_complete(res: Dictionary, ctx: Dictionary, caller_ctx:
 		return _dispatch_continue(res.continue, wikitext_endpoint, ctx.new_titles, ctx, caller_ctx)
 	else:
 		_cache_all(ctx.new_titles)
-		wikitext_complete.emit.call_deferred(ctx.titles, caller_ctx)
+		wikitext_complete.emit.call_deferred(ctx.titles, caller_ctx if caller_ctx != null else {})
 		# wikitext ignores queue, so return false to prevent queue advance after completion
 		return false
 
@@ -730,23 +749,27 @@ func _on_topic_search_complete(res: Dictionary, ctx: Dictionary, caller_ctx: Var
 	random_complete.emit.call_deferred(null, caller_ctx)
 	return true
 
+func _on_backlinks_complete(res: Dictionary, _ctx: Dictionary, caller_ctx: Variant) -> bool:
+	## Extracts article titles from a backlinks API response and emits backlinks_complete.
+	var titles: Array = []
+	if res.has("query") and res.query.has("backlinks"):
+		for entry in res.query.backlinks:
+			var t: String = entry.get("title", "")
+			if t != "":
+				titles.append(t)
+	backlinks_complete.emit.call_deferred(titles, caller_ctx)
+	return true
+
 func _on_random_category_step1_complete(res: Dictionary, _ctx: Dictionary, caller_ctx: Variant) -> bool:
-	## Got a random category name — search for articles in it using incategory: operator.
+	## Got a random category name — pass straight to Toolforge (cmnamespace=0, articles only).
 	if res.has("query") and res.query.has("random"):
 		var items: Array = res.query.random
 		if not items.is_empty():
 			var cat_title: String = items[0].get("title", "")
 			var cat_name: String = cat_title.replace("Category:", "").strip_edges()
 			if cat_name != "":
-				var query: String = 'incategory:"' + cat_name + '"'
-				var random_offset: int = (randi() % 10) * 500
-				var url := topic_search_endpoint + query.uri_encode()
-				if random_offset > 0:
-					url += "&sroffset=%d" % random_offset
-				if caller_ctx is Dictionary:
-					caller_ctx["_topic_query"] = query
-					caller_ctx["_topic_fallback_offset"] = true
-				var ctx := {"topic_search": true, "topic_first_pass": false}
+				var url := TOOLFORGE_USER_CATEGORY_BASE + cat_name.uri_encode()
+				var ctx := {"random_level4": true}
 				_dispatch_request(url, ctx, caller_ctx)
 				return true
 	category_random_complete.emit.call_deferred("", caller_ctx)

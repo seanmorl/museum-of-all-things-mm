@@ -106,6 +106,13 @@ func _ready() -> void:
 
 	_parse_command_line()
 
+	# Register host hint keybind (H) at runtime
+	if not InputMap.has_action("reveal_hint"):
+		InputMap.add_action("reveal_hint")
+		var ev := InputEventKey.new()
+		ev.physical_keycode = KEY_H
+		InputMap.action_add_event("reveal_hint", ev)
+
 	if _multiplayer_controller.is_server_mode():
 		_start_dedicated_server()
 		return
@@ -321,6 +328,16 @@ func _input(event: InputEvent) -> void:
 	if Input.is_action_pressed("toggle_fullscreen"):
 		UIEvents.fullscreen_toggled.emit(not GraphicsManager.fullscreen)
 
+	# Host keybind: H = reveal next hint to all players during a race
+	if event.is_action_pressed("reveal_hint") and not event.is_echo():
+		var chat_open: bool = _chat_hud != null and _chat_hud.is_input_open()
+		if not chat_open and NetworkManager.is_server() and RaceManager.is_race_active():
+			var ok := RaceManager.reveal_hint_now()
+			if not ok and _chat_system:
+				_chat_system._show_system_message("⚠ No hints available.")
+			get_viewport().set_input_as_handled()
+			return
+
 	if not game_started:
 		return
 
@@ -459,12 +476,12 @@ func _on_start_race_pressed() -> void:
 		_debug_log("Main: Fetching random articles for race vote...")
 		_race_candidates.clear()
 		_race_target_article = ""
-		_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
+		_race_start_article = ""
+		_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 2  # +1 target, +1 start
 		_show_vote_loading()
-		# Fetch all candidates in a single Wikipedia API call
 		_fetch_race_candidates()
-		# Target still uses Toolforge for quality filtering
 		_fetch_race_target()
+		_fetch_race_start_article()
 	else:
 		_debug_log("Main: Sending _request_race_start RPC to server (my id: %d, multiplayer active: %s)" % [multiplayer.get_unique_id(), NetworkManager.is_multiplayer_active()])
 		_request_race_start.rpc_id(1)
@@ -480,22 +497,25 @@ func _request_race_start() -> void:
 	_debug_log("Main: Race start requested by peer, fetching random articles for vote...")
 	_race_candidates.clear()
 	_race_target_article = ""
-	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
+	_race_start_article = ""
+	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 2
 	_show_vote_loading()
 	_fetch_race_candidates()
 	_fetch_race_target()
+	_fetch_race_start_article()
 
 
 ## Collects random articles for the vote pool + target.
 var _race_candidates: Array = []
 var _race_target_article: String = ""
+var _race_start_article: String = ""  ## completely random article — where players begin
 var _race_fetches_pending: int = 0
 
 var _race_retry_count: int = 0
 const MAX_RACE_RETRIES: int = 10
 
-func _on_random_article_complete(title: Variant, context: Dictionary) -> void:
-	if not context or not context.has("race") or not context.race:
+func _on_random_article_complete(title: Variant, context: Variant) -> void:
+	if not context or not (context is Dictionary) or not context.has("race") or not context.race:
 		return
 
 	if title == null or title == "":
@@ -510,6 +530,8 @@ func _on_random_article_complete(title: Variant, context: Dictionary) -> void:
 		var role: String = context.get("race_role", "candidate")
 		if role == "candidate":
 			_fetch_one_candidate()
+		elif role == "start":
+			_fetch_race_start_article()
 		else:
 			_fetch_race_target()
 		return
@@ -525,13 +547,19 @@ func _on_random_article_complete(title: Variant, context: Dictionary) -> void:
 		_race_candidates.append(title)
 		_race_fetches_pending -= 1
 		_debug_log("Main: Got candidate '%s' (%d remaining)" % [title, _race_fetches_pending])
-		if _race_fetches_pending <= 0 and _race_target_article != "":
+		if _race_fetches_pending <= 0 and _race_target_article != "" and _race_start_article != "":
 			_launch_vote()
 	elif role == "target":
 		_race_target_article = title
 		_race_fetches_pending -= 1
 		_debug_log("Main: Got target '%s'" % title)
-		if _race_fetches_pending <= 0 and _race_candidates.size() >= RaceManager.CANDIDATE_COUNT:
+		if _race_fetches_pending <= 0 and _race_candidates.size() >= RaceManager.CANDIDATE_COUNT and _race_start_article != "":
+			_launch_vote()
+	elif role == "start":
+		_race_start_article = title
+		_race_fetches_pending -= 1
+		_debug_log("Main: Got start article '%s'" % title)
+		if _race_fetches_pending <= 0 and _race_candidates.size() >= RaceManager.CANDIDATE_COUNT and _race_target_article != "":
 			_launch_vote()
 
 func _fetch_race_target() -> void:
@@ -552,12 +580,15 @@ func _fetch_one_candidate() -> void:
 	elif RaceManager.get_difficulty() == "random_category":
 		ExhibitFetcher.fetch_random_category_article({ "race": true, "race_role": "candidate" })
 	else:
-		ExhibitFetcher.fetch_random_batch([{ "race": true, "race_role": "candidate" }])
+		ExhibitFetcher.fetch_random_target({ "race": true, "race_role": "candidate" }, RaceManager.get_difficulty())
 
+
+func _fetch_race_start_article() -> void:
+	## Fetches a completely random article as the starting point — ignores difficulty.
+	ExhibitFetcher.fetch_random({ "race": true, "race_role": "start" })
 
 func _fetch_race_candidates() -> void:
-	## When a category override is set, candidates also come from that category.
-	## Otherwise use the fast batch random endpoint.
+	## All candidates respect the current difficulty/category setting.
 	var cat := RaceManager.get_category_override()
 	if cat != "":
 		for i in RaceManager.CANDIDATE_COUNT:
@@ -566,16 +597,15 @@ func _fetch_race_candidates() -> void:
 		for i in RaceManager.CANDIDATE_COUNT:
 			ExhibitFetcher.fetch_random_category_article({ "race": true, "race_role": "candidate" })
 	else:
-		var candidate_contexts: Array = []
 		for i in RaceManager.CANDIDATE_COUNT:
-			candidate_contexts.append({ "race": true, "race_role": "candidate" })
-		ExhibitFetcher.fetch_random_batch(candidate_contexts)
+			ExhibitFetcher.fetch_random_target({ "race": true, "race_role": "candidate" }, RaceManager.get_difficulty())
 
 
 func _on_vote_cancelled() -> void:
 	## Host cancelled the vote — clear pending fetch state and return all players to pause menu.
 	_race_candidates.clear()
 	_race_target_article = ""
+	_race_start_article = ""
 	_race_fetches_pending = 0
 	_pause_game()
 
@@ -587,23 +617,26 @@ func _show_vote_loading() -> void:
 
 
 func reroll_vote() -> void:
-	## Called by VoteHUD reroll button (host only). Re-fetches all candidates.
+	## Called by VoteHUD reroll button (host only). Re-fetches all candidates + start article.
 	if not NetworkManager.is_server():
 		return
 	RaceManager.set_vote_timer_paused(true)
 	_race_candidates.clear()
 	_race_target_article = ""
-	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
+	_race_start_article = ""
+	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 2
 	_fetch_race_candidates()
 	_fetch_race_target()
+	_fetch_race_start_article()
 
 
 func _launch_vote() -> void:
-	_debug_log("Main: Launching vote with candidates %s, target '%s'" % [str(_race_candidates), _race_target_article])
+	_debug_log("Main: Launching vote with candidates %s, target '%s', start '%s'" % [str(_race_candidates), _race_target_article, _race_start_article])
 	RaceManager.set_vote_timer_paused(false)
-	RaceManager.begin_vote(_race_candidates.duplicate(), _race_target_article)
+	RaceManager.begin_vote(_race_candidates.duplicate(), _race_target_article, _race_start_article)
 	_race_candidates.clear()
 	_race_target_article = ""
+	_race_start_article = ""
 	# Tell VoteHUD reroll button it can re-enable
 	var vote_hud := get_node_or_null("TabMenu/VoteHUD")
 	if vote_hud and vote_hud.has_method("on_reroll_ready"):
@@ -612,6 +645,11 @@ func _launch_vote() -> void:
 
 func _on_race_started(target_article: String, start_article: String) -> void:
 	_debug_log("Main: Race started, sending all players to '%s'" % start_article)
+
+	# Server fetches backlinks to populate the hint pool
+	if NetworkManager.is_server() and target_article != "":
+		ExhibitFetcher.backlinks_complete.connect(_on_backlinks_for_hints, CONNECT_ONE_SHOT)
+		ExhibitFetcher.fetch_backlinks(target_article, {"hints": true})
 
 	# In dedicated host mode there is no local player — just sync to clients and return
 	if _is_ui_dedicated_host:
@@ -637,6 +675,13 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 	_start_game()
 
 	GameplayEvents.emit_race_started(target_article)
+
+func _on_backlinks_for_hints(titles: Array, context: Dictionary) -> void:
+	if not context.get("hints", false):
+		return
+	# Filter out the target itself just in case
+	var filtered: Array = titles.filter(func(t): return t != RaceManager.get_target_article())
+	RaceManager.set_hint_pool(filtered)
 
 
 # =============================================================================

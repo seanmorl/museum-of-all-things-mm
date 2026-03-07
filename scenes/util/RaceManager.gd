@@ -5,6 +5,11 @@ signal race_ended(winner_peer_id: int, winner_name: String)
 signal race_cancelled
 ## Emitted every second while a race is active. Connect to update a HUD timer.
 signal race_timer_updated(elapsed_seconds: float)
+## Emitted on all peers when a backlink hint is revealed during a race.
+signal race_hint_revealed(hint_article: String, hint_number: int)
+## Emitted on all peers when hint interval/mode is changed by the host.
+signal hint_settings_changed(interval: float, manual: bool)
+
 ## Emitted on all peers when the host cancels the vote.
 signal vote_cancelled
 ## Emitted on all peers when a vote round begins.
@@ -22,6 +27,7 @@ var _state: State = State.IDLE
 var _target_article: String = ""
 var _start_article: String = ""
 var _vote_start_article: String = ""
+var _vote_target_article: String = ""
 var _winner_peer_id: int = -1
 var _winner_name: String = ""
 
@@ -51,6 +57,14 @@ var _difficulty: String = "medium"
 ## When non-empty, target is drawn from this Wikipedia category instead of difficulty pool.
 var _category_override: String = ""
 
+## Backlink hints — revealed to all players on a timer during the race.
+var _hint_pool: Array = []         ## shuffled backlinks of the target
+var _hints_revealed: Array = []    ## hints already shown (index 0 = first)
+var _hint_timer: float = 0.0       ## counts up; hint drops every _hint_interval seconds
+var _hint_interval: float = 600.0  ## default: 10 minutes
+var _hint_manual: bool = false     ## if true, host triggers hints manually only
+const MAX_HINTS: int = 5           ## cap so we don't spoil everything
+
 func _ready() -> void:
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
 	NetworkManager.peer_connected.connect(_on_peer_connected)
@@ -74,6 +88,14 @@ func _process(delta: float) -> void:
 	if _timer_signal_accumulator >= 1.0:
 		_timer_signal_accumulator -= 1.0
 		race_timer_updated.emit(_elapsed_time)
+
+	# Reveal a backlink hint every _hint_interval seconds (server only — synced via RPC)
+	if NetworkManager.is_server() and _hint_pool.size() > 0 and not _hint_manual:
+		_hint_timer += delta
+		if _hint_timer >= _hint_interval and _hints_revealed.size() < MAX_HINTS:
+			_hint_timer = 0.0
+			var hint: String = _hint_pool.pop_front()
+			_reveal_hint.rpc(hint, _hints_revealed.size() + 1)
 
 
 func is_race_active() -> bool:
@@ -100,11 +122,12 @@ func get_elapsed_time_string() -> String:
 	return "%02d:%02d" % [secs / 60, secs % 60]
 
 ## Called by server once candidates are ready. Winner becomes the race target.
-func begin_vote(candidates: Array, start_article: String = "") -> void:
+func begin_vote(candidates: Array, target_article: String = "", start_article: String = "") -> void:
 	if not NetworkManager.is_server():
 		return
 	_vote_candidates = candidates
 	_vote_start_article = start_article
+	_vote_target_article = target_article
 	_votes.clear()
 	_vote_active = true
 	_vote_timer = VOTE_DURATION
@@ -145,12 +168,18 @@ func _finish_vote() -> void:
 	var winning_idx: int = winners[0]
 	var winning_article: String = _vote_candidates[winning_idx]
 	if OS.is_debug_build():
-		print("RaceManager: Vote ended, target: ", winning_article)
+		print("RaceManager: Vote ended, winning target: ", winning_article)
 	_sync_vote_end.rpc(winning_idx)
+	## winning_article = what players voted for = the race target
+	## _vote_start_article = random article = where the door opens
 	start_race(winning_article, _vote_start_article)
 
 func get_vote_candidates() -> Array:
 	return _vote_candidates
+
+func get_vote_target_article() -> String:
+	## The article players are trying to find — known before the vote ends.
+	return _vote_start_article
 
 func get_vote_time_remaining() -> float:
 	return _vote_timer
@@ -209,6 +238,72 @@ func _sync_category_override(category_name: String) -> void:
 	_category_override = category_name
 	category_override_changed.emit(category_name)
 
+## Called by Main after fetching backlinks for the target article.
+## Only the server calls this; hints are revealed via RPC at _hint_interval.
+func set_hint_pool(titles: Array) -> void:
+	_hint_pool = titles.duplicate()
+	_hint_pool.shuffle()
+	_hint_pool = _hint_pool.slice(0, MAX_HINTS + 2)
+	_hints_revealed.clear()
+	_hint_timer = 0.0
+
+## Host sets hint interval (seconds) and whether hints are manual-only.
+## interval <= 0 means hints are disabled entirely.
+func set_hint_settings(interval: float, manual: bool) -> void:
+	if not NetworkManager.is_server():
+		return
+	_sync_hint_settings.rpc(interval, manual)
+
+## Host manually reveals the next hint immediately.
+func reveal_hint_now() -> bool:
+	## Reveal next hint to all players. Returns false if no hints available.
+	if not NetworkManager.is_server():
+		return false
+	if _hint_pool.is_empty() or _hints_revealed.size() >= MAX_HINTS:
+		return false
+	_hint_timer = 0.0
+	var hint: String = _hint_pool.pop_front()
+	_reveal_hint.rpc(hint, _hints_revealed.size() + 1)
+	return true
+
+func reveal_hint_to_peer(peer_id: int) -> void:
+	## Reveal next hint privately to a specific peer only.
+	if not NetworkManager.is_server():
+		return
+	if _hint_pool.is_empty() or _hints_revealed.size() >= MAX_HINTS:
+		return
+	var hint: String = _hint_pool[0]  # peek, don't consume — still available for everyone later
+	var number: int = _hints_revealed.size() + 1
+	if peer_id == multiplayer.get_unique_id():
+		race_hint_revealed.emit(hint, number)
+	else:
+		_reveal_hint_private.rpc_id(peer_id, hint, number)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_hint_settings(interval: float, manual: bool) -> void:
+	_hint_interval = interval
+	_hint_manual = manual
+	hint_settings_changed.emit(interval, manual)
+
+func get_hint_interval() -> float:
+	return _hint_interval
+
+func get_hint_manual() -> bool:
+	return _hint_manual
+
+func get_hints_revealed() -> Array:
+	return _hints_revealed.duplicate()
+
+@rpc("authority", "call_local", "reliable")
+func _reveal_hint(hint_article: String, hint_number: int) -> void:
+	_hints_revealed.append(hint_article)
+	race_hint_revealed.emit(hint_article, hint_number)
+
+@rpc("authority", "call_remote", "reliable")
+func _reveal_hint_private(hint_article: String, hint_number: int) -> void:
+	## Private hint — only the receiving peer sees this; not added to _hints_revealed.
+	race_hint_revealed.emit(hint_article, hint_number)
+
 func is_vote_active() -> bool:
 	return _vote_active
 
@@ -256,6 +351,7 @@ func start_race(target_article: String, start_article: String) -> void:
 	_race_start_time = Time.get_unix_time_from_system()
 	_elapsed_time = 0.0
 	_timer_signal_accumulator = 0.0
+	_hint_timer = 0.0  # reset hint timer for new race
 
 	if OS.is_debug_build():
 		print("RaceManager: Starting race to find '", target_article, "'")
