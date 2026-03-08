@@ -188,6 +188,10 @@ func _ready() -> void:
 	NetworkManager.server_disconnected.connect(_on_network_server_disconnected)
 	NetworkManager.player_info_updated.connect(_on_network_player_info_updated)
 	
+	# Accessibility
+	SettingsEvents.accessibility_changed.connect(_on_accessibility_changed)
+	_load_accessibility_settings()
+	
 	call_deferred("_play_sting")
 	
 	_world_light.visible = Platform.is_compatibility_renderer()
@@ -461,6 +465,60 @@ func _process(delta: float) -> void:
 		)
 
 # =============================================================================
+# ACCESSIBILITY FUNCTIONS
+# =============================================================================
+
+func _load_accessibility_settings() -> void:
+	var saved: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
+	
+	# Broadcast all saved accessibility settings to consumers (RaceHUD, items, etc)
+	for key: String in saved:
+		SettingsEvents.emit_accessibility_changed(key, saved[key])
+		
+	# Apply global settings that belong to the main app scope
+	if saved.has("colorblind_mode"):
+		_apply_colorblind_filter(saved.get("colorblind_mode"))
+
+func _on_accessibility_changed(key: String, value: Variant) -> void:
+	if key == "colorblind_mode":
+		_apply_colorblind_filter(value as int)
+
+func _apply_colorblind_filter(mode: int) -> void:
+	var root := get_tree().root
+	var overlay := root.find_child("ColorblindOverlay", true, false)
+
+	if mode == 0:
+		if overlay:
+			overlay.visible = false
+		return
+
+	if not overlay:
+		var shader_path := "res://assets/shaders/colorblind_correction.gdshader"
+		if not ResourceLoader.exists(shader_path):
+			push_warning("Main: Colorblind shader not found at " + shader_path)
+			return
+		var canvas := CanvasLayer.new()
+		canvas.name = "ColorblindLayer"
+		canvas.layer = 128  # render on top of everything
+		root.add_child(canvas)
+		
+		var rect := ColorRect.new()
+		rect.name = "ColorblindOverlay"
+		rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var mat := ShaderMaterial.new()
+		mat.shader = load(shader_path)
+		rect.material = mat
+		canvas.add_child(rect)
+		overlay = rect
+
+	overlay.visible = true
+	var mat := overlay.material as ShaderMaterial
+	if mat:
+		mat.set_shader_parameter("mode", mode)
+		mat.set_shader_parameter("strength", 1.0)
+
+# =============================================================================
 # SKIN FUNCTIONS
 # =============================================================================
 
@@ -674,8 +732,28 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 func _on_backlinks_for_hints(titles: Array, context: Dictionary) -> void:
 	if not context.get("hints", false):
 		return
-	# Filter out the target itself just in case
-	var filtered: Array = titles.filter(func(t): return t != RaceManager.get_target_article())
+	## The hint pool is the list of articles that LINK TO the target (backlinks).
+	## These serve two purposes:
+	##   1. RaceManager.reveal_hint_now() picks one and broadcasts it so RaceHUD
+	##      shows "<article> links here", guiding players from that room.
+	##   2. ExhibitLoader._link_backlink_to_exit() makes the target article the
+	##      exit destination *inside* each backlink room so players can walk
+	##      through to the target from any hinted room.
+	##
+	## ⚠️ The old filter `t != get_target_article()` was masking a separate bug
+	## where the target was being added to EVERY exit, not just the backlink ones.
+	## That fix belongs in ExhibitLoader. Removing the filter here restores the
+	## ability for the target to appear behind the door in hint rooms.
+	##
+	## We deduplicate and strip blank entries before setting the pool.
+	var seen: Dictionary = {}
+	var filtered: Array = []
+	for t: String in titles:
+		if t != "" and t != " " and not seen.has(t):
+			seen[t] = true
+			filtered.append(t)
+	if OS.is_debug_build():
+		print("Main: hint pool set — %d backlinks for target '%s'" % [filtered.size(), RaceManager.get_target_article()])
 	RaceManager.set_hint_pool(filtered)
 
 # =============================================================================
@@ -723,6 +801,13 @@ func _on_network_peer_connected(peer_id: int) -> void:
 		if _is_ui_dedicated_host and _race_controller_peer_id == -1:
 			_race_controller_peer_id = peer_id
 			_grant_race_control.rpc_id(peer_id)
+
+		# Sync placed paintings to late joiner so they see paintings placed
+		# before they connected.
+		if _painting_controller:
+			var state: Array = _painting_controller.get_placed_paintings_state()
+			if state.size() > 0:
+				_sync_placed_paintings_to_peer.rpc_id(peer_id, state)
 
 func _on_network_peer_disconnected(peer_id: int) -> void:
 	if _painting_controller:
@@ -936,6 +1021,13 @@ func _eat_anim_cancel_sync(peer_id: int) -> void:
 func _reaction_sync(peer_id: int, reaction_index: int, target: Vector3) -> void:
 	if peer_id != NetworkManager.get_unique_id():
 		_pointing_controller.spawn_reaction(reaction_index, target)
+
+@rpc("authority", "call_remote", "reliable")
+func _sync_placed_paintings_to_peer(state: Array) -> void:
+	## Received by a newly-joined client. Materialises all paintings that existed
+	## before they connected.
+	if _painting_controller:
+		_painting_controller.apply_placed_paintings_state(state, _player)
 
 ## Syncs the race starting exhibit to all non-server peers so they also
 ## open the search door and load the starting article.

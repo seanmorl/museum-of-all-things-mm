@@ -289,6 +289,17 @@ func _on_peer_connected(id: int) -> void:
 	if enet_peer:
 		enet_peer.set_timeout(32, 20000, 60000)
 
+	# Defer the RPC burst by one frame so ENet fully registers the peer before
+	# we send to them. Sending RPCs before the peer is in ENet's peer table
+	# produces "Condition !peers.has(p_id) is true" errors and packet loss.
+	call_deferred("_send_peer_info_rpcs", id)
+	peer_connected.emit(id)
+
+
+func _send_peer_info_rpcs(id: int) -> void:
+	# Guard: peer may have disconnected in the frame we waited.
+	if not peer or not multiplayer.get_peers().has(id):
+		return
 	_request_player_info.rpc_id(id, multiplayer.get_unique_id())
 	if not is_dedicated_server:
 		_receive_player_info.rpc_id(id, multiplayer.get_unique_id(), local_player_name, local_player_color.to_html(), local_player_skin, local_player_pronouns)
@@ -301,10 +312,10 @@ func _on_peer_connected(id: int) -> void:
 				var info = player_info[existing_id]
 				var color_html = info.color.to_html() if info.has("color") else Color(0.2, 0.5, 0.8, 1.0).to_html()
 				var skin = info.skin_url if info.has("skin_url") else ""
-				_receive_player_info.rpc_id(id, existing_id, info.name, color_html, skin)
+				var pronouns: String = info.pronouns if info.has("pronouns") else ""
+				_receive_player_info.rpc_id(id, existing_id, info.name, color_html, skin, pronouns)
 				var room: String = info.current_room if info.has("current_room") else "Lobby"
 				_broadcast_player_room.rpc_id(id, existing_id, room)
-	peer_connected.emit(id)
 
 func _on_peer_disconnected(id: int) -> void:
 	Log.info("Network", "Peer disconnected: %d" % id)

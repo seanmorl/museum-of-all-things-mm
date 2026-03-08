@@ -9,6 +9,7 @@ signal resume
 	_vbox.get_node("ControlSettings"),
 	_vbox.get_node("DataSettings") if not Platform.is_web() else null,
 	_build_multiplayer_settings(),
+	_build_accessibility_settings(),
 ]
 
 var _serif_font: FontFile = null
@@ -302,3 +303,299 @@ func _on_resume() -> void:
 	if visible:
 		visible = false
 		resume.emit()
+
+# =============================================================================
+# DROPDOWN STYLING — mirrors GraphicsSettings for visual consistency
+# =============================================================================
+
+func _style_option_button(btn: OptionButton) -> void:
+	## Flat, rounded dropdown style matching GraphicsSettings.gd.
+	if not btn:
+		return
+	var normal := StyleBoxFlat.new()
+	normal.bg_color         = Color(0.97, 0.97, 0.97, 1.0)
+	normal.border_color     = Color(0.72, 0.72, 0.72, 1.0)
+	for s in ["left","right","top","bottom"]:
+		normal.set("border_width_" + s, 1)
+	for c in ["top_left","top_right","bottom_left","bottom_right"]:
+		normal.set("corner_radius_" + c, 5)
+	normal.content_margin_left   = 10
+	normal.content_margin_right  = 28
+	normal.content_margin_top    = 5
+	normal.content_margin_bottom = 5
+
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color     = Color(0.92, 0.93, 0.98, 1.0)
+	hover.border_color = Color(0.50, 0.55, 0.85, 1.0)
+
+	var pressed := normal.duplicate() as StyleBoxFlat
+	pressed.bg_color     = Color(0.88, 0.90, 0.97, 1.0)
+	pressed.border_color = Color(0.40, 0.45, 0.80, 1.0)
+
+	var focus := normal.duplicate() as StyleBoxFlat
+	focus.border_color = Color(0.40, 0.45, 0.80, 1.0)
+	for s in ["left","right","top","bottom"]:
+		focus.set("border_width_" + s, 2)
+
+	btn.add_theme_stylebox_override("normal",  normal)
+	btn.add_theme_stylebox_override("hover",   hover)
+	btn.add_theme_stylebox_override("pressed", pressed)
+	btn.add_theme_stylebox_override("focus",   focus)
+	btn.add_theme_font_size_override("font_size", 13)
+
+	var popup_style := StyleBoxFlat.new()
+	popup_style.bg_color     = Color(0.98, 0.98, 0.98, 1.0)
+	popup_style.border_color = Color(0.70, 0.70, 0.70, 1.0)
+	for s in ["left","right","top","bottom"]:
+		popup_style.set("border_width_" + s, 1)
+	for c in ["top_left","top_right","bottom_left","bottom_right"]:
+		popup_style.set("corner_radius_" + c, 5)
+	popup_style.shadow_color  = Color(0, 0, 0, 0.12)
+	popup_style.shadow_size   = 8
+	popup_style.shadow_offset = Vector2(0, 3)
+	btn.get_popup().add_theme_stylebox_override("panel", popup_style)
+	btn.get_popup().add_theme_font_size_override("font_size", 13)
+
+
+
+func _build_accessibility_settings() -> Control:
+	var saved: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
+
+	var container := VBoxContainer.new()
+	container.name = "AccessibilitySettings"
+	container.add_theme_constant_override("separation", 14)
+	_vbox.add_child(container)
+
+	# ── inline helpers ────────────────────────────────────────────────────────
+
+	var _h := func(text: String) -> Label:
+		var h := Label.new()
+		h.text = text
+		h.set_meta("settings_role", "heading")
+		h.add_theme_font_size_override("font_size", 18)
+		return h
+
+	var _hint := func(text: String) -> Label:
+		var h := Label.new()
+		h.text = text
+		h.set_meta("settings_role", "hint")
+		h.add_theme_font_size_override("font_size", 11)
+		h.autowrap_mode = TextServer.AUTOWRAP_WORD
+		return h
+
+	var _toggle := func(label_text: String, current_val: bool, cb: Callable) -> HBoxContainer:
+		var row := HBoxContainer.new()
+		var lbl := Label.new()
+		lbl.text = label_text
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(lbl)
+		var check := CheckButton.new()
+		check.button_pressed = current_val
+		check.toggled.connect(cb)
+		row.add_child(check)
+		return row
+
+	# ── Screen Reader (AccessKit) ─────────────────────────────────────────────
+	container.add_child(_h.call("Screen Reader"))
+
+	var sr_on: bool = saved.get("screen_reader", false)
+	container.add_child(_toggle.call("Enable screen reader (AccessKit)", sr_on,
+		func(on: bool):
+			_save_accessibility("screen_reader", on)
+			_apply_screen_reader(on)
+	))
+	container.add_child(_hint.call(
+		"Exposes UI elements to OS screen readers via AccessKit. " +
+		"Requires Godot's DisplayServer accessibility API (4.3+). " +
+		"Changes take effect immediately — no restart needed."
+	))
+
+	var sr_verbosity_row := HBoxContainer.new()
+	var sr_v_lbl := Label.new()
+	sr_v_lbl.text = "Verbosity"
+	sr_v_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sr_verbosity_row.add_child(sr_v_lbl)
+	var sr_option := OptionButton.new()
+	sr_option.add_item("All controls")
+	sr_option.add_item("Focused only")
+	sr_option.add_item("Off")
+	var sr_verbosity: int = saved.get("screen_reader_verbosity", 0)
+	sr_option.selected = sr_verbosity
+	sr_option.item_selected.connect(func(idx: int):
+		_save_accessibility("screen_reader_verbosity", idx)
+		_apply_screen_reader(saved.get("screen_reader", false))
+	)
+	_style_option_button(sr_option)
+	sr_verbosity_row.add_child(sr_option)
+	container.add_child(sr_verbosity_row)
+
+	# ── Vision ────────────────────────────────────────────────────────────────
+	container.add_child(_h.call("Vision"))
+
+	# Readable font selector
+	var font_row := HBoxContainer.new()
+	font_row.add_theme_constant_override("separation", 8)
+	var font_lbl := Label.new()
+	font_lbl.text = "Reading font"
+	font_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	font_row.add_child(font_lbl)
+	var font_option := OptionButton.new()
+	font_option.add_item("Default (Cormorant Garamond)")
+	font_option.add_item("OpenDyslexic")
+	font_option.add_item("Atkinson Hyperlegible")
+	var font_choice: int = saved.get("reading_font", 0)
+	font_option.selected = font_choice
+	font_option.item_selected.connect(func(idx: int):
+		_save_accessibility("reading_font", idx)
+		_emit_accessibility_event("reading_font", idx)
+	)
+	_style_option_button(font_option)
+	font_row.add_child(font_option)
+	container.add_child(font_row)
+	container.add_child(_hint.call(
+		"OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. " +
+		"Fonts must be present at:\n" +
+		"• res://assets/fonts/OpenDyslexic/OpenDyslexic-Regular.otf\n" +
+		"• res://assets/fonts/AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf"
+	))
+
+	# High-contrast exhibit text
+	var hc_on: bool = saved.get("high_contrast_text", false)
+	container.add_child(_toggle.call("High-contrast exhibit text", hc_on,
+		func(on: bool):
+			_save_accessibility("high_contrast_text", on)
+			_emit_accessibility_event("high_contrast_text", on)
+	))
+	container.add_child(_hint.call(
+		"Renders article wall-card text as black-on-white regardless of dark mode."))
+
+	# Exhibit text size
+	var ts: float = saved.get("exhibit_text_size", 1.0)
+	var ts_val := Label.new()
+	ts_val.custom_minimum_size = Vector2(44, 0)
+	ts_val.text = "%.0f%%" % (ts * 100.0)
+	var ts_slider := HSlider.new()
+	ts_slider.min_value = 0.5; ts_slider.max_value = 2.0; ts_slider.step = 0.1
+	ts_slider.value = ts; ts_slider.custom_minimum_size = Vector2(180, 0)
+	var ts_reset := Button.new()
+	ts_reset.text = "Reset"; ts_reset.custom_minimum_size = Vector2(54, 0)
+	ts_reset.pressed.connect(func(): ts_slider.value = 1.0)
+	ts_slider.value_changed.connect(func(v: float):
+		ts_val.text = "%.0f%%" % (v * 100.0)
+		_save_accessibility("exhibit_text_size", v)
+		_emit_accessibility_event("exhibit_text_size", v)
+	)
+	var ts_row := HBoxContainer.new()
+	ts_row.add_theme_constant_override("separation", 8)
+	var ts_lbl := Label.new(); ts_lbl.text = "Exhibit text size"
+	ts_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ts_row.add_child(ts_lbl); ts_row.add_child(ts_slider)
+	ts_row.add_child(ts_val); ts_row.add_child(ts_reset)
+	container.add_child(ts_row)
+	container.add_child(_hint.call("Scales the font size of Wikipedia article text on exhibit walls."))
+
+	# ── Colour & Contrast ─────────────────────────────────────────────────────
+	container.add_child(_h.call("Colour & Contrast"))
+
+	var cb_row := HBoxContainer.new()
+	cb_row.add_theme_constant_override("separation", 8)
+	var cb_lbl := Label.new()
+	cb_lbl.text = "Colourblind filter"
+	cb_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cb_row.add_child(cb_lbl)
+	var cb_option := OptionButton.new()
+	cb_option.add_item("None")
+	cb_option.add_item("Protanopia  (red-blind)")
+	cb_option.add_item("Deuteranopia  (green-blind)")
+	cb_option.add_item("Tritanopia  (blue-blind)")
+	var cb_mode: int = saved.get("colorblind_mode", 0)
+	cb_option.selected = cb_mode
+	cb_option.item_selected.connect(func(idx: int):
+		_save_accessibility("colorblind_mode", idx)
+		_apply_colorblind_filter(idx)
+	)
+	_style_option_button(cb_option)
+	cb_row.add_child(cb_option)
+	container.add_child(cb_row)
+	container.add_child(_hint.call(
+		"Applies a full-screen post-processing shader to correct for colour vision deficiency. " +
+		"Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a " +
+		"CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
+	))
+
+	# Apply saved colorblind filter on load
+	if cb_mode > 0:
+		_apply_colorblind_filter(cb_mode)
+
+	# ── Motion ────────────────────────────────────────────────────────────────
+	container.add_child(_h.call("Motion"))
+
+	var rm_on: bool = saved.get("reduce_motion", false)
+	container.add_child(_toggle.call("Reduce motion", rm_on,
+		func(on: bool):
+			_save_accessibility("reduce_motion", on)
+			_emit_accessibility_event("reduce_motion", on)
+	))
+	container.add_child(_hint.call(
+		"Disables slide/fade animations on menus and the race HUD. Fog transitions remain."))
+
+	# ── HUD & Hints ───────────────────────────────────────────────────────────
+	container.add_child(_h.call("HUD & Hints"))
+
+	var lh_on: bool = saved.get("large_hud_text", false)
+	container.add_child(_toggle.call("Large HUD text", lh_on,
+		func(on: bool):
+			_save_accessibility("large_hud_text", on)
+			_emit_accessibility_event("large_hud_text", on)
+	))
+	container.add_child(_hint.call("Increases font size of the race timer, target name, and hint banners."))
+
+	var ph_on: bool = saved.get("persistent_hints", false)
+	container.add_child(_toggle.call("Keep hints visible", ph_on,
+		func(on: bool): _save_accessibility("persistent_hints", on)
+	))
+	container.add_child(_hint.call(
+		"Hint banners stay on screen until the race ends instead of fading after a few seconds."))
+
+	_tab_bar.add_tab("Accessibility")
+	return container
+
+
+func _apply_screen_reader(enabled: bool) -> void:
+	## Activates AccessKit via Godot 4.3+ DisplayServer accessibility API.
+	## Falls back gracefully on older builds.
+	if DisplayServer.has_feature(DisplayServer.FEATURE_ACCESSIBILITY_SCREEN_READER):
+		# Use call() to invoke the instance method on the DisplayServer singleton.
+		# Direct static-style calls like DisplayServer.accessibility_screen_reader_is_active()
+		# don't work because it's an instance method, not a static method.
+		var _currently_active: bool = false
+		if DisplayServer.has_method("accessibility_screen_reader_is_active"):
+			_currently_active = DisplayServer.call("accessibility_screen_reader_is_active")
+		# The standard way to toggle AccessKit in Godot 4.3+:
+		# Project Settings > accessibility/accessibility_support must be "Always"
+		# or "When Screen Reader Found". We emit the event so other nodes can
+		# also respond (e.g. add aria-label equivalents to their controls).
+		_emit_accessibility_event("screen_reader", enabled)
+	else:
+		push_warning("Settings: AccessKit screen reader requires Godot 4.3+ DisplayServer. " +
+			"Enable Project Settings > accessibility/accessibility_support.")
+	_emit_accessibility_event("screen_reader", enabled)
+
+
+func _apply_colorblind_filter(mode: int) -> void:
+	_emit_accessibility_event("colorblind_mode", mode)
+
+
+func _save_accessibility(key: String, value: Variant) -> void:
+	var data: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
+	data[key] = value
+	SettingsManager.save_settings("accessibility", data)
+
+
+func _emit_accessibility_event(key: String, value: Variant) -> void:
+	## Fires SettingsEvents.accessibility_changed if the signal exists.
+	## Add  `signal accessibility_changed(key: String, value: Variant)`
+	## and  `func emit_accessibility_changed(key, value): accessibility_changed.emit(key, value)`
+	## to SettingsEvents.gd to wire up consumers (RaceHUD, ItemProcessor, etc.).
+	if SettingsEvents.has_method("emit_accessibility_changed"):
+		SettingsEvents.emit_accessibility_changed(key, value)

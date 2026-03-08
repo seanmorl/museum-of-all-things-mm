@@ -29,6 +29,7 @@ var _start_article: String = ""
 var _vote_start_article: String = ""
 var _winner_peer_id: int = -1
 var _winner_name: String = ""
+var _winner_path: Array[String] = []  ## Path taken by the winner, sent from their client
 
 ## Time (Unix seconds) when the race started, set on every peer for accuracy.
 var _race_start_time: float = 0.0
@@ -65,9 +66,20 @@ var _hint_interval: float = 600.0  ## default: 10 minutes
 var _hint_manual: bool = false     ## if true, host triggers hints manually only
 const MAX_HINTS: int = 5           ## cap so we don't spoil everything
 
+## Local path this client has walked during the current race.
+## Sent to the server when the target article is reached.
+var _local_visited_pages: Array[String] = []
+
 func _ready() -> void:
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
 	NetworkManager.peer_connected.connect(_on_peer_connected)
+	SettingsEvents.set_current_room.connect(_on_local_room_changed)
+
+
+func _on_local_room_changed(room: String) -> void:
+	if not is_race_active() or room == "Lobby":
+		return
+	_local_visited_pages.append(room)
 
 
 func _process(delta: float) -> void:
@@ -106,6 +118,11 @@ func get_target_article() -> String:
 
 func get_start_article() -> String:
 	return _start_article
+
+func get_winner_path() -> Array[String]:
+	## Returns the path the winner navigated, as received from their client.
+	## Empty array until a race ends.
+	return _winner_path
 
 func get_state() -> State:
 	return _state
@@ -348,6 +365,8 @@ func start_race(target_article: String, start_article: String) -> void:
 	_state = State.ACTIVE
 	_winner_peer_id = -1
 	_winner_name = ""
+	_winner_path.clear()
+	_local_visited_pages.clear()
 	_race_start_time = Time.get_unix_time_from_system()
 	_elapsed_time = 0.0
 	_timer_signal_accumulator = 0.0
@@ -359,17 +378,25 @@ func start_race(target_article: String, start_article: String) -> void:
 	_sync_race_start.rpc(target_article, start_article, _race_start_time)
 	race_started.emit(target_article, start_article)
 
-func notify_article_reached(peer_id: int, article_title: String) -> void:
+func notify_article_reached(peer_id: int, article_title: String, visited_path: Array = []) -> void:
 	if _state != State.ACTIVE:
 		return
 
 	if article_title != _target_article:
 		return
 
+	# Prefer explicitly-provided path; fall back to the internally-tracked one.
+	var path: Array[String] = []
+	if visited_path.size() > 0:
+		path.assign(visited_path)
+	else:
+		path = _local_visited_pages.duplicate()
+
 	if NetworkManager.is_server():
+		_winner_path = path.duplicate()
 		_handle_win(peer_id)
 	else:
-		_request_win_validation.rpc_id(1, peer_id, article_title)
+		_request_win_validation.rpc_id(1, peer_id, article_title, path)
 
 func _handle_win(peer_id: int) -> void:
 	if _state != State.ACTIVE:
@@ -388,7 +415,7 @@ func _handle_win(peer_id: int) -> void:
 	if OS.is_debug_build():
 		print("RaceManager: Winner is ", _winner_name, " (peer ", peer_id, ") in ", "%.1f" % final_time, "s")
 
-	_sync_race_end.rpc(peer_id, _winner_name, final_time)
+	_sync_race_end.rpc(peer_id, _winner_name, final_time, _winner_path)
 	race_ended.emit(peer_id, _winner_name)
 
 func cancel_race() -> void:
@@ -435,10 +462,11 @@ func _sync_race_start(target_article: String, start_article: String, start_time:
 		race_started.emit(target_article, start_article)
 
 @rpc("authority", "call_local", "reliable")
-func _sync_race_end(winner_peer_id: int, winner_name: String, final_time: float) -> void:
+func _sync_race_end(winner_peer_id: int, winner_name: String, final_time: float, winner_path: Array = []) -> void:
 	_state = State.IDLE
 	_winner_peer_id = winner_peer_id
 	_winner_name = winner_name
+	_winner_path.assign(winner_path)
 	_elapsed_time = final_time
 	_timer_signal_accumulator = 0.0
 
@@ -479,7 +507,7 @@ func _sync_race_state_to_peer(target_article: String, start_article: String, sta
 	race_started.emit(target_article, start_article)
 
 @rpc("any_peer", "call_remote", "reliable")
-func _request_win_validation(peer_id: int, article_title: String) -> void:
+func _request_win_validation(peer_id: int, article_title: String, visited_path: Array = []) -> void:
 	if not NetworkManager.is_server():
 		return
 
@@ -489,6 +517,7 @@ func _request_win_validation(peer_id: int, article_title: String) -> void:
 	if article_title != _target_article:
 		return
 
+	_winner_path.assign(visited_path)
 	_handle_win(peer_id)
 
 @rpc("any_peer", "call_remote", "reliable")

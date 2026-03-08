@@ -449,3 +449,63 @@ func _find_wall_item_by_image_title(exhibit_title: String, image_title: String) 
 					return wall_item
 
 	return null
+
+
+# =============================================================================
+# PERSISTENCE / LATE-JOINER SYNC
+# =============================================================================
+
+func restore_placed_painting(exhibit: Node3D, exhibit_title: String,
+		image_title: String, image_url: String,
+		wall_position: Vector3, wall_normal: Vector3, image_size: Vector2) -> void:
+	## Called by ExhibitLoader when a room reloads and TraceManager has a saved
+	## painting for it. Re-materialises the mesh without going through the
+	## steal/carry flow.
+	if not is_instance_valid(exhibit):
+		return
+	# Skip if we already have this painting (e.g. duplicate restore call)
+	for p: Node in _placed_paintings:
+		if is_instance_valid(p) and p.has_meta("image_title") and p.get_meta("image_title") == image_title:
+			return
+	_create_placed_painting(wall_position, wall_normal, image_size,
+		null, exhibit_title, image_title, image_url)
+
+
+func get_placed_paintings_state() -> Array:
+	## Returns a snapshot of all currently-placed paintings so the server can
+	## relay them to a newly-connected peer.
+	var state: Array = []
+	for p: Node in _placed_paintings:
+		if not is_instance_valid(p):
+			continue
+		state.append({
+			"exhibit_title": p.get_meta("exhibit_title", ""),
+			"image_title":   p.get_meta("image_title",   ""),
+			"image_url":     p.get_meta("image_url",     ""),
+			"image_size":    p.get_meta("image_size",    Vector2.ONE),
+			"wall_position": p.global_position - p.basis.y * 0.13,
+			"wall_normal":   p.basis.y,
+		})
+	return state
+
+
+func apply_placed_paintings_state(state: Array, _local_player: Node) -> void:
+	## Called on a newly-joined peer to materialise all paintings that were
+	## placed before they joined. Skips any we already have (dedup by image_title).
+	var existing_titles: Dictionary = {}
+	for p: Node in _placed_paintings:
+		if is_instance_valid(p) and p.has_meta("image_title"):
+			existing_titles[p.get_meta("image_title")] = true
+
+	for entry: Dictionary in state:
+		if existing_titles.has(entry.get("image_title", "")):
+			continue
+		_create_placed_painting(
+			entry.get("wall_position", Vector3.ZERO),
+			entry.get("wall_normal",   Vector3.UP),
+			entry.get("image_size",    Vector2.ONE),
+			null,
+			entry.get("exhibit_title", ""),
+			entry.get("image_title",   ""),
+			entry.get("image_url",     "")
+		)

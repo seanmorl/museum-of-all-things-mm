@@ -48,3 +48,8 @@ func emit_chat_key_changed(key_name: String) -> void:
 
 func emit_ui_scale_changed(scale: float) -> void:
 	ui_scale_changed.emit(scale)
+
+signal accessibility_changed(key: String, value: Variant)
+
+func emit_accessibility_changed(key: String, value: Variant) -> void:
+	accessibility_changed.emit(key, value)

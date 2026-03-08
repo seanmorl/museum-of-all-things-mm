@@ -69,7 +69,16 @@ func _ready() -> void:
 		_race_panel.add_theme_stylebox_override("panel", _race_style)
 	if orig_win:
 		_win_style = orig_win.duplicate()
+		# Compact margins so the win popup is more notification-sized
+		_win_style.content_margin_left   = 16
+		_win_style.content_margin_right  = 16
+		_win_style.content_margin_top    = 12
+		_win_style.content_margin_bottom = 12
 		_win_popup.add_theme_stylebox_override("panel", _win_style)
+	# Constrain win popup width so it stays compact
+	if _win_popup:
+		_win_popup.custom_minimum_size = Vector2(0, 0)
+		_win_popup.size_flags_horizontal = Control.SIZE_SHRINK_END
 
 	visible = false
 	_race_panel.visible = false
@@ -85,7 +94,41 @@ func _ready() -> void:
 	RaceManager.race_hint_revealed.connect(_on_race_hint_revealed)
 	SettingsEvents.set_current_room.connect(_on_room_changed)
 	ThemeManager.dark_mode_changed.connect(_apply_theme)
+	SettingsEvents.accessibility_changed.connect(_on_accessibility_changed)
 	_apply_theme(ThemeManager.is_dark_mode)
+
+func _on_accessibility_changed(key: String, value: Variant) -> void:
+	match key:
+		"large_hud_text":
+			_apply_large_hud_text(value as bool)
+		"reduce_motion":
+			pass # handled dynamically in _slide_in / _slide_out
+		"persistent_hints":
+			_update_hint_persistence(value as bool)
+
+func _apply_large_hud_text(enabled: bool) -> void:
+	if _timer_label:
+		_timer_label.add_theme_font_size_override("font_size", 36 if enabled else 24)
+	if _target_label:
+		_target_label.add_theme_font_size_override("font_size", 20 if enabled else 14)
+	if _hint_overlay:
+		for child in _hint_overlay.get_children():
+			if child is Label:
+				child.add_theme_font_size_override("font_size", 18 if enabled else 12)
+
+func _update_hint_persistence(persistent: bool) -> void:
+	if not _hint_overlay: return
+	for child in _hint_overlay.get_children():
+		if child is Label and child.has_meta("fade_tween"):
+			var tw: Tween = child.get_meta("fade_tween")
+			if persistent:
+				if is_instance_valid(tw) and tw.is_valid():
+					tw.kill()
+				child.modulate.a = 1.0
+			else:
+				# If not persistent but still there, fade it out now
+				_fade_out_hint(child)
+
 
 
 func _find(n: String) -> Node:
@@ -232,50 +275,49 @@ func _refresh_timeline_display() -> void:
 	else:                  _refresh_timeline_mode_b()
 
 
-func _populate_win_timeline() -> void:
-	if not _win_timeline:
-		return
-	for child in _win_timeline.get_children():
-		child.queue_free()
-	var target := RaceManager.get_target_article()
-	for i in _visited_pages.size():
-		var page     := _visited_pages[i]
-		var is_tgt:  bool = page == target
-		var is_first:bool = i == 0
-		var arrow: String = " ↓" if i < _visited_pages.size() - 1 else ""
-		var prefix: String = "★ " if is_tgt else ("▶ " if is_first else "")
-		var role: String   = "target" if is_tgt else ("start" if is_first else "mid")
-		_win_timeline.add_child(_make_label(prefix + page + arrow, role))
-	# Cap height so it doesn't overflow the screen
-	var row_h: float = 22.0
-	var max_rows: int = 16
-	_win_timeline.custom_minimum_size.y = 0
-	if _visited_pages.size() > max_rows:
-		_win_timeline.custom_minimum_size.y = row_h * max_rows
-
 
 func _slide_in(panel: Control, from_top: bool) -> void:
 	if not panel: return
 	panel.visible = true
-	panel.modulate.a = 0.0
-	panel.position.y = -50.0 if from_top else 50.0  # always start from clean offset
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(panel, "position:y", 0.0, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(panel, "modulate:a", 1.0, 0.25)
+	var reduce_motion: bool = false
+	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
+	if acc.has("reduce_motion"):
+		reduce_motion = acc.reduce_motion
+
+	if reduce_motion:
+		panel.modulate.a = 1.0
+		panel.position.y = 0.0
+	else:
+		panel.modulate.a = 0.0
+		panel.position.y = -50.0 if from_top else 50.0  # always start from clean offset
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(panel, "position:y", 0.0, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(panel, "modulate:a", 1.0, 0.25)
 
 
 func _slide_out(panel: Control, to_top: bool, then_hide: bool = true) -> void:
 	if not panel or not panel.visible: return
-	var offset := -35.0 if to_top else 35.0
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(panel, "position:y", offset, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-	tw.tween_property(panel, "modulate:a", 0.0, 0.2)
-	if then_hide:
-		tw.chain().tween_callback(func():
+	var reduce_motion: bool = false
+	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
+	if acc.has("reduce_motion"):
+		reduce_motion = acc.reduce_motion
+		
+	if reduce_motion:
+		if then_hide:
 			panel.visible = false
 			panel.modulate.a = 1.0
-			panel.position.y = 0.0  # always reset cleanly
-		)
+			panel.position.y = 0.0
+	else:
+		var offset := -35.0 if to_top else 35.0
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(panel, "position:y", offset, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		tw.tween_property(panel, "modulate:a", 0.0, 0.2)
+		if then_hide:
+			tw.chain().tween_callback(func():
+				panel.visible = false
+				panel.modulate.a = 1.0
+				panel.position.y = 0.0  # always reset cleanly
+			)
 
 
 func _process(delta: float) -> void:
@@ -310,6 +352,11 @@ func _on_race_started(target_article: String, _start_article: String) -> void:
 		_slide_out(_win_popup, false)
 	if _timeline_list:
 		for child in _timeline_list.get_children(): child.queue_free()
+	# Reset panel heights so they don't accumulate across multiple races
+	if _timeline_scroll:
+		_timeline_scroll.custom_minimum_size = Vector2(0, 0)
+	if _win_timeline:
+		_win_timeline.custom_minimum_size = Vector2(0, 0)
 	visible = true
 	_slide_in(_race_panel, true)
 
@@ -321,15 +368,42 @@ func _on_race_timer_updated(elapsed_seconds: float) -> void:
 
 
 func _on_race_ended(_winner_peer_id: int, winner_name: String) -> void:
-	if _win_label: _win_label.text = winner_name + " wins!"
-	if _time_label: _time_label.text = "Time: " + RaceManager.get_elapsed_time_string()
+	if _win_label:
+		_win_label.text = winner_name + " wins!"
+		_win_label.add_theme_font_size_override("font_size", 20)  # compact: was 32+
+	if _time_label:
+		_time_label.text = "Time: " + RaceManager.get_elapsed_time_string()
+		_time_label.add_theme_font_size_override("font_size", 11)
 	_populate_win_timeline()
 	_dismiss_timer = AUTO_DISMISS
 	_slide_in(_win_popup, false)
 
 
-func _on_race_cancelled() -> void:
-	_dismiss()
+func _populate_win_timeline() -> void:
+	if not _win_timeline:
+		return
+	for child in _win_timeline.get_children():
+		child.queue_free()
+
+	# Use the winner's path broadcast by the server, not the local player's path.
+	var winner_path: Array[String] = RaceManager.get_winner_path()
+	var path_to_show: Array[String] = winner_path if winner_path.size() > 0 else _visited_pages
+
+	var target := RaceManager.get_target_article()
+	for i in path_to_show.size():
+		var page     := path_to_show[i]
+		var is_tgt:  bool = page == target
+		var is_first: bool = i == 0
+		var arrow: String = " ↓" if i < path_to_show.size() - 1 else ""
+		var prefix: String = "★ " if is_tgt else ("▶ " if is_first else "")
+		var role: String   = "target" if is_tgt else ("start" if is_first else "mid")
+		_win_timeline.add_child(_make_label(prefix + page + arrow, role, 11))
+	# Cap height — compact row height to match smaller font
+	var row_h: float = 16.0
+	var max_rows: int = 12
+	_win_timeline.custom_minimum_size.y = 0
+	if path_to_show.size() > max_rows:
+		_win_timeline.custom_minimum_size.y = row_h * max_rows
 
 
 func _dismiss() -> void:
@@ -343,6 +417,11 @@ func _dismiss() -> void:
 		for child in _hint_overlay.get_children():
 			child.queue_free()
 	if _race_panel: _race_panel.visible = false
+	# Reset accumulated sizes so the panel starts clean next race
+	if _timeline_scroll:
+		_timeline_scroll.custom_minimum_size = Vector2(0, 0)
+	if _win_timeline:
+		_win_timeline.custom_minimum_size = Vector2(0, 0)
 
 
 func _on_race_hint_revealed(hint_article: String, hint_number: int) -> void:
@@ -351,4 +430,35 @@ func _on_race_hint_revealed(hint_article: String, hint_number: int) -> void:
 		return
 	var lbl := _make_label("💡 Hint %d: \"%s\" links here" % [hint_number, hint_article], "hint")
 	lbl.add_theme_color_override("font_color", Color(0.35, 0.65, 0.6) if not ThemeManager.is_dark_mode else Color(0.45, 0.75, 0.7))
+	
+	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
+	if acc.get("large_hud_text", false):
+		lbl.add_theme_font_size_override("font_size", 18)
+		
 	_hint_overlay.add_child(lbl)
+	
+	if not acc.get("persistent_hints", false):
+		_fade_out_hint(lbl, 8.0)
+
+func _fade_out_hint(lbl: Label, delay: float = 0.0) -> void:
+	var reduce_motion: bool = false
+	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
+	reduce_motion = acc.get("reduce_motion", false)
+	
+	var tw := create_tween()
+	lbl.set_meta("fade_tween", tw)
+	
+	if delay > 0.0:
+		tw.tween_interval(delay)
+		
+	if reduce_motion:
+		tw.tween_callback(lbl.queue_free)
+	else:
+		tw.tween_property(lbl, "modulate:a", 0.0, 1.0)
+		tw.tween_callback(lbl.queue_free)
+
+
+func _on_race_cancelled() -> void:
+	## Called when the race is cancelled (e.g., host cancels the vote).
+	## Hides the race HUD and resets state.
+	_dismiss()

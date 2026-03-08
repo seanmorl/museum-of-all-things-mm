@@ -310,6 +310,11 @@ func _on_chat_message_received(sender_name: String, pronouns: String, message: S
 func _on_player_joined(peer_id: int, _pname: String) -> void:
 	if not NetworkManager.is_multiplayer_active():
 		return
+	# Defer by one frame — player_info RPC (including pronouns) arrives shortly
+	# after the peer_connected signal, so reading it immediately gives "".
+	await get_tree().process_frame
+	if not NetworkManager.is_multiplayer_active():
+		return
 	var n := NetworkManager.get_player_name(peer_id)
 	var p := NetworkManager.get_player_pronouns(peer_id)
 	_add_message("%s%s joined the museum" % [n, " (%s)" % p if p != "" else ""], "", Color.WHITE, true)

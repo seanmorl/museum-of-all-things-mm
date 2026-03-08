@@ -12,6 +12,11 @@ var _serif_font: FontFile = null
 var _panel_style: StyleBoxFlat = null
 var _dedicated_host_btn: Button = null
 
+# Thin 1px divider lines placed above specific buttons, matching PauseMenu style.
+# A divider is drawn just above each button named here.
+const _DIVIDER_BEFORE := ["Settings", "Quit"]
+var _dividers: Array[Dictionary] = []
+
 
 func _ready() -> void:
 	_serif_font = load(_FONT_PATH) as FontFile
@@ -22,6 +27,7 @@ func _ready() -> void:
 		var q = get_node_or_null("%Quit")
 		if q: q.visible = false
 	call_deferred("_entrance_animation")
+	call_deferred("_build_dividers")
 
 
 func _on_visibility_changed() -> void:
@@ -69,6 +75,53 @@ func _apply_theme() -> void:
 		for child in container.get_children():
 			if child is Button:
 				_style_button(child)
+
+	for entry in _dividers:
+		var line: ColorRect = entry["line"]
+		if is_instance_valid(line):
+			line.color = ThemeManager.border_color
+
+
+# ── Dividers ──────────────────────────────────────────────────────────────────
+
+func _build_dividers() -> void:
+	var panel := get_node_or_null(
+		"MarginContainer/CenterContainer/VBoxContainer/PanelContainer") as PanelContainer
+	var container := get_node_or_null(_BTN_PATH.trim_suffix("/"))
+	if not panel or not container:
+		return
+	for btn_name in _DIVIDER_BEFORE:
+		var btn := container.get_node_or_null(btn_name)
+		if not btn:
+			continue
+		var line := ColorRect.new()
+		line.name = "Div_" + btn_name
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line.color = ThemeManager.border_color
+		panel.add_child(line)
+		_dividers.append({"leader": btn, "line": line, "panel": panel})
+	_update_dividers()
+
+
+func _update_dividers() -> void:
+	for entry in _dividers:
+		var leader: Control = entry["leader"]
+		var line: ColorRect  = entry["line"]
+		var panel: Control   = entry["panel"]
+		if not is_instance_valid(leader) or not is_instance_valid(line):
+			continue
+		if not leader.visible:
+			line.visible = false
+			continue
+		line.visible = true
+		var y: float = leader.global_position.y - panel.global_position.y - 6.0
+		line.position = Vector2(16.0, y)
+		line.size     = Vector2(panel.size.x - 32.0, 1.0)
+
+
+func _process(_delta: float) -> void:
+	if not _dividers.is_empty():
+		_update_dividers()
 
 
 func _style_label(path: String, color: Color, size: int) -> void:

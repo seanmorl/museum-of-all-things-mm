@@ -257,6 +257,14 @@ func _on_vote_started(candidates: Array) -> void:
 		child.queue_free()
 	_candidate_buttons.clear()
 
+	# Close any menu that may be covering the VoteHUD (e.g. PauseMenu on clients).
+	# The host's path already closes menus via _show_vote_loading → Main.
+	# For clients, we close menus here so the VoteHUD is unobstructed.
+	if not NetworkManager.is_server():
+		var main := get_tree().get_first_node_in_group("main")
+		if main and main.has_method("_start_game"):
+			main._start_game()
+
 	if NetworkManager.is_server():
 		_status_label.text = "Pick a starting room — vote will begin"
 
