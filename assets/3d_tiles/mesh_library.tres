@@ -1,7 +1,7 @@
 [gd_resource type="MeshLibrary" format=4 uid="uid://b887fn6f3qg14"]
 
 [ext_resource type="Material" uid="uid://1ddkd5q5infj" path="res://assets/textures/wood.tres" id="1_a6en6"]
-[ext_resource type="Texture2D" uid="uid://d28b2l52nlx2p" path="res://assets/textures/white.png" id="2_cuohn"]
+[ext_resource type="Texture2D" uid="uid://cmm43flphkdkx" path="res://assets/textures/white.png" id="2_cuohn"]
 [ext_resource type="Material" uid="uid://datvvi6j3c0kp" path="res://assets/textures/white.tres" id="3_kxeub"]
 [ext_resource type="Material" uid="uid://x4bq1qrai2w2" path="res://assets/textures/carpet.tres" id="4_wgiei"]
 [ext_resource type="Material" uid="uid://ddrg1bie5gs8p" path="res://assets/textures/marble21.tres" id="5_xithv"]

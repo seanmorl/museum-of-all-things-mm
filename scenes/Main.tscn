@@ -8,7 +8,7 @@
 [ext_resource type="PackedScene" uid="uid://bhi1d8bl668hb" path="res://scenes/menu/PauseMenu.tscn" id="5_boks6"]
 [ext_resource type="PackedScene" uid="uid://b575vo2u5rw0p" path="res://scenes/menu/PopupTerminalMenu.tscn" id="6_cjdwp"]
 [ext_resource type="PackedScene" uid="uid://btdrwyul4s0cv" path="res://scenes/CacheCleaner.tscn" id="7_lsl8e"]
-[ext_resource type="AudioStream" uid="uid://b1h0hsbf5yxji" path="res://assets/sound/UI/UI Game Launch Sting/Game Launch Sting.ogg" id="9_ketwq"]
+[ext_resource type="AudioStream" uid="uid://dlglidpxju4qy" path="res://assets/sound/UI/UI Game Launch Sting/Game Launch Sting.ogg" id="9_ketwq"]
 [ext_resource type="PackedScene" uid="uid://bmp7qk2xnj5vy" path="res://scenes/menu/MultiplayerMenu.tscn" id="10_mpmenu"]
 [ext_resource type="PackedScene" uid="uid://bj7vvqjer0u7e" path="res://scenes/menu/PlayerListOverlay.tscn" id="11_plyrovly"]
 [ext_resource type="PackedScene" uid="uid://cdw3l0qfrg837" path="res://scenes/menu/RaceHUD.tscn" id="12_racehud"]
@@ -122,15 +122,15 @@ unique_name_in_owner = true
 visible = false
 
 [node name="StartLine" parent="." unique_id=2087091294 instance=ExtResource("19_nfivy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.051032305, 4.035794, 1.0915947)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.051032305, 4.035794, 23.94235)
 
 [connection signal="resume" from="MenuLayer/Settings" to="." method="_on_settings_back"]
-[connection signal="resume" from="MenuLayer/PauseMenu" to="." method="_on_main_menu_start_pressed"]
-[connection signal="settings" from="MenuLayer/PauseMenu" to="." method="_on_pause_menu_settings"]
-[connection signal="return_to_lobby" from="MenuLayer/PauseMenu" to="." method="_on_pause_menu_return_to_lobby"]
 [connection signal="settings" from="MenuLayer/MainMenu" to="." method="_on_main_menu_settings"]
 [connection signal="start" from="MenuLayer/MainMenu" to="." method="_on_main_menu_start_pressed"]
 [connection signal="start_multiplayer" from="MenuLayer/MainMenu" to="." method="_on_main_menu_multiplayer"]
+[connection signal="resume" from="MenuLayer/PauseMenu" to="." method="_on_main_menu_start_pressed"]
+[connection signal="return_to_lobby" from="MenuLayer/PauseMenu" to="." method="_on_pause_menu_return_to_lobby"]
+[connection signal="settings" from="MenuLayer/PauseMenu" to="." method="_on_pause_menu_settings"]
 [connection signal="resume" from="MenuLayer/PopupTerminalMenu" to="." method="_on_main_menu_start_pressed"]
 [connection signal="back" from="MenuLayer/MultiplayerMenu" to="." method="_on_multiplayer_menu_back"]
 [connection signal="start_game" from="MenuLayer/MultiplayerMenu" to="." method="_on_multiplayer_start_game"]
