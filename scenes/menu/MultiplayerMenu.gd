@@ -8,9 +8,18 @@ static var default_server_address := "responsible-interactions.gl.at.ply.gg:1896
 const DEFAULT_HOST_NAME := "Host"
 const DEFAULT_PLAYER_NAME := "Player"
 
+const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
+
 enum MenuState { MAIN, HOST, JOIN, LOBBY }
 
 var current_state: MenuState = MenuState.MAIN
+var _serif_font: FontFile = null
+var _panel_style: StyleBoxFlat = null
+var _closing: bool = false
+
+# The single panel node that slides/fades (mirrors PauseMenu's _panel approach)
+@onready var _panel = get_node_or_null("MarginContainer/CenterContainer/VBoxContainer")
+@onready var _inner_panel = get_node_or_null("MarginContainer/CenterContainer/VBoxContainer/MenuPanel")
 
 @onready var _main_container = %MainContainer
 @onready var _host_container = %HostContainer
@@ -37,6 +46,14 @@ var _join_pronoun_custom: LineEdit = null
 
 
 func _ready() -> void:
+	_serif_font = load(_FONT_PATH) as FontFile
+
+	# Build panel style identical to PauseMenu / VoteHUD
+	if _inner_panel:
+		var orig = _inner_panel.get_theme_stylebox("panel")
+		_panel_style = orig.duplicate() if orig is StyleBoxFlat else StyleBoxFlat.new()
+		_inner_panel.add_theme_stylebox_override("panel", _panel_style)
+
 	NetworkManager.peer_connected.connect(_on_peer_connected)
 	NetworkManager.peer_disconnected.connect(_on_peer_disconnected)
 	NetworkManager.connection_succeeded.connect(_on_connection_succeeded)
@@ -44,17 +61,246 @@ func _ready() -> void:
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
 	MultiplayerEvents.multiplayer_started.connect(_on_multiplayer_started)
 
+	_apply_theme()
+	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+
 	_show_state(MenuState.MAIN)
 	_setup_pronoun_dropdowns()
 	_load_saved_identity()
+	_animate_in()
 
 
 func _on_visibility_changed() -> void:
 	if visible:
+		_closing = false
 		_show_state(MenuState.MAIN)
 		_error_label.visible = false
 		%HostButton.grab_focus()
+		_animate_in()
 
+
+# ── Theme & Styling ───────────────────────────────────────────────────────────
+# All styling follows the exact same patterns as PauseMenu._apply_theme()
+# and VoteHUD._apply_theme() so the three screens are visually consistent.
+
+func _apply_theme() -> void:
+	var dark := ThemeManager.is_dark_mode
+
+	if _inner_panel and _panel_style:
+		_panel_style.bg_color = ThemeManager.bg_color
+		_panel_style.border_color = ThemeManager.border_color
+
+		for side in [0, 1, 2, 3]:
+			_panel_style.set("border_width_" + ["left", "right", "top", "bottom"][side], 1)
+
+		for corner in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+			_panel_style.set("corner_radius_" + corner, 10)
+
+		_panel_style.shadow_color = Color(0, 0, 0, 0.35 if dark else 0.12)
+		_panel_style.shadow_size = 16
+		_panel_style.shadow_offset = Vector2(0, 6)
+
+	# Style all containers
+	for container in [_main_container, _host_container, _join_container, _lobby_container]:
+		_style_container_recursive(container)
+
+	# Title label — mirrors PauseMenu's Title node styling
+	var title = %MenuTitle if has_node("%MenuTitle") else null
+	if title:
+		title.add_theme_color_override("font_color", ThemeManager.text_color)
+		title.add_theme_font_size_override("font_size", 32)
+		if _serif_font:
+			title.add_theme_font_override("font", _serif_font)
+
+	# Section heading labels (Host/Join/Lobby subtitles)
+	for path in ["%HostHeading", "%JoinHeading", "%LobbyTitle"]:
+		var node = get_node_or_null(path)
+		if node is Label:
+			node.add_theme_color_override("font_color", ThemeManager.text_color)
+			node.add_theme_font_size_override("font_size", 22)
+			if _serif_font:
+				node.add_theme_font_override("font", _serif_font)
+
+	# Error label
+	if _error_label:
+		if _serif_font:
+			_error_label.add_theme_font_override("font", _serif_font)
+		_error_label.add_theme_font_size_override("font_size", 13)
+
+
+func _style_container_recursive(container: Control) -> void:
+	if not container:
+		return
+	for child in container.get_children():
+		if child is Button:
+			_style_button(child)
+		elif child is LineEdit:
+			_style_line_edit(child)
+		elif child is OptionButton:
+			_style_option_button(child)
+		elif child is Label:
+			_style_label(child)
+		elif child is ItemList:
+			_style_item_list(child)
+		elif child is Control:
+			_style_container_recursive(child)
+
+
+func _style_label(lbl: Label) -> void:
+	lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	if _serif_font:
+		lbl.add_theme_font_override("font", _serif_font)
+	lbl.add_theme_font_size_override("font_size", 14)
+
+
+func _style_item_list(list: ItemList) -> void:
+	## Style the player list to match the panel's aesthetic.
+	var dark := ThemeManager.is_dark_mode
+	var sn := StyleBoxFlat.new()
+	sn.bg_color = Color(0, 0, 0, 0.04) if dark else Color(ThemeManager.border_color, 0.18)
+	sn.border_color = ThemeManager.border_color
+	sn.border_width_left = 1
+	sn.border_width_right = 1
+	sn.border_width_top = 1
+	sn.border_width_bottom = 1
+	sn.set_corner_radius_all(6)
+	sn.content_margin_left = 8
+	sn.content_margin_right = 8
+	sn.content_margin_top = 6
+	sn.content_margin_bottom = 6
+	list.add_theme_stylebox_override("panel", sn)
+	list.add_theme_color_override("font_color", ThemeManager.text_color)
+	if _serif_font:
+		list.add_theme_font_override("font", _serif_font)
+	list.add_theme_font_size_override("font_size", 15)
+
+
+func _style_button(btn: Button) -> void:
+	## Exact copy of PauseMenu._style_button for visual consistency.
+	var dark := ThemeManager.is_dark_mode
+	if _serif_font:
+		btn.add_theme_font_override("font", _serif_font)
+	btn.add_theme_font_size_override("font_size", 17)
+
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		btn.add_theme_color_override(state, ThemeManager.text_color)
+	btn.add_theme_color_override("font_disabled_color", ThemeManager.subtext_color)
+
+	var sn := StyleBoxFlat.new()
+	sn.bg_color = Color(0, 0, 0, 0)
+	sn.content_margin_left = 16
+	sn.content_margin_right = 16
+	sn.content_margin_top = 9
+	sn.content_margin_bottom = 9
+	btn.add_theme_stylebox_override("normal", sn)
+
+	var sh := StyleBoxFlat.new()
+	sh.bg_color = Color(1, 1, 1, 0.06) if dark else Color(ThemeManager.border_color, 0.5)
+	sh.set_corner_radius_all(5)
+	sh.content_margin_left = 16
+	sh.content_margin_right = 16
+	sh.content_margin_top = 9
+	sh.content_margin_bottom = 9
+	btn.add_theme_stylebox_override("hover", sh)
+
+	var sp := sh.duplicate() as StyleBoxFlat
+	sp.bg_color = Color(1, 1, 1, 0.12) if dark else Color(ThemeManager.border_color, 0.85)
+	btn.add_theme_stylebox_override("pressed", sp)
+
+	var sf := sh.duplicate() as StyleBoxFlat
+	sf.border_color = ThemeManager.text_color
+	sf.border_width_left = 2
+	btn.add_theme_stylebox_override("focus", sf)
+
+
+func _style_line_edit(edit: LineEdit) -> void:
+	## Exact copy of VoteHUD._style_vote_line_edit for visual consistency.
+	var dark := ThemeManager.is_dark_mode
+	if _serif_font:
+		edit.add_theme_font_override("font", _serif_font)
+	edit.add_theme_font_size_override("font_size", 15)
+
+	edit.add_theme_color_override("font_color", ThemeManager.text_color)
+	edit.add_theme_color_override("font_placeholder_color", ThemeManager.subtext_color)
+
+	var sn := StyleBoxFlat.new()
+	sn.bg_color = Color(0, 0, 0, 0.03) if dark else Color(ThemeManager.border_color, 0.3)
+	sn.border_color = ThemeManager.border_color
+	sn.border_width_left = 1
+	sn.border_width_right = 1
+	sn.border_width_top = 1
+	sn.border_width_bottom = 1
+	sn.set_corner_radius_all(5)
+	sn.content_margin_left = 12
+	sn.content_margin_right = 12
+	sn.content_margin_top = 8
+	sn.content_margin_bottom = 8
+	edit.add_theme_stylebox_override("normal", sn)
+
+	var sf := sn.duplicate() as StyleBoxFlat
+	sf.border_color = ThemeManager.text_color
+	sf.border_width_left = 2
+	sf.border_width_right = 2
+	sf.border_width_top = 2
+	sf.border_width_bottom = 2
+	edit.add_theme_stylebox_override("focus", sf)
+
+
+func _style_option_button(btn: OptionButton) -> void:
+	_style_button(btn)
+
+	var popup := btn.get_popup()
+	if popup:
+		var dark := ThemeManager.is_dark_mode
+
+		var popup_bg := StyleBoxFlat.new()
+		popup_bg.bg_color = ThemeManager.bg_color
+		popup_bg.border_color = ThemeManager.border_color
+		popup_bg.border_width_left = 1
+		popup_bg.border_width_right = 1
+		popup_bg.border_width_top = 1
+		popup_bg.border_width_bottom = 1
+		popup_bg.set_corner_radius_all(5)
+		popup.add_theme_stylebox_override("panel", popup_bg)
+
+		popup.add_theme_color_override("font_color", ThemeManager.text_color)
+		popup.add_theme_color_override("font_hover_color", ThemeManager.text_color)
+
+		var popup_hover := StyleBoxFlat.new()
+		popup_hover.bg_color = Color(1, 1, 1, 0.06) if dark else Color(ThemeManager.border_color, 0.5)
+		popup.add_theme_stylebox_override("hover", popup_hover)
+
+
+# ── Animations ────────────────────────────────────────────────────────────────
+# Mirrors PauseMenu._animate_in / _animate_out exactly.
+
+func _animate_in() -> void:
+	if _panel:
+		_panel.modulate.a = 0.0
+		_panel.position.y = 14.0
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(_panel, "modulate:a", 1.0, 0.40).set_delay(0.10)
+		tw.tween_property(_panel, "position:y", 0.0, 0.40).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(0.10)
+
+
+func _animate_out(then: Callable) -> void:
+	if _closing:
+		return
+	_closing = true
+	if _panel:
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(_panel, "modulate:a", 0.0, 0.16)
+		tw.tween_property(_panel, "position:y", 10.0, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.chain().tween_callback(func():
+			_closing = false
+			then.call()
+		)
+	else:
+		_closing = false
+		then.call()
+
+
+# ── State ─────────────────────────────────────────────────────────────────────
 
 func _show_state(state: MenuState) -> void:
 	current_state = state
@@ -81,6 +327,8 @@ func _show_state(state: MenuState) -> void:
 func _show_error(message: String) -> void:
 	_error_label.text = message
 	_error_label.visible = true
+	# Red tint consistent with VoteHUD's cancel button colour
+	_error_label.add_theme_color_override("font_color", Color(0.85, 0.3, 0.3))
 
 
 func _update_player_list() -> void:
@@ -108,6 +356,14 @@ func _setup_pronoun_dropdowns() -> void:
 	_join_pronoun_option = _build_pronoun_option(%JoinContainer, _join_color_picker, options)
 	_join_pronoun_custom = _build_pronoun_custom_field(%JoinContainer, _join_pronoun_option)
 	_join_pronoun_option.item_selected.connect(_on_join_pronoun_selected)
+
+	# Style the freshly built dropdowns
+	_style_option_button(_host_pronoun_option)
+	_style_option_button(_join_pronoun_option)
+	if _host_pronoun_custom:
+		_style_line_edit(_host_pronoun_custom)
+	if _join_pronoun_custom:
+		_style_line_edit(_join_pronoun_custom)
 
 
 func _build_pronoun_option(container: Control, after_node: Control, options: Array) -> OptionButton:
@@ -212,7 +468,7 @@ func _on_join_pressed() -> void:
 
 func _on_back_pressed() -> void:
 	if current_state == MenuState.MAIN:
-		back.emit()
+		_animate_out(func(): back.emit())
 	else:
 		_show_state(MenuState.MAIN)
 
@@ -242,6 +498,10 @@ func _on_host_start_pressed() -> void:
 	_show_state(MenuState.LOBBY)
 
 func _on_host_back_pressed() -> void:
+	_show_state(MenuState.MAIN)
+
+
+func _on_join_back_pressed() -> void:
 	_show_state(MenuState.MAIN)
 
 
@@ -282,20 +542,16 @@ func _on_join_connect_pressed() -> void:
 	%JoinConnectButton.disabled = true
 	_error_label.text    = "Resolving %s..." % address
 	_error_label.visible = true
-	_error_label.modulate = Color(0.7, 0.7, 0.7, 1.0)
+	# Neutral colour while connecting (not red)
+	_error_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
 
 	var error: Error = await NetworkManager.join_game(address, port)
 
 	%JoinConnectButton.disabled = false
-	_error_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
 
 	if error != OK:
 		_show_error("Failed to connect: " + error_string(error))
 		return
-
-func _on_join_back_pressed() -> void:
-	_show_state(MenuState.MAIN)
-
 
 # -- Lobby buttons ------------------------------------------------------------
 

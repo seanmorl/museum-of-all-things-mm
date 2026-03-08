@@ -316,6 +316,11 @@ func _fetch_random_from_category(category_name: String, context: Variant) -> voi
 	## Uses Toolforge randomincategory with cmnamespace=0&cmtype=page — mainspace articles only.
 	## This prevents Category:, Portal:, and other namespace pages from appearing as candidates.
 	var cat: String = category_name.replace("Category:", "").strip_edges()
+	# Guard against empty category to prevent malformed URLs
+	if cat == "":
+		Log.error("ExhibitFetcher", "Empty category passed to _fetch_random_from_category, falling back to random")
+		_fetch_random(context)
+		return
 	var url := TOOLFORGE_USER_CATEGORY_BASE + cat.uri_encode()
 	var ctx := {"random_level4": true}
 	_dispatch_request(url, ctx, context)

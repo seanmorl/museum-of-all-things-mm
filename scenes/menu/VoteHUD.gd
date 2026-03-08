@@ -1,6 +1,8 @@
 extends Control
 ## In-world HUD overlay for voting on the race target article.
 
+const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
+
 @onready var _countdown_label: Label = $MarginContainer/CenterContainer/Panel/Content/CountdownLabel
 @onready var _candidates_container: VBoxContainer = $MarginContainer/CenterContainer/Panel/Content/CandidatesContainer
 @onready var _status_label: Label = $MarginContainer/CenterContainer/Panel/Content/StatusLabel
@@ -8,6 +10,7 @@ extends Control
 @onready var _panel: PanelContainer = $MarginContainer/CenterContainer/Panel
 @onready var _loading_overlay: Control = $LoadingOverlay
 
+var _serif_font: FontFile = null
 var _my_vote: int = -1
 var _candidate_buttons: Array[Button] = []
 var _panel_style: StyleBoxFlat
@@ -33,11 +36,15 @@ var _hint_reveal_btn: Button = null
 var _hint_custom_edit: LineEdit = null
 
 func _ready() -> void:
+	_serif_font = load(_FONT_PATH) as FontFile
+
 	visible = false
 	var orig := _panel.get_theme_stylebox("panel") as StyleBoxFlat
 	if orig:
 		_panel_style = orig.duplicate()
-		_panel.add_theme_stylebox_override("panel", _panel_style)
+	else:
+		_panel_style = StyleBoxFlat.new()
+	_panel.add_theme_stylebox_override("panel", _panel_style)
 
 	RaceManager.vote_started.connect(_on_vote_started)
 	RaceManager.vote_ended.connect(_on_vote_ended)
@@ -57,15 +64,125 @@ func _ready() -> void:
 
 
 func _apply_theme(_dark: bool) -> void:
-	ThemeManager.update_panel_style(_panel_style)
+	# Enhanced panel styling
+	if _panel_style:
+		_panel_style.bg_color = ThemeManager.bg_color
+		_panel_style.border_color = ThemeManager.border_color
+
+		for side in [0, 1, 2, 3]:
+			_panel_style.set("border_width_" + ["left", "right", "top", "bottom"][side], 1)
+
+		for corner in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+			_panel_style.set("corner_radius_" + corner, 10)
+
+		_panel_style.shadow_color = Color(0, 0, 0, 0.35 if _dark else 0.12)
+		_panel_style.shadow_size = 16
+		_panel_style.shadow_offset = Vector2(0, 6)
+
+	# Style labels
 	if _countdown_label:
 		_countdown_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
+		if _serif_font:
+			_countdown_label.add_theme_font_override("font", _serif_font)
 	if _status_label:
 		_status_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
+		if _serif_font:
+			_status_label.add_theme_font_override("font", _serif_font)
+
+	# Style reroll button
 	if _reroll_button:
-		_reroll_button.add_theme_color_override("font_color", ThemeManager.subtext_color)
+		_style_vote_button(_reroll_button)
+
+	# Style candidate buttons
 	for btn in _candidate_buttons:
-		btn.add_theme_color_override("font_color", ThemeManager.text_color)
+		_style_vote_button(btn)
+
+	# Style host panel buttons if exists
+	if _host_panel:
+		_style_host_panel(_host_panel)
+
+
+func _style_vote_button(btn: Button) -> void:
+	var dark := ThemeManager.is_dark_mode
+	if _serif_font:
+		btn.add_theme_font_override("font", _serif_font)
+	btn.add_theme_font_size_override("font_size", 15)
+
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		btn.add_theme_color_override(state, ThemeManager.text_color)
+	btn.add_theme_color_override("font_disabled_color", ThemeManager.subtext_color)
+
+	var sn := StyleBoxFlat.new()
+	sn.bg_color = Color(0, 0, 0, 0)
+	sn.content_margin_left = 12
+	sn.content_margin_right = 12
+	sn.content_margin_top = 8
+	sn.content_margin_bottom = 8
+	btn.add_theme_stylebox_override("normal", sn)
+
+	var sh := StyleBoxFlat.new()
+	sh.bg_color = Color(1, 1, 1, 0.06) if dark else Color(ThemeManager.border_color, 0.5)
+	sh.set_corner_radius_all(5)
+	sh.content_margin_left = 12
+	sh.content_margin_right = 12
+	sh.content_margin_top = 8
+	sh.content_margin_bottom = 8
+	btn.add_theme_stylebox_override("hover", sh)
+
+	var sp := sh.duplicate() as StyleBoxFlat
+	sp.bg_color = Color(1, 1, 1, 0.12) if dark else Color(ThemeManager.border_color, 0.85)
+	btn.add_theme_stylebox_override("pressed", sp)
+
+	var sf := sh.duplicate() as StyleBoxFlat
+	sf.border_color = ThemeManager.text_color
+	sf.border_width_left = 2
+	btn.add_theme_stylebox_override("focus", sf)
+
+
+func _style_host_panel(panel: Control) -> void:
+	for child in panel.get_children():
+		if child is Button:
+			_style_vote_button(child)
+		elif child is HBoxContainer or child is VBoxContainer:
+			_style_host_panel(child)
+		elif child is Label:
+			child.add_theme_color_override("font_color", ThemeManager.subtext_color)
+			if _serif_font:
+				child.add_theme_font_override("font", _serif_font)
+		elif child is LineEdit:
+			_style_vote_line_edit(child)
+
+
+func _style_vote_line_edit(edit: LineEdit) -> void:
+	var dark := ThemeManager.is_dark_mode
+	if _serif_font:
+		edit.add_theme_font_override("font", _serif_font)
+	edit.add_theme_font_size_override("font_size", 15)
+
+	edit.add_theme_color_override("font_color", ThemeManager.text_color)
+	edit.add_theme_color_override("font_placeholder_color", ThemeManager.subtext_color)
+
+	var sn := StyleBoxFlat.new()
+	sn.bg_color = Color(0, 0, 0, 0.03) if dark else Color(ThemeManager.border_color, 0.3)
+	sn.border_color = ThemeManager.border_color
+	sn.border_width_left = 1
+	sn.border_width_right = 1
+	sn.border_width_top = 1
+	sn.border_width_bottom = 1
+	sn.set_corner_radius_all(5)
+	sn.content_margin_left = 10
+	sn.content_margin_right = 10
+	sn.content_margin_top = 6
+	sn.content_margin_bottom = 6
+	edit.add_theme_stylebox_override("normal", sn)
+
+	var sf := sn.duplicate() as StyleBoxFlat
+	sf.border_color = ThemeManager.text_color
+	sf.border_width_left = 2
+	sf.border_width_right = 2
+	sf.border_width_top = 2
+	sf.border_width_bottom = 2
+	edit.add_theme_stylebox_override("focus", sf)
 
 
 func show_loading() -> void:
@@ -148,14 +265,17 @@ func _on_vote_started(candidates: Array) -> void:
 			btn.text = candidates[i]
 			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			btn.add_theme_color_override("font_color", ThemeManager.text_color)
 			btn.pressed.connect(_on_candidate_pressed.bind(i))
 			_candidates_container.add_child(btn)
 			_candidate_buttons.append(btn)
+			# Apply styling to new candidate button
+			_style_vote_button(btn)
 
 		_reroll_button.visible = true
 		if _host_panel == null:
 			_build_host_panel()
+		# Apply styling to host panel
+		_style_host_panel(_host_panel)
 		_host_panel.visible = true
 	else:
 		_status_label.text = "Waiting for host to start the race..."
