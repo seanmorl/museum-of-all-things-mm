@@ -1,12 +1,12 @@
 extends Node3D
 
-const FONT_PATH = "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
 var _font: Font
 var _results: Array = []
 
 
 func _ready() -> void:
-	_font = load(FONT_PATH)
+	_font = ThemeManager.get_reading_font()
+	ThemeManager.reading_font_changed.connect(func(f): _font = f; _refresh())
 	RaceManager.race_ended.connect(_on_race_ended)
 
 

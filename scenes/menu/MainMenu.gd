@@ -8,7 +8,7 @@ signal start_dedicated_host
 const _BTN_PATH := "MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer/"
 const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
 
-var _serif_font: FontFile = null
+var _serif_font: Font = null
 var _panel_style: StyleBoxFlat = null
 var _dedicated_host_btn: Button = null
 
@@ -19,10 +19,11 @@ var _dividers: Array[Dictionary] = []
 
 
 func _ready() -> void:
-	_serif_font = load(_FONT_PATH) as FontFile
+	_serif_font = ThemeManager.get_reading_font()
 	_build_dedicated_host_button()
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
 	if Platform.is_web():
 		var q = get_node_or_null("%Quit")
 		if q: q.visible = false

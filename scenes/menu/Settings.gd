@@ -12,13 +12,12 @@ signal resume
 	_build_accessibility_settings(),
 ]
 
-var _serif_font: FontFile = null
-const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
+var _serif_font: Font = null
 var _content_panel_style: StyleBoxFlat = null
 var _current_tab: int = 0
 
 func _ready() -> void:
-	_serif_font = load(_FONT_PATH) as FontFile
+	_serif_font = ThemeManager.get_reading_font()
 	UIEvents.ui_cancel_pressed.connect(_on_resume)
 	for i in range(_tab_scenes.size()):
 		if _tab_scenes[i] == null:
@@ -26,6 +25,7 @@ func _ready() -> void:
 			_tab_bar.set_tab_hidden(i, true)
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
 
 func _apply_theme() -> void:
 	## Apply ThemeManager colors to the settings panel and tab bar.
@@ -67,14 +67,20 @@ func _theme_control_tree(node: Node) -> void:
 				lbl.add_theme_color_override("font_color", ThemeManager.text_color)
 		if _serif_font:
 			lbl.add_theme_font_override("font", _serif_font)
+	elif node is OptionButton:
+		var opt := node as OptionButton
+		if _serif_font:
+			opt.add_theme_font_override("font", _serif_font)
+			opt.get_popup().add_theme_font_override("font", _serif_font)
 	elif node is Button or node is CheckButton:
 		var btn := node as BaseButton
 		for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 			btn.add_theme_color_override(state, ThemeManager.text_color)
 		if _serif_font:
 			btn.add_theme_font_override("font", _serif_font)
-		for child in node.get_children():
-			_theme_control_tree(child)
+	
+	for child in node.get_children():
+		_theme_control_tree(child)
 
 func _on_visibility_changed() -> void:
 	if visible:
@@ -447,6 +453,7 @@ func _build_accessibility_settings() -> Control:
 	font_option.selected = font_choice
 	font_option.item_selected.connect(func(idx: int):
 		_save_accessibility("reading_font", idx)
+		ThemeManager.set_reading_font(idx)
 		_emit_accessibility_event("reading_font", idx)
 	)
 	_style_option_button(font_option)

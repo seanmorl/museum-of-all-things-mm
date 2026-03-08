@@ -74,7 +74,12 @@ func _ready() -> void:
 
 	# Override nameplate font to match the rest of the HUD
 	if _name_label:
-		_name_label.font = load("res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf")
+		_name_label.font = ThemeManager.get_reading_font()
+
+	ThemeManager.reading_font_changed.connect(func(f):
+		if _name_label: _name_label.font = f
+		if _pronoun_label: _pronoun_label.font = f
+	)
 
 	if _body_mesh:
 		_body_mesh_base_y = _body_mesh.position.y
@@ -450,7 +455,7 @@ func _get_or_create_pronoun_label() -> Label3D:
 		_pronoun_label.render_priority = _name_label.render_priority
 		_pronoun_label.modulate = _name_label.modulate
 		_pronoun_label.pixel_size = _name_label.pixel_size
-		_pronoun_label.font = load("res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf")
+		_pronoun_label.font = ThemeManager.get_reading_font()
 		# Smaller font — roughly half the name size, min 10px
 		_pronoun_label.font_size = max(int(_name_label.font_size * 0.5), 10)
 		_pronoun_label.outline_size = max(int(_name_label.outline_size * 0.5), 2)
@@ -463,7 +468,7 @@ func _get_or_create_pronoun_label() -> Label3D:
 	else:
 		_pronoun_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		_pronoun_label.no_depth_test = true
-		_pronoun_label.font = load("res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf")
+		_pronoun_label.font = ThemeManager.get_reading_font()
 		_pronoun_label.font_size = 10
 		_pronoun_label.position = Vector3(0, 2.1, 0)
 	add_child(_pronoun_label)

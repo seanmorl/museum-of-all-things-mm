@@ -2,8 +2,10 @@ extends Node
 ## Autoload: ThemeManager
 
 signal dark_mode_changed(enabled: bool)
+signal reading_font_changed(font: Font)
 
 var is_dark_mode: bool = false
+var current_font_index: int = 0
 
 var bg_color:      Color = Color(1.0,   1.0,   1.0,  0.95)
 var border_color:  Color = Color(0.635, 0.663, 0.694, 1.0)
@@ -23,11 +25,21 @@ const _DARK := {
 	"subtext": Color(0.55,  0.55,  0.60, 1.0),
 }
 
+const FONT_PATHS := [
+	"res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf",
+	"res://assets/fonts/OpenDyslexic/OpenDyslexic-Regular.otf",
+	"res://assets/fonts/AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf"
+]
 
 func _ready() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load("user://ui_settings.cfg") == OK:
 		is_dark_mode = cfg.get_value("ui", "dark_mode", false)
+	
+	var acc = SettingsManager.get_settings("accessibility")
+	if acc and acc.has("reading_font"):
+		current_font_index = acc.reading_font
+		
 	_update_palette()
 
 
@@ -42,6 +54,18 @@ func set_dark_mode(enabled: bool) -> void:
 	_update_palette()
 	_save_preference(is_dark_mode)
 	dark_mode_changed.emit(enabled)
+
+
+func get_reading_font() -> Font:
+	var path := FONT_PATHS[0]
+	if current_font_index >= 0 and current_font_index < FONT_PATHS.size():
+		path = FONT_PATHS[current_font_index]
+	return load(path) as Font
+
+
+func set_reading_font(index: int) -> void:
+	current_font_index = index
+	reading_font_changed.emit(get_reading_font())
 
 
 func _update_palette() -> void:

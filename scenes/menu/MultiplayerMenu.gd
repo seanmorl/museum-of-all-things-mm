@@ -8,12 +8,10 @@ static var default_server_address := "responsible-interactions.gl.at.ply.gg:1896
 const DEFAULT_HOST_NAME := "Host"
 const DEFAULT_PLAYER_NAME := "Player"
 
-const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
-
 enum MenuState { MAIN, HOST, JOIN, LOBBY }
 
 var current_state: MenuState = MenuState.MAIN
-var _serif_font: FontFile = null
+var _serif_font: Font = null
 var _panel_style: StyleBoxFlat = null
 var _closing: bool = false
 
@@ -46,7 +44,7 @@ var _join_pronoun_custom: LineEdit = null
 
 
 func _ready() -> void:
-	_serif_font = load(_FONT_PATH) as FontFile
+	_serif_font = ThemeManager.get_reading_font()
 
 	# Build panel style identical to PauseMenu / VoteHUD
 	if _inner_panel:
@@ -63,6 +61,7 @@ func _ready() -> void:
 
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
 
 	_show_state(MenuState.MAIN)
 	_setup_pronoun_dropdowns()

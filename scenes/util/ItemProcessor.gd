@@ -349,16 +349,26 @@ func _create_items(title: String, result: Dictionary, prev_title: String, race_t
 	text_items.push_front(front_text)
 	doors.push_front(front_door)
 
-	# Ensure the race target appears early in the doors list so it doesn't get culled
-	# if the exhibit runs out of wall space to place doors.
-	if race_target != "" and doors.has(race_target):
-		var target_idx: int = doors.find(race_target)
-		if target_idx > 1:
-			doors.remove_at(target_idx)
+	# Ensure the race target appears as a door in this room. The backlinks API says
+	# this article links to the target, but the link may only exist inside a
+	# {{template}} (navbox/infobox) which the wikitext parser strips. Inject the
+	# target explicitly so the hint system's promise is always honoured.
+	if race_target != "" and race_target != title and race_target != prev_title:
+		if not doors.has(race_target):
+			# Inject near the front so it isn't culled if the room runs out of wall space
 			var rng_target: RandomNumberGenerator = RandomNumberGenerator.new()
 			rng_target.seed = hash(title + ":shuffler_target")
 			var insert_idx: int = rng_target.randi_range(1, mini(doors.size(), 3))
 			doors.insert(insert_idx, race_target)
+		else:
+			# Already present — promote to an early position
+			var target_idx: int = doors.find(race_target)
+			if target_idx > 1:
+				doors.remove_at(target_idx)
+				var rng_target: RandomNumberGenerator = RandomNumberGenerator.new()
+				rng_target.seed = hash(title + ":shuffler_target")
+				var insert_idx: int = rng_target.randi_range(1, mini(doors.size(), 3))
+				doors.insert(insert_idx, race_target)
 
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = hash(title + ":shuffler")

@@ -9,6 +9,8 @@ signal continue_pressed
 
 func _ready() -> void:
 	visible = false
+	winner_label.add_theme_font_override("font", ThemeManager.get_reading_font())
+	ThemeManager.reading_font_changed.connect(func(f): winner_label.add_theme_font_override("font", f))
 	# Disabled - replaced by RaceHUD bottom-left toast
 	# RaceManager.race_ended.connect(_on_race_ended)
 	continue_button.pressed.connect(_on_continue_pressed)

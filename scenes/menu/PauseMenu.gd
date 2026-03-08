@@ -18,7 +18,7 @@ const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-Semi
 # The confirmation panel shown when the player presses Quit.
 @onready var _quit_container  = get_node_or_null("MarginContainer/CenterContainer/QuitContainer")
 
-var _serif_font: FontFile = null
+var _serif_font: Font = null
 var _panel_style: StyleBoxFlat = null
 var _closing: bool = false
 var _race_control_override: bool = false
@@ -37,7 +37,7 @@ var _loading_overlay: Control = null
 const _GROUP_LEADERS := ["Lobby", "Settings", "DarkMode"]
 
 func _ready() -> void:
-	_serif_font = load(_FONT_PATH) as FontFile
+	_serif_font = ThemeManager.get_reading_font()
 
 	# Hide the spacer Labels that cause excessive gaps between button groups.
 	# These are empty Labels used as crude spacers in the scene; we replace
@@ -62,6 +62,7 @@ func _ready() -> void:
 
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
 
 	if Platform.is_web():
 		var aq = get_node_or_null("%AskQuit")
@@ -201,8 +202,11 @@ func _apply_theme() -> void:
 	if vbox:
 		var title = vbox.get_node_or_null("Title")
 		if title:
+			# Clear LabelSettings (set in .tscn with hardcoded black font_color)
+			# so that add_theme_color_override can actually take effect.
+			title.label_settings = null
 			title.add_theme_color_override("font_color", ThemeManager.text_color)
-			title.add_theme_font_size_override("font_size", 32)
+			title.add_theme_font_size_override("font_size", 48)
 			if _serif_font:
 				title.add_theme_font_override("font", _serif_font)
 		for child in vbox.get_children():

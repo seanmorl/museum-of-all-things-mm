@@ -14,14 +14,7 @@ func _apply_accessibility() -> void:
 	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
 	
 	# Handle Reading Font
-	var font_choice: int = acc.get("reading_font", 0)
-	var font_path: String = "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
-	if font_choice == 1:
-		font_path = "res://assets/fonts/OpenDyslexic/OpenDyslexic-Regular.otf"
-	elif font_choice == 2:
-		font_path = "res://assets/fonts/AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf"
-		
-	var font := load(font_path) as Font
+	var font := ThemeManager.get_reading_font()
 	if font:
 		$Label.font = font
 		

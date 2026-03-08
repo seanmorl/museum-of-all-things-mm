@@ -10,7 +10,7 @@ const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-Semi
 @onready var _panel: PanelContainer = $MarginContainer/CenterContainer/Panel
 @onready var _loading_overlay: Control = $LoadingOverlay
 
-var _serif_font: FontFile = null
+var _serif_font: Font = null
 var _my_vote: int = -1
 var _candidate_buttons: Array[Button] = []
 var _panel_style: StyleBoxFlat
@@ -36,8 +36,7 @@ var _hint_reveal_btn: Button = null
 var _hint_custom_edit: LineEdit = null
 
 func _ready() -> void:
-	_serif_font = load(_FONT_PATH) as FontFile
-
+	_serif_font = ThemeManager.get_reading_font()
 	visible = false
 	var orig := _panel.get_theme_stylebox("panel") as StyleBoxFlat
 	if orig:
@@ -45,11 +44,11 @@ func _ready() -> void:
 	else:
 		_panel_style = StyleBoxFlat.new()
 	_panel.add_theme_stylebox_override("panel", _panel_style)
-
 	RaceManager.vote_started.connect(_on_vote_started)
 	RaceManager.vote_ended.connect(_on_vote_ended)
 	RaceManager.race_started.connect(_on_race_started)
-	ThemeManager.dark_mode_changed.connect(_apply_theme)
+	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme(ThemeManager.is_dark_mode))
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme(ThemeManager.is_dark_mode))
 	_apply_theme(ThemeManager.is_dark_mode)
 
 	_reroll_button.visible = NetworkManager.is_server()
@@ -78,6 +77,15 @@ func _apply_theme(_dark: bool) -> void:
 		_panel_style.shadow_color = Color(0, 0, 0, 0.35 if _dark else 0.12)
 		_panel_style.shadow_size = 16
 		_panel_style.shadow_offset = Vector2(0, 6)
+
+	# Style title label — clear LabelSettings (hardcoded black in .tscn) so theme overrides work
+	var title_label = _panel.get_node_or_null("Content/TitleRow/TitleLabel") if _panel else null
+	if title_label:
+		title_label.label_settings = null
+		title_label.add_theme_color_override("font_color", ThemeManager.text_color)
+		title_label.add_theme_font_size_override("font_size", 48)
+		if _serif_font:
+			title_label.add_theme_font_override("font", _serif_font)
 
 	# Style labels
 	if _countdown_label:

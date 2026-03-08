@@ -45,17 +45,12 @@ func _apply_accessibility(text_content: String, label: RichTextLabel) -> String:
 		if bg_rect:
 			bg_rect.visible = false
 
-	# Handle Reading Font
-	var font_choice: int = acc.get("reading_font", 0)
-	var font_path: String = "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
+	var font := ThemeManager.get_reading_font()
 	var font_size: int = 18
-	if font_choice == 1:
-		font_path = "res://assets/fonts/OpenDyslexic/OpenDyslexic-Regular.otf"
+	var acc_settings = SettingsManager.get_settings("accessibility")
+	if acc_settings and acc_settings.get("reading_font", 0) == 1:
 		font_size = 14 # OpenDyslexic is natively larger
-	elif font_choice == 2:
-		font_path = "res://assets/fonts/AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf"
-
-	var font := load(font_path) as Font
+	
 	if font:
 		label.add_theme_font_override("normal_font", font)
 		label.add_theme_font_override("bold_font", font)
