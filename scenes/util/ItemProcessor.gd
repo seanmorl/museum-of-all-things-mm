@@ -336,13 +336,11 @@ func _create_items(title: String, result: Dictionary, prev_title: String, race_t
 
 			elif type == "link" and target and target.find(":") < 0:
 				var door: String = _to_link_case(target.get_slice("#", 0))
-				# Exclude the race target so it never appears as a door sign — players
-				# must reach it by navigating links, not by walking through a labelled door.
-				if not doors_used.has(door) and door != title and door != prev_title and door != race_target and len(door) > 0:
+				# Allow the target article to generate naturally so the player can actually win.
+				if not doors_used.has(door) and door != title and door != prev_title and len(door) > 0:
 					doors.append(door)
 					doors_used[door] = true
 
-	# keep first item and first door intact
 	var front_text: Variant = text_items.pop_front()
 	var front_door: Variant = doors.pop_front()
 	_seeded_shuffle(title + ":text_items", text_items)
@@ -350,6 +348,17 @@ func _create_items(title: String, result: Dictionary, prev_title: String, race_t
 	_seeded_shuffle(title + ":doors", doors, true)
 	text_items.push_front(front_text)
 	doors.push_front(front_door)
+
+	# Ensure the race target appears early in the doors list so it doesn't get culled
+	# if the exhibit runs out of wall space to place doors.
+	if race_target != "" and doors.has(race_target):
+		var target_idx: int = doors.find(race_target)
+		if target_idx > 1:
+			doors.remove_at(target_idx)
+			var rng_target: RandomNumberGenerator = RandomNumberGenerator.new()
+			rng_target.seed = hash(title + ":shuffler_target")
+			var insert_idx: int = rng_target.randi_range(1, mini(doors.size(), 3))
+			doors.insert(insert_idx, race_target)
 
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = hash(title + ":shuffler")
