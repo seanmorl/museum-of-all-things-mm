@@ -552,7 +552,9 @@ func _build_accessibility_settings() -> Control:
 
 	var ph_on: bool = saved.get("persistent_hints", false)
 	container.add_child(_toggle.call("Keep hints visible", ph_on,
-		func(on: bool): _save_accessibility("persistent_hints", on)
+		func(on: bool):
+			_save_accessibility("persistent_hints", on)
+			_emit_accessibility_event("persistent_hints", on)
 	))
 	container.add_child(_hint.call(
 		"Hint banners stay on screen until the race ends instead of fading after a few seconds."))

@@ -95,7 +95,15 @@ func _ready() -> void:
 	SettingsEvents.set_current_room.connect(_on_room_changed)
 	ThemeManager.dark_mode_changed.connect(_apply_theme)
 	SettingsEvents.accessibility_changed.connect(_on_accessibility_changed)
+	_apply_initial_accessibility_settings()
 	_apply_theme(ThemeManager.is_dark_mode)
+
+func _apply_initial_accessibility_settings() -> void:
+	## Apply saved accessibility settings on load (in case broadcast from Main was missed).
+	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
+	if acc.get("large_hud_text", false):
+		_apply_large_hud_text(true)
+	_update_hint_persistence(acc.get("persistent_hints", false))
 
 func _on_accessibility_changed(key: String, value: Variant) -> void:
 	match key:

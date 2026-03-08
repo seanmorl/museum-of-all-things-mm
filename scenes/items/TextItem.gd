@@ -2,6 +2,9 @@ extends Node3D
 
 static var max_chars := 2500
 
+func _ready() -> void:
+	SettingsEvents.accessibility_changed.connect(_on_accessibility_changed)
+
 func init(text: String) -> void:
 	var t : String = TextUtils.strip_markup(text).substr(0, max_chars)
 	$Label.text = t if len(t) < max_chars else t + "..."
@@ -38,4 +41,8 @@ func _apply_accessibility() -> void:
 		
 	var scale_factor: float = acc.get("exhibit_text_size", 1.0)
 	$Label.font_size = int(60 * scale_factor) # Default label3d font size is usually 32-60, maybe assume base relative to scale
+
+func _on_accessibility_changed(key: String, _value: Variant) -> void:
+	if key in ["reading_font", "high_contrast_text", "exhibit_text_size"]:
+		_apply_accessibility()
 
