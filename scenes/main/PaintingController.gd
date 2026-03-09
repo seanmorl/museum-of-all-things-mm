@@ -433,6 +433,12 @@ func _get_exhibit_node(exhibit_title: String) -> Node:
 	return null
 
 
+func is_painting_stolen(exhibit_title: String, image_title: String) -> bool:
+	## Checks the server-synced state to see if a painting should be missing.
+	var key: String = exhibit_title + ":" + image_title
+	return _stolen_paintings.has(key)
+
+
 func _find_wall_item_by_image_title(exhibit_title: String, image_title: String) -> Node:
 	if not _main.has_node("Museum"):
 		return null
@@ -509,3 +515,21 @@ func apply_placed_paintings_state(state: Array, _local_player: Node) -> void:
 			entry.get("image_title",   ""),
 			entry.get("image_url",     "")
 		)
+
+
+func get_stolen_paintings_state() -> Dictionary:
+	## Returns the map of "exhibit:image" -> peer_id for all currently stolen wall paintings.
+	return _stolen_paintings.duplicate()
+
+
+func apply_stolen_paintings_state(state: Dictionary) -> void:
+	## Received by a late-joining peer to populate their initial stolen state.
+	for key in state:
+		_stolen_paintings[key] = state[key]
+		
+		# If the exhibit is already loaded, hide the painting immediately
+		var parts: PackedStringArray = key.split(":")
+		if parts.size() >= 2:
+			var wall_item := _find_wall_item_by_image_title(parts[0], parts[1])
+			if wall_item:
+				wall_item.set_stolen(true)

@@ -36,6 +36,7 @@ var _chat_hud: Node = null
 @onready var _crt_post_processing: CanvasLayer = %CRTPostProcessing
 @onready var _world_light: DirectionalLight3D = %WorldLight
 @onready var _pause_menu: Control = %PauseMenu
+@onready var _wip_label: Label = %WIPLabel
 
 var game_started: bool = false
 ## True when running as a UI-based dedicated host (no local player spawned)
@@ -67,6 +68,11 @@ func _ready() -> void:
 	var ui_saved = SettingsManager.get_settings("ui")
 	if ui_saved and ui_saved.has("scale"):
 		get_tree().root.content_scale_factor = float(ui_saved.scale)
+	
+	# WIP Label font management
+	if _wip_label:
+		_wip_label.add_theme_font_override("font", ThemeManager.get_reading_font())
+		ThemeManager.reading_font_changed.connect(func(f): _wip_label.add_theme_font_override("font", f))
 	
 	# Initialize subsystems first
 	_menu_controller = MainMenuController.new()
@@ -563,7 +569,7 @@ func _load_saved_skin() -> void:
 func _on_start_race_pressed() -> void:
 	if RaceManager.is_race_active():
 		return
-	if NetworkManager.is_server():
+	if not NetworkManager.is_multiplayer_active() or NetworkManager.is_server():
 		_debug_log("Main: Fetching random articles for race vote...")
 		_race_candidates.clear()
 		_race_start_article = ""
@@ -810,6 +816,12 @@ func _on_network_peer_connected(peer_id: int) -> void:
 			var state: Array = _painting_controller.get_placed_paintings_state()
 			if state.size() > 0:
 				_sync_placed_paintings_to_peer.rpc_id(peer_id, state)
+		
+		# Sync stolen paintings to late joiner
+		if _painting_controller:
+			var stolen_state: Dictionary = _painting_controller.get_stolen_paintings_state()
+			if not stolen_state.is_empty():
+				_sync_stolen_paintings_to_peer.rpc_id(peer_id, stolen_state)
 
 func _on_network_peer_disconnected(peer_id: int) -> void:
 	if _painting_controller:
@@ -881,6 +893,12 @@ func restore_placed_painting(exhibit: Node3D, exhibit_title: String,
 	if _painting_controller:
 		_painting_controller.restore_placed_painting(exhibit, exhibit_title,
 			image_title, image_url, wall_position, wall_normal, image_size)
+
+func check_painting_stolen(exhibit_title: String, image_title: String) -> bool:
+	## Called by ExhibitLoader/WallItem to see if a painting was previously stolen.
+	if _painting_controller:
+		return _painting_controller.is_painting_stolen(exhibit_title, image_title)
+	return false
 
 func _request_eat_painting(exhibit_title: String, image_title: String) -> void:
 	_painting_controller.request_eat(exhibit_title, image_title, _player)
@@ -1031,6 +1049,12 @@ func _sync_placed_paintings_to_peer(state: Array) -> void:
 	if _painting_controller:
 		_painting_controller.apply_placed_paintings_state(state, _player)
 
+@rpc("authority", "call_remote", "reliable")
+func _sync_stolen_paintings_to_peer(state: Dictionary) -> void:
+	## Received by a newly-joined client. Populates the stolen painting map.
+	if _painting_controller:
+		_painting_controller.apply_stolen_paintings_state(state)
+
 ## Syncs the race starting exhibit to all non-server peers so they also
 ## open the search door and load the starting article.
 @rpc("authority", "call_remote", "reliable")
@@ -1038,6 +1062,21 @@ func _sync_race_start_article(start_article: String) -> void:
 	_museum.reset_to_lobby()
 	UIEvents.emit_set_custom_door(start_article)
 	_start_game()
+
+func sync_custom_door(page: String) -> void:
+	## Synchronises the search corridor door to a specific page for all players.
+	## If called by a client, it requests the server to broadcast the change.
+	if not NetworkManager.is_multiplayer_active() or NetworkManager.is_server():
+		if NetworkManager.is_multiplayer_active():
+			_sync_race_start_article.rpc(page)
+		UIEvents.emit_set_custom_door(page)
+	else:
+		_request_sync_custom_door.rpc_id(1, page)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_sync_custom_door(page: String) -> void:
+	if NetworkManager.is_server():
+		sync_custom_door(page)
 
 @rpc("authority", "call_remote", "reliable")
 func _grant_race_control() -> void:

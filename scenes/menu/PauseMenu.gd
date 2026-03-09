@@ -87,6 +87,9 @@ func _ready() -> void:
 			add_child(_quit_container)
 			# Make it fill the whole PauseMenu Control
 			_quit_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	
+	# Re-apply theme now that reparenting is done and paths are stable
+	_apply_theme()
 	_build_loading_overlay()
 
 func _on_visibility_changed() -> void:

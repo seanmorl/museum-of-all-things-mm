@@ -25,6 +25,7 @@ const _GRID_WRAPPER: PackedScene = preload("res://scenes/util/GridWrapper.tscn")
 @onready var _detector: Area3D = $HallDirectionDetector
 @onready var from_sign: Node3D = $FromSign
 @onready var to_sign: Node3D = $ToSign
+@onready var light: OmniLight3D = $HallLight
 
 var _disco_hue: float = randf()
 
@@ -33,10 +34,10 @@ func _ready() -> void:
 	_on_dark_mode_changed(ThemeManager.is_dark_mode)
 
 func _process(delta: float) -> void:
-	if ThemeManager.disco_mode:
+	if ThemeManager.disco_mode and light:
 		_disco_hue = fmod(_disco_hue + delta * 0.8, 1.0)
-		$Light.light_color = Color.from_hsv(_disco_hue, 0.9, 1.0)
-		$Light.light_energy = 1.5 # Pump it up
+		light.light_color = Color.from_hsv(_disco_hue, 0.9, 1.0)
+		light.light_energy = 1.5 # Pump it up
 
 func _on_disco_mode_changed(enabled: bool) -> void:
 	if not enabled:
@@ -45,8 +46,9 @@ func _on_disco_mode_changed(enabled: bool) -> void:
 
 func _on_dark_mode_changed(is_dark: bool) -> void:
 	# Dim the hallway light in dark mode for atmosphere
-	$Light.light_energy = 0.05 if is_dark else 0.4
-	$Light.light_color = Color.WHITE
+	if light:
+		light.light_energy = 0.05 if is_dark else 0.4
+		light.light_color = Color.WHITE
 
 var _grid: Node = null
 var hall_type: Array = [true, FLAT]
@@ -174,7 +176,8 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 		_grid.set_cell_item(hall_corner, INTERNAL_HALL_TURN, corner_ori)
 		_grid.set_cell_item(hall_corner - Vector3.UP, floor_type, 0)
 		_grid.set_cell_item(hall_corner + Vector3.UP, WALL, 0)
-		$Light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 2
+		light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 4
+		light.rotation_degrees = Vector3(180, 0, 0)
 	elif level == UP:
 		_grid.set_cell_item(hall_start, HALL_STAIRS_UP, ori)
 		if _grid.get_cell_item(hall_start + Vector3.UP) != -1:
@@ -182,7 +185,8 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 		if _grid.get_cell_item(hall_corner + Vector3.UP) != -1:
 			_grid.set_cell_item(hall_corner + Vector3.UP, -1, ori)
 		_grid.set_cell_item(hall_corner, HALL_STAIRS_TURN, corner_ori)
-		$Light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 4
+		light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 8
+		light.rotation_degrees = Vector3(180, 0, 0)
 	elif level == DOWN:
 		_grid.set_cell_item(hall_start, HALL_STAIRS_DOWN, ori)
 		if _grid.get_cell_item(hall_start + Vector3.UP) != -1:
@@ -190,7 +194,8 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 		if _grid.get_cell_item(hall_corner) != -1:
 			_grid.set_cell_item(hall_corner, -1, ori)
 		_grid.set_cell_item(hall_corner - Vector3.UP, HALL_STAIRS_TURN, corner_ori)
-		$Light.global_position = GridUtils.grid_to_world(hall_corner)
+		light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 4
+		light.rotation_degrees = Vector3(180, 0, 0)
 
 	var exit_hall_dir: Vector3 = hall_dir.rotated(Vector3.UP, (3 if is_right else 1) * PI / 2)
 	var exit_hall: Vector3 = hall_corner + exit_hall_dir

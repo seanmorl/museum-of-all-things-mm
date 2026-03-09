@@ -4,6 +4,7 @@
 
 [resource]
 albedo_texture = ExtResource("1_frp54")
-metallic = 0.3
-roughness = 0.0
+metallic = 0.0
+roughness = 0.2
+specular = 0.5
 normal_enabled = true

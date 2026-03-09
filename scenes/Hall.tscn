@@ -23,6 +23,9 @@ monitoring = false
 
 [node name="ExitDoor" parent="." instance=ExtResource("3_1akbl")]
 
-[node name="Light" type="OmniLight3D" parent="." groups=["managed_light", "managed_light_skip_direction_test"]]
-light_energy = 0.5
+[node name="HallLight" type="OmniLight3D" parent="." groups=["managed_light", "managed_light_skip_direction_test"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+light_energy = 0.4
+omni_range = 10.0
 omni_attenuation = 2.0
+

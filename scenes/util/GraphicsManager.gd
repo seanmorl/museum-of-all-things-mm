@@ -1,13 +1,11 @@
 extends Node
-
 signal change_post_processing(post_processing: String)
-
 const _settings_ns = "graphics"
 const _GROUP_MANAGED_LIGHT := &"managed_light"
 const _GROUP_MANAGED_LIGHT_SKIP := &"managed_light_skip_direction_test"
 const _GROUP_RENDER_DISTANCE := &"render_distance"
 
-# Deprecated: use Constants.MANAGED_LIGHTS_* instead
+## Deprecated: use Constants.MANAGED_LIGHTS_* instead
 const MANAGED_LIGHTS_MAX := Constants.MANAGED_LIGHTS_MAX
 const MANAGED_LIGHTS_DIRECTION_THRESHOLD := Constants.MANAGED_LIGHTS_DIRECTION_THRESHOLD
 const MANAGED_LIGHTS_FREQUENCY := Constants.MANAGED_LIGHTS_FREQUENCY
@@ -31,9 +29,39 @@ var anisotropy_level: int = 4
 var light_timer: Timer
 var _light_tweens: Dictionary = {}
 
+func _exit_tree() -> void:
+	if light_timer:
+		light_timer.stop()
+	for tween in _light_tweens.values():
+		if tween.is_valid():
+			tween.kill()
+	_light_tweens.clear()
+
+## ── Shadow quality ─────────────────────────────────────────────────────────────
+## 0=Low(512) 1=Medium(1024) 2=High(2048) 3=Ultra(4096)
+var shadow_quality: int = 2
+
+## ── Depth of Field ─────────────────────────────────────────────────────────────
+var dof_enabled: bool = false
+var dof_blur_amount: float = 0.1
+var dof_focus_distance: float = 10.0
+var dof_focus_range: float = 10.0
+
+## ── Resolution ────────────────────────────────────────────────────────────────
+var resolution: Vector2i = Vector2i(-1, -1)
+const RESOLUTION_PRESETS: Array[Vector2i] = [
+	Vector2i(-1, -1),
+	Vector2i(3840, 2160),
+	Vector2i(2560, 1440),
+	Vector2i(1920, 1080),
+	Vector2i(1600, 900),
+	Vector2i(1280, 720),
+	Vector2i(1024, 576),
+	Vector2i(854, 480),
+]
+
 func init() -> void:
 	_env = get_tree().get_nodes_in_group("Environment")[0]
-
 	if not _env:
 		Log.error("GraphicsManager", "could not load environment node")
 		return
@@ -57,46 +85,22 @@ func set_fullscreen(_fullscreen: bool) -> void:
 
 func set_render_scale(scale: float) -> void:
 	render_scale = scale
-	var vp := _get_render_viewport()
-	if vp:
-		vp.scaling_3d_scale = scale
-
-func _get_render_viewport() -> Viewport:
-	## Returns the root Viewport (never a bare Window) for 3D render settings.
-	## get_viewport() called on an autoload Node returns the root Window, which
-	## does NOT have texture_filter / scaling_3d_mode — those live on Viewport.
-	## get_tree().root is the Window; its first child that IS a Viewport is what
-	## we actually want, but in practice get_tree().root itself IS a Window
-	## subclass that also inherits Viewport in Godot 4, so we cast carefully.
-	var vp: Viewport = get_tree().root as Viewport
-	if vp:
-		return vp
-	# Fallback: walk to the first Viewport in the tree
-	return get_tree().get_root()
-
+	get_viewport().scaling_3d_scale = scale
 
 func set_scale_mode(mode: int) -> void:
 	scale_mode = mode
-	var vp := _get_render_viewport()
-	if not vp:
-		push_warning("GraphicsManager.set_scale_mode: no Viewport found, skipping.")
-		return
-
-	if mode == 3: # Nearest — bilinear scaling but nearest texture filter
+	var vp = get_viewport()
+	
+	if mode == 3: # Nearest (Retro/Pixelated)
 		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
-		# texture_filter is only present on SubViewport, not on Window/Viewport.
-		# Apply it safely via cast so we don't crash on the root Window.
-		var sub := vp as SubViewport
-		if sub:
-			sub.canvas_item_default_texture_filter = SubViewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+		# FIXED: Viewports use canvas_item_default_texture_filter in Godot 4
+		vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	else:
 		vp.scaling_3d_mode = mode as Viewport.Scaling3DMode
-		var sub := vp as SubViewport
-		if sub:
-			sub.canvas_item_default_texture_filter = SubViewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-
-	# MSAA is now managed separately, but we still disable it for FSR2 as it has its own AA
-	if mode == 2: # FSR2
+		# Default back to Linear for standard modes (FSR/Bilinear)
+		vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR
+		
+	if mode == 2: # FSR2 has its own AA
 		vp.msaa_3d = Viewport.MSAA_DISABLED
 	else:
 		vp.msaa_3d = msaa_3d as Viewport.MSAA
@@ -104,51 +108,32 @@ func set_scale_mode(mode: int) -> void:
 func set_msaa_3d(value: int) -> void:
 	msaa_3d = value
 	if scale_mode != 2:
-		var vp := _get_render_viewport()
-		if vp:
-			vp.msaa_3d = value as Viewport.MSAA
+		get_viewport().msaa_3d = value as Viewport.MSAA
 
 func set_use_fxaa(enabled: bool) -> void:
 	use_fxaa = enabled
-	var vp := _get_render_viewport()
-	if vp:
-		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if enabled else Viewport.SCREEN_SPACE_AA_DISABLED
+	get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if enabled else Viewport.SCREEN_SPACE_AA_DISABLED
 
 func set_use_taa(enabled: bool) -> void:
 	use_taa = enabled
-	var vp := _get_render_viewport()
-	if vp:
-		vp.use_taa = enabled
+	get_viewport().use_taa = enabled
 
 func set_anisotropy_level(level: int) -> void:
 	anisotropy_level = level
-	# Note: This is a project setting in Godot, but we can try to set it via RenderingServer or ProjectSettings
 	ProjectSettings.set_setting("rendering/textures/default_filters/anisotropic_filtering_level", level)
-	# For changes to take effect on already loaded textures, we might need to refresh them, 
-	# but usually this setting applies to new imports or general filtering behavior.
 
 func set_fsr_quality(quality: int) -> void:
 	fsr_quality = quality
-	var vp := _get_render_viewport()
-	if not vp:
-		return
 	match quality:
-		0:
-			vp.scaling_3d_scale = 1.0 / 1.3
-		1:
-			vp.scaling_3d_scale = 1.0 / 1.5
-		2:
-			vp.scaling_3d_scale = 1.0 / 1.7
-		3:
-			vp.scaling_3d_scale = 1.0 / 2.0
-		4:
-			vp.scaling_3d_scale = 1.0 / 3.0
+		0: get_viewport().scaling_3d_scale = 1.0 / 1.3
+		1: get_viewport().scaling_3d_scale = 1.0 / 1.5
+		2: get_viewport().scaling_3d_scale = 1.0 / 1.7
+		3: get_viewport().scaling_3d_scale = 1.0 / 2.0
+		4: get_viewport().scaling_3d_scale = 1.0 / 3.0
 
 func set_fsr_sharpness(sharpness: float) -> void:
 	fsr_sharpness = sharpness
-	var vp := _get_render_viewport()
-	if vp:
-		vp.fsr_sharpness = sharpness
+	get_viewport().fsr_sharpness = sharpness
 
 func set_post_processing(_post_processing: String) -> void:
 	post_processing = _post_processing
@@ -170,64 +155,173 @@ func set_vsync_enabled(_vsync_enabled: bool) -> void:
 	vsync_enabled = _vsync_enabled
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync_enabled else DisplayServer.VSYNC_DISABLED)
 
+func set_resolution(res: Vector2i) -> void:
+	resolution = res
+	if fullscreen:
+		return
+	if res == Vector2i(-1, -1):
+		DisplayServer.window_set_size(DisplayServer.screen_get_size())
+	else:
+		DisplayServer.window_set_size(res)
+	var screen := DisplayServer.screen_get_size()
+	DisplayServer.window_set_position(Vector2i((screen.x - res.x) / 2, (screen.y - res.y) / 2))
+
+## ── Shadow quality ─────────────────────────────────────────────────────────────
+func set_shadow_quality(quality: int) -> void:
+	shadow_quality = quality
+	var size: int
+	match quality:
+		0: size = 512
+		1: size = 1024
+		2: size = 2048
+		3: size = 4096
+		_: size = 2048
+	RenderingServer.directional_shadow_atlas_set_size(size, true)
+
+## ── Depth of Field ─────────────────────────────────────────────────────────────
+func set_dof_enabled(enabled: bool) -> void:
+	dof_enabled = enabled
+
+func set_dof_blur_amount(amount: float) -> void:
+	dof_blur_amount = amount
+
+func set_dof_focus_distance(distance: float) -> void:
+	dof_focus_distance = distance
+
+func set_dof_focus_range(range_val: float) -> void:
+	dof_focus_range = range_val
+
+func set_ssao_enabled(enabled: bool) -> void:
+	_env.environment.ssao_enabled = enabled
+
+func set_ssil_enabled(enabled: bool) -> void:
+	_env.environment.ssil_enabled = enabled
+
+
+func set_ssr_enabled(enabled: bool) -> void:
+	_env.environment.ssr_enabled = enabled
+
+func set_glow_enabled(enabled: bool) -> void:
+	_env.environment.glow_enabled = enabled
+
+func set_volumetric_fog_enabled(enabled: bool) -> void:
+	_env.environment.volumetric_fog_enabled = enabled
+
+## ── Environment accessor ───────────────────────────────────────────────────────
 func _on_node_added(node: Node) -> void:
 	if not is_equal_approx(render_distance_multiplier, 1.0):
 		if node.is_in_group(_GROUP_RENDER_DISTANCE):
 			node.visibility_range_end *= render_distance_multiplier
 
 func get_env() -> Environment:
-	# we assume that they modify the settings
 	if not _env:
 		init()
 	return _env.environment
 
+## ── Settings persistence ───────────────────────────────────────────────────────
 func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 	var e: Environment = _env.environment
-	for field in ["ssr_enabled", "ssr_max_steps", "fog_enabled", "ssil_enabled", "ambient_light_energy"]:
-		e[field] = s[field] if s.has(field) else default[field]
-	set_vsync_enabled(s["vsync_enabled"] if s.has("vsync_enabled") else default["vsync_enabled"])
-	set_fps_limit(s["fps_limit"] if s.has("fps_limit") else default["fps_limit"])
-	enable_fps_limit(s["limit_fps"] if s.has("limit_fps") else default["limit_fps"])
-	set_fullscreen(s["fullscreen"] if s.has("fullscreen") else default["fullscreen"])
-	set_fsr_sharpness(s["fsr_sharpness"] if s.has("fsr_sharpness") else default["fsr_sharpness"])
-	set_post_processing(s["post_processing"] if s.has("post_processing") else default["post_processing"])
-	
+	# All Environment fields that are saved/loaded directly
+	for field in [
+		"ssr_enabled", "ssr_max_steps", "ssr_fade_in", "ssr_fade_out",
+		"ssr_depth_tolerance",
+		"fog_enabled", "volumetric_fog_enabled", "ssil_enabled", "ambient_light_energy",
+		"ssao_enabled", "ssao_radius", "ssao_intensity", "ssao_power", "ssao_detail",
+		"glow_enabled", "glow_intensity", "glow_bloom",
+		"tonemap_mode", "tonemap_exposure", "tonemap_white"]:
+		if s.has(field):
+			e[field] = s[field]
+		elif default.has(field):
+			e[field] = default[field]
+
+	# ssr_roughness was removed in Godot 4.x — only set it if the property exists
+	if "ssr_roughness" in e:
+		if s.has("ssr_roughness"):
+			e.ssr_roughness = s["ssr_roughness"]
+		elif default.has("ssr_roughness"):
+			e.ssr_roughness = default["ssr_roughness"]
+
+	set_vsync_enabled(s.get("vsync_enabled", default.get("vsync_enabled", true)))
+	set_fps_limit(s.get("fps_limit", default.get("fps_limit", 60)))
+	enable_fps_limit(s.get("limit_fps", default.get("limit_fps", false)))
+	set_fullscreen(s.get("fullscreen", default.get("fullscreen", false)))
+	set_fsr_sharpness(s.get("fsr_sharpness", default.get("fsr_sharpness", 0.2)))
+	set_post_processing(s.get("post_processing", default.get("post_processing", "none")))
 	set_msaa_3d(s.get("msaa_3d", default.get("msaa_3d", Viewport.MSAA_DISABLED)))
 	set_use_fxaa(s.get("use_fxaa", default.get("use_fxaa", false)))
 	set_use_taa(s.get("use_taa", default.get("use_taa", false)))
 	set_anisotropy_level(s.get("anisotropy_level", default.get("anisotropy_level", 4)))
+	set_shadow_quality(s.get("shadow_quality", default.get("shadow_quality", 2)))
+	set_render_distance_multiplier(s.get("render_distance_multiplier", default.get("render_distance_multiplier", 2.5)))
+	set_resolution(s.get("resolution", default.get("resolution", Vector2i(-1, -1))))
 
-	var mode: int = s["scale_mode"] if s.has("scale_mode") else default["scale_mode"]
+	# DOF convenience vars (mirrored from env fields above, kept for UI use)
+	dof_enabled = s.get("dof_enabled", default.get("dof_enabled", false))
+	dof_blur_amount = s.get("dof_blur_amount", default.get("dof_blur_amount", 0.1))
+	dof_focus_distance = s.get("dof_focus_distance", default.get("dof_focus_distance", 10.0))
+	dof_focus_range = s.get("dof_focus_range", default.get("dof_focus_range", 10.0))
+
+	var mode: int = s.get("scale_mode", default.get("scale_mode", 0))
 	set_scale_mode(mode)
 	if mode > 0:
-		set_fsr_quality(s["fsr_quality"] if s.has("fsr_quality") else default["fsr_quality"])
+		set_fsr_quality(s.get("fsr_quality", default.get("fsr_quality", 5)))
 	else:
-		set_render_scale(s["render_scale"] if s.has("render_scale") else default["render_scale"])
-
-	set_render_distance_multiplier(s["render_distance_multiplier"] if s.has("render_distance_multiplier") else default["render_distance_multiplier"])
+		set_render_scale(s.get("render_scale", default.get("render_scale", 1.0)))
+	
 
 func _create_settings_obj() -> Dictionary:
 	var e: Environment = _env.environment
 	return {
-		"ambient_light_energy": e.ambient_light_energy,
-		"ssr_enabled": e.ssr_enabled,
-		"ssr_max_steps": e.ssr_max_steps,
-		"ssil_enabled": e.ssil_enabled,
-		"fog_enabled": e.fog_enabled,
-		"fps_limit": fps_limit,
-		"limit_fps": limit_fps,
-		"fullscreen": fullscreen,
+		# Display
 		"render_scale": render_scale,
 		"scale_mode": scale_mode,
+		"fsr_quality": fsr_quality,
+		"fsr_sharpness": fsr_sharpness,
+		"fullscreen": fullscreen,
+		"vsync_enabled": vsync_enabled,
+		"fps_limit": fps_limit,
+		"limit_fps": limit_fps,
+		"render_distance_multiplier": render_distance_multiplier,
+		"post_processing": post_processing,
+		"resolution": resolution,
+		# AA / filtering
 		"msaa_3d": msaa_3d,
 		"use_fxaa": use_fxaa,
 		"use_taa": use_taa,
 		"anisotropy_level": anisotropy_level,
-		"fsr_quality": fsr_quality,
-		"fsr_sharpness": fsr_sharpness,
-		"post_processing": post_processing,
-		"vsync_enabled": vsync_enabled,
-		"render_distance_multiplier": render_distance_multiplier,
+		# Shadows
+		"shadow_quality": shadow_quality,
+		# Lighting
+		"ambient_light_energy": e.ambient_light_energy,
+		"ssil_enabled": e.ssil_enabled,
+		"fog_enabled": e.fog_enabled,
+		"volumetric_fog_enabled": e.volumetric_fog_enabled,
+		# SSR
+		"ssr_enabled": e.ssr_enabled,
+		"ssr_max_steps": e.ssr_max_steps,
+		"ssr_fade_in": e.ssr_fade_in,
+		"ssr_fade_out": e.ssr_fade_out,
+		"ssr_depth_tolerance": e.ssr_depth_tolerance,
+		"ssr_roughness": e.get("ssr_roughness") if "ssr_roughness" in e else false,
+		# SSAO
+		"ssao_enabled": e.ssao_enabled,
+		"ssao_radius": e.ssao_radius,
+		"ssao_intensity": e.ssao_intensity,
+		"ssao_power": e.ssao_power,
+		"ssao_detail": e.ssao_detail,
+		# Glow
+		"glow_enabled": e.glow_enabled,
+		"glow_intensity": e.glow_intensity,
+		"glow_bloom": e.glow_bloom,
+		# Tone mapping
+		"tonemap_mode": e.tonemap_mode,
+		"tonemap_exposure": e.tonemap_exposure,
+		"tonemap_white": e.tonemap_white,
+		# DOF - Uses local variables instead of Environment properties in Godot 4.x
+		"dof_enabled": dof_enabled,
+		"dof_blur_amount": dof_blur_amount,
+		"dof_focus_distance": dof_focus_distance,
+		"dof_focus_range": dof_focus_range,
 	}
 
 func restore_default_settings() -> void:
@@ -238,8 +332,6 @@ func save_settings() -> void:
 
 func _ready() -> void:
 	get_tree().node_added.connect(_on_node_added)
-
-	# When using the compatibility renderer, we need to manage the number of lights.
 	if Platform.is_compatibility_renderer():
 		light_timer = Timer.new()
 		add_child(light_timer)
@@ -250,12 +342,10 @@ func _ready() -> void:
 func _manage_lights() -> void:
 	var camera: Camera3D = get_viewport().get_camera_3d()
 	var lights = get_tree().get_nodes_in_group(_GROUP_MANAGED_LIGHT)
-
 	var light_data := []
 	for light in lights:
 		var p: Vector3 = light.global_position
 
-		# For spotlights, we check a spot half the range in front of the light.
 		if light is SpotLight3D:
 			p = p + (-light.global_transform.basis.z * (light.spot_range / 2.0))
 
@@ -264,7 +354,6 @@ func _manage_lights() -> void:
 		if not light.is_in_group(_GROUP_MANAGED_LIGHT_SKIP):
 			var camera_dot = v.normalized().dot(-camera.global_transform.basis.z)
 			if camera_dot < MANAGED_LIGHTS_DIRECTION_THRESHOLD:
-				# This light is behind the player, so turn it off, and move on.
 				_toggle_managed_light(light, false)
 				continue
 
@@ -274,7 +363,7 @@ func _manage_lights() -> void:
 		}
 		light_data.push_back(d)
 
-	light_data.sort_custom(func (a, b): return a['distance'] < b['distance'])
+	light_data.sort_custom(func(a, b): return a['distance'] < b['distance'])
 
 	var enabled := 0
 	for d in light_data:
@@ -290,7 +379,6 @@ func _manage_lights() -> void:
 func _toggle_managed_light(light: Light3D, enable: bool) -> void:
 	if light.visible == enable:
 		return
-
 	var light_id: int = light.get_instance_id()
 	if _light_tweens.has(light_id) and _light_tweens[light_id].is_valid():
 		_light_tweens[light_id].kill()
@@ -307,7 +395,7 @@ func _toggle_managed_light(light: Light3D, enable: bool) -> void:
 		light.visible = true
 
 	tween.tween_property(light, "light_energy", light_energy if enable else 0.0, MANAGED_LIGHTS_FREQUENCY * 0.5)
-	tween.tween_callback(func ():
+	tween.tween_callback(func():
 		_light_tweens.erase(light_id)
 		if not is_instance_valid(light):
 			return

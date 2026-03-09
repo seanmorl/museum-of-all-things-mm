@@ -245,13 +245,6 @@ func _set_up_lobby(lobby: Node) -> void:
 
 
 func _set_custom_door(title: String) -> void:
-	# In multiplayer, only the server (host) may open the search corridor.
-	# Clients using it individually would load an exhibit that exists only on
-	# their machine, splitting them into a private museum instance that other
-	# players cannot see or share. The host opens it for everyone via the
-	# race-start RPC (_sync_race_start_article), which calls this on all peers.
-	if NetworkManager.is_multiplayer_active() and not NetworkManager.is_server():
-		return
 	if _custom_door and is_instance_valid(_custom_door):
 		_custom_door.to_title = title
 		_custom_door.entry_door.set_open(true)

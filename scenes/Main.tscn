@@ -8,7 +8,7 @@
 [ext_resource type="PackedScene" uid="uid://bhi1d8bl668hb" path="res://scenes/menu/PauseMenu.tscn" id="5_boks6"]
 [ext_resource type="PackedScene" uid="uid://b575vo2u5rw0p" path="res://scenes/menu/PopupTerminalMenu.tscn" id="6_cjdwp"]
 [ext_resource type="PackedScene" uid="uid://btdrwyul4s0cv" path="res://scenes/CacheCleaner.tscn" id="7_lsl8e"]
-[ext_resource type="AudioStream" uid="uid://dlglidpxju4qy" path="res://assets/sound/UI/UI Game Launch Sting/Game Launch Sting.ogg" id="9_ketwq"]
+[ext_resource type="AudioStream" uid="uid://b1h0hsbf5yxji" path="res://assets/sound/UI/UI Game Launch Sting/Game Launch Sting.ogg" id="9_ketwq"]
 [ext_resource type="PackedScene" uid="uid://bmp7qk2xnj5vy" path="res://scenes/menu/MultiplayerMenu.tscn" id="10_mpmenu"]
 [ext_resource type="PackedScene" uid="uid://bj7vvqjer0u7e" path="res://scenes/menu/PlayerListOverlay.tscn" id="11_plyrovly"]
 [ext_resource type="PackedScene" uid="uid://cdw3l0qfrg837" path="res://scenes/menu/RaceHUD.tscn" id="12_racehud"]
@@ -25,6 +25,7 @@ script = ExtResource("1_d7g3n")
 
 [node name="Museum" parent="." unique_id=76677364 instance=ExtResource("1_ivvmh")]
 unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.022853851, -1.9073486e-06, -0.039419174)
 
 [node name="CRTPostProcessing" type="CanvasLayer" parent="." unique_id=1109775851]
 unique_name_in_owner = true
@@ -123,6 +124,31 @@ visible = false
 
 [node name="StartLine" parent="." unique_id=2087091294 instance=ExtResource("19_nfivy")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.051032305, 4.035794, 23.94235)
+
+[node name="WIPOverlay" type="CanvasLayer" parent="." unique_id=314159265]
+layer = 100
+
+[node name="WIPLabel" type="Label" parent="WIPOverlay" unique_id=271828182]
+unique_name_in_owner = true
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -800.0
+offset_top = -30.0
+offset_right = -10.0
+offset_bottom = -7.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 1, 0.501961)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.470588)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_constants/outline_size = 0
+text = "WORK IN PROGRESS — SUBJECT TO CHANGE"
+horizontal_alignment = 2
+vertical_alignment = 2
 
 [connection signal="resume" from="MenuLayer/Settings" to="." method="_on_settings_back"]
 [connection signal="settings" from="MenuLayer/MainMenu" to="." method="_on_main_menu_settings"]

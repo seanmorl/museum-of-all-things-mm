@@ -425,6 +425,13 @@ func _init_item(exhibit: Node3D, item: Node3D, data: Dictionary) -> void:
 	if is_instance_valid(exhibit) and is_instance_valid(item):
 		exhibit.add_child(item)
 		item.init(data)
+		
+		# Check if this painting should be stolen (missing)
+		if data.type == "image":
+			var main: Node = _museum.get_parent()
+			if main and main.has_method("check_painting_stolen"):
+				if main.check_painting_stolen(exhibit.title, data.get("title", "")):
+					item.set_stolen(true)
 
 
 func _restore_placed_painting(exhibit: Node3D, exhibit_title: String,
