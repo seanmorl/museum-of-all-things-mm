@@ -228,6 +228,11 @@ func _on_visibility_changed() -> void:
 			tw.tween_property(scroll, "position:y", 0.0, 0.30) \
 				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
+func _input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		_on_resume()
+
 func _on_tab_bar_tab_changed(tab: int) -> void:
 	var prev_scene: Control = _tab_scenes[_current_tab] if _current_tab < _tab_scenes.size() else null
 	_current_tab = tab

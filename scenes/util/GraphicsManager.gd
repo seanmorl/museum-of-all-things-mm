@@ -24,6 +24,10 @@ var fsr_sharpness: float = 0.2
 var post_processing: String = "none"
 var render_distance_multiplier: float = 2.5
 var vsync_enabled: bool = true
+var msaa_3d: int = Viewport.MSAA_DISABLED
+var use_fxaa: bool = false
+var use_taa: bool = false
+var anisotropy_level: int = 4
 var light_timer: Timer
 var _light_tweens: Dictionary = {}
 
@@ -53,35 +57,98 @@ func set_fullscreen(_fullscreen: bool) -> void:
 
 func set_render_scale(scale: float) -> void:
 	render_scale = scale
-	get_viewport().scaling_3d_scale = scale
+	var vp := _get_render_viewport()
+	if vp:
+		vp.scaling_3d_scale = scale
+
+func _get_render_viewport() -> Viewport:
+	## Returns the root Viewport (never a bare Window) for 3D render settings.
+	## get_viewport() called on an autoload Node returns the root Window, which
+	## does NOT have texture_filter / scaling_3d_mode — those live on Viewport.
+	## get_tree().root is the Window; its first child that IS a Viewport is what
+	## we actually want, but in practice get_tree().root itself IS a Window
+	## subclass that also inherits Viewport in Godot 4, so we cast carefully.
+	var vp: Viewport = get_tree().root as Viewport
+	if vp:
+		return vp
+	# Fallback: walk to the first Viewport in the tree
+	return get_tree().get_root()
+
 
 func set_scale_mode(mode: int) -> void:
 	scale_mode = mode
-	get_viewport().scaling_3d_mode = mode as Viewport.Scaling3DMode
+	var vp := _get_render_viewport()
+	if not vp:
+		push_warning("GraphicsManager.set_scale_mode: no Viewport found, skipping.")
+		return
 
-	if mode < 2:
-		get_viewport().msaa_3d = Viewport.MSAA_2X
+	if mode == 3: # Nearest — bilinear scaling but nearest texture filter
+		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+		# texture_filter is only present on SubViewport, not on Window/Viewport.
+		# Apply it safely via cast so we don't crash on the root Window.
+		var sub := vp as SubViewport
+		if sub:
+			sub.canvas_item_default_texture_filter = SubViewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	else:
-		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+		vp.scaling_3d_mode = mode as Viewport.Scaling3DMode
+		var sub := vp as SubViewport
+		if sub:
+			sub.canvas_item_default_texture_filter = SubViewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+	# MSAA is now managed separately, but we still disable it for FSR2 as it has its own AA
+	if mode == 2: # FSR2
+		vp.msaa_3d = Viewport.MSAA_DISABLED
+	else:
+		vp.msaa_3d = msaa_3d as Viewport.MSAA
+
+func set_msaa_3d(value: int) -> void:
+	msaa_3d = value
+	if scale_mode != 2:
+		var vp := _get_render_viewport()
+		if vp:
+			vp.msaa_3d = value as Viewport.MSAA
+
+func set_use_fxaa(enabled: bool) -> void:
+	use_fxaa = enabled
+	var vp := _get_render_viewport()
+	if vp:
+		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if enabled else Viewport.SCREEN_SPACE_AA_DISABLED
+
+func set_use_taa(enabled: bool) -> void:
+	use_taa = enabled
+	var vp := _get_render_viewport()
+	if vp:
+		vp.use_taa = enabled
+
+func set_anisotropy_level(level: int) -> void:
+	anisotropy_level = level
+	# Note: This is a project setting in Godot, but we can try to set it via RenderingServer or ProjectSettings
+	ProjectSettings.set_setting("rendering/textures/default_filters/anisotropic_filtering_level", level)
+	# For changes to take effect on already loaded textures, we might need to refresh them, 
+	# but usually this setting applies to new imports or general filtering behavior.
 
 func set_fsr_quality(quality: int) -> void:
 	fsr_quality = quality
-
+	var vp := _get_render_viewport()
+	if not vp:
+		return
 	match quality:
 		0:
-			get_viewport().scaling_3d_scale = 1.0 / 1.3
+			vp.scaling_3d_scale = 1.0 / 1.3
 		1:
-			get_viewport().scaling_3d_scale = 1.0 / 1.5
+			vp.scaling_3d_scale = 1.0 / 1.5
 		2:
-			get_viewport().scaling_3d_scale = 1.0 / 1.7
+			vp.scaling_3d_scale = 1.0 / 1.7
 		3:
-			get_viewport().scaling_3d_scale = 1.0 / 2.0
+			vp.scaling_3d_scale = 1.0 / 2.0
 		4:
-			get_viewport().scaling_3d_scale = 1.0 / 3.0
+			vp.scaling_3d_scale = 1.0 / 3.0
 
 func set_fsr_sharpness(sharpness: float) -> void:
 	fsr_sharpness = sharpness
-	get_viewport().fsr_sharpness = sharpness
+	var vp := _get_render_viewport()
+	if vp:
+		vp.fsr_sharpness = sharpness
 
 func set_post_processing(_post_processing: String) -> void:
 	post_processing = _post_processing
@@ -124,6 +191,11 @@ func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 	set_fullscreen(s["fullscreen"] if s.has("fullscreen") else default["fullscreen"])
 	set_fsr_sharpness(s["fsr_sharpness"] if s.has("fsr_sharpness") else default["fsr_sharpness"])
 	set_post_processing(s["post_processing"] if s.has("post_processing") else default["post_processing"])
+	
+	set_msaa_3d(s.get("msaa_3d", default.get("msaa_3d", Viewport.MSAA_DISABLED)))
+	set_use_fxaa(s.get("use_fxaa", default.get("use_fxaa", false)))
+	set_use_taa(s.get("use_taa", default.get("use_taa", false)))
+	set_anisotropy_level(s.get("anisotropy_level", default.get("anisotropy_level", 4)))
 
 	var mode: int = s["scale_mode"] if s.has("scale_mode") else default["scale_mode"]
 	set_scale_mode(mode)
@@ -147,6 +219,10 @@ func _create_settings_obj() -> Dictionary:
 		"fullscreen": fullscreen,
 		"render_scale": render_scale,
 		"scale_mode": scale_mode,
+		"msaa_3d": msaa_3d,
+		"use_fxaa": use_fxaa,
+		"use_taa": use_taa,
+		"anisotropy_level": anisotropy_level,
 		"fsr_quality": fsr_quality,
 		"fsr_sharpness": fsr_sharpness,
 		"post_processing": post_processing,

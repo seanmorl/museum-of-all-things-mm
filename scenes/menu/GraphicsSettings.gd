@@ -2,7 +2,7 @@ extends VBoxContainer
 
 signal resume
 
-enum ScaleMode { BILINEAR, FSR1, FSR2 }
+enum ScaleMode { BILINEAR, FSR1, FSR2, NEAREST }
 
 var post_processing_options: Array[String] = ["none", "crt"]
 
@@ -39,6 +39,14 @@ var post_processing_options: Array[String] = ["none", "crt"]
 
 # Post-processing options
 @onready var post_processing_effect: OptionButton = %PostProcessingEffect
+
+# Anti-Aliasing options
+@onready var msaa_option: OptionButton = %MSAAOption
+@onready var use_fxaa_check: CheckBox = %UseFXAACheck
+@onready var use_taa_check: CheckBox = %UseTAACheck
+
+# Texture Filtering
+@onready var anisotropy_option: OptionButton = %AnisotropyOption
 
 var _loaded_settings: bool = false
 
@@ -387,6 +395,19 @@ func _load_settings() -> void:
 	var idx = post_processing_options.find(post_processing)
 	post_processing_effect.select(idx if idx >= 0 else 0)
 
+	# Anti-Aliasing
+	msaa_option.selected = GraphicsManager.msaa_3d
+	use_fxaa_check.button_pressed = GraphicsManager.use_fxaa
+	use_taa_check.button_pressed = GraphicsManager.use_taa
+
+	# Texture Filtering
+	match GraphicsManager.anisotropy_level:
+		1: anisotropy_option.selected = 0
+		2: anisotropy_option.selected = 1
+		4: anisotropy_option.selected = 2
+		8: anisotropy_option.selected = 3
+		16: anisotropy_option.selected = 4
+
 	# Refresh SSR fine-tuning sliders if they exist (built in _ready via _build_ssr_section)
 	if _ssr_fade_in_label:
 		_ssr_fade_in_label.text = "%.2f" % e.ssr_fade_in
@@ -448,12 +469,13 @@ func _update_scaling() -> void:
 	var selected_scale_mode: int = scale_mode.selected
 	GraphicsManager.set_scale_mode(selected_scale_mode)
 
-	# Show render scale if bilinear, FSR options otherwise
-	render_scale.visible = (selected_scale_mode == ScaleMode.BILINEAR)
-	get_tree().set_group("fsr_options", "visible", (selected_scale_mode != ScaleMode.BILINEAR))
+	# Show render scale if bilinear/nearest, FSR options otherwise
+	render_scale.visible = (selected_scale_mode == ScaleMode.BILINEAR or selected_scale_mode == ScaleMode.NEAREST)
+	get_tree().set_group("fsr_options", "visible", (selected_scale_mode != ScaleMode.BILINEAR and selected_scale_mode != ScaleMode.NEAREST))
 
-	if selected_scale_mode == ScaleMode.BILINEAR:
+	if selected_scale_mode == ScaleMode.BILINEAR or selected_scale_mode == ScaleMode.NEAREST:
 		GraphicsManager.set_render_scale(render_scale.value)
+		_update_render_scale_label(render_scale.value)
 		return
 
 	# FSR
@@ -468,10 +490,18 @@ func _update_scaling() -> void:
 
 	var current_scale = get_viewport().scaling_3d_scale
 	render_scale.value = current_scale
-	render_scale_value.text = "%.0f %%\n" % (current_scale * 100)
+	_update_render_scale_label(current_scale)
+
+func _update_render_scale_label(value: float) -> void:
+	## Shows percentage with an SSAA badge when scale exceeds 100% (supersampling).
+	var pct := int(round(value * 100.0))
+	if value > 1.0:
+		render_scale_value.text = "%d%% (SSAA)" % pct
+	else:
+		render_scale_value.text = "%d%%" % pct
 
 func _on_render_scale_value_changed(value: float) -> void:
-	render_scale_value.text = "%d %%\n" % (value * 100)
+	_update_render_scale_label(value)
 	_update_scaling()
 
 func _on_scale_mode_value_changed(value: int) -> void:
@@ -480,6 +510,9 @@ func _on_scale_mode_value_changed(value: int) -> void:
 			fsr_quality.select(0)
 		ScaleMode.FSR2:
 			fsr_quality.select(1)
+		ScaleMode.NEAREST:
+			# Reset to 1.0 so pixel-perfect retro rendering is the default.
+			render_scale.value = 1.0
 
 	_update_scaling()
 
@@ -496,3 +529,22 @@ func _on_post_processing_effect_item_selected(index: int) -> void:
 func _on_render_distance_value_changed(value: float) -> void:
 	render_distance_value.text = "%dm" % int(value * 30)
 	GraphicsManager.set_render_distance_multiplier(value)
+
+func _on_msaa_option_item_selected(index: int) -> void:
+	GraphicsManager.set_msaa_3d(index)
+
+func _on_use_fxaa_check_toggled(toggled_on: bool) -> void:
+	GraphicsManager.set_use_fxaa(toggled_on)
+
+func _on_use_taa_check_toggled(toggled_on: bool) -> void:
+	GraphicsManager.set_use_taa(toggled_on)
+
+func _on_anisotropy_option_item_selected(index: int) -> void:
+	var level: int = 4
+	match index:
+		0: level = 1
+		1: level = 2
+		2: level = 4
+		3: level = 8
+		4: level = 16
+	GraphicsManager.set_anisotropy_level(level)
