@@ -80,10 +80,12 @@ func _ready() -> void:
 	if main_menu_node and main_menu_node.has_signal("start_dedicated_host"):
 		main_menu_node.start_dedicated_host.connect(_on_dedicated_host_pressed)
 	
-	# ⚠️ FIX: Connect Settings resume signal to show MainMenu
+	# Connect Settings resume signal to show MainMenu.
+	# Guard with is_connected — the scene inspector may already wire this.
 	var settings_node := _menu_layer.get_node_or_null("Settings")
-	if settings_node and settings_node.has_signal("resume"):
-		settings_node.resume.connect(_on_settings_resume)
+	if settings_node and settings_node.has_signal("resume") \
+			and not settings_node.resume.is_connected(_on_settings_back):
+		settings_node.resume.connect(_on_settings_back)
 	
 	_multiplayer_controller = MultiplayerController.new()
 	_multiplayer_controller.init(self, NetworkPlayer, starting_point)
@@ -195,6 +197,8 @@ func _ready() -> void:
 	call_deferred("_play_sting")
 	
 	_world_light.visible = Platform.is_compatibility_renderer()
+	ThemeManager.dark_mode_changed.connect(func(_d): _update_world_light_intensity())
+	_update_world_light_intensity()
 	
 	_pause_game()
 
@@ -218,6 +222,10 @@ func _recreate_player() -> void:
 
 func _change_post_processing(post_processing: String) -> void:
 	_crt_post_processing.visible = post_processing == "crt"
+
+func _update_world_light_intensity() -> void:
+	if _world_light:
+		_world_light.light_energy = 0.05 if ThemeManager.is_dark_mode else 0.35
 
 func _start_game() -> void:
 	if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
@@ -343,12 +351,6 @@ func _on_pause_menu_return_to_lobby() -> void:
 
 func _on_settings_back() -> void:
 	_menu_controller.on_settings_back()
-
-# ⚠️ NEW: Handler for Settings resume signal
-func _on_settings_resume() -> void:
-	## Called when Settings panel emits resume (back button pressed)
-	## Shows the MainMenu again
-	_menu_controller.open_main_menu()
 
 # =============================================================================
 # INPUT HANDLING

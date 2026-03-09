@@ -8,18 +8,16 @@ static var default_server_address := "responsible-interactions.gl.at.ply.gg:1896
 const DEFAULT_HOST_NAME := "Host"
 const DEFAULT_PLAYER_NAME := "Player"
 
-const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
-
 enum MenuState { MAIN, HOST, JOIN, LOBBY }
 
 var current_state: MenuState = MenuState.MAIN
-var _serif_font: FontFile = null
+var _serif_font: Font = null
 var _panel_style: StyleBoxFlat = null
 var _closing: bool = false
 
 # The single panel node that slides/fades (mirrors PauseMenu's _panel approach)
-@onready var _panel = get_node_or_null("MarginContainer/CenterContainer/VBoxContainer")
-@onready var _inner_panel = get_node_or_null("MarginContainer/CenterContainer/VBoxContainer/MenuPanel")
+@onready var _panel = get_node_or_null("MarginContainer/Panel")
+@onready var _inner_panel = get_node_or_null("MarginContainer/Panel")
 
 @onready var _main_container = %MainContainer
 @onready var _host_container = %HostContainer
@@ -43,10 +41,18 @@ var _host_pronoun_option: OptionButton = null
 var _host_pronoun_custom: LineEdit = null
 var _join_pronoun_option: OptionButton = null
 var _join_pronoun_custom: LineEdit = null
+# Dividers
+var _dividers: Array[Dictionary] = []
+const _DIVIDERS_BY_CONTAINER := {
+	"MainContainer": ["JoinButton", "BackButton"],
+	"HostContainer": ["HostStartButton", "HostBackButton"],
+	"JoinContainer": ["JoinConnectButton", "JoinBackButton"],
+	"LobbyContainer": ["LobbyStartButton", "LobbyLeaveButton"]
+}
 
 
 func _ready() -> void:
-	_serif_font = load(_FONT_PATH) as FontFile
+	_serif_font = ThemeManager.get_reading_font()
 
 	# Build panel style identical to PauseMenu / VoteHUD
 	if _inner_panel:
@@ -63,16 +69,19 @@ func _ready() -> void:
 
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
 
 	_show_state(MenuState.MAIN)
 	_setup_pronoun_dropdowns()
 	_load_saved_identity()
+	call_deferred("_build_dividers")
 	_animate_in()
 
 
 func _on_visibility_changed() -> void:
 	if visible:
 		_closing = false
+		_apply_theme()
 		_show_state(MenuState.MAIN)
 		_error_label.visible = false
 		%HostButton.grab_focus()
@@ -104,28 +113,42 @@ func _apply_theme() -> void:
 	for container in [_main_container, _host_container, _join_container, _lobby_container]:
 		_style_container_recursive(container)
 
-	# Title label — mirrors PauseMenu's Title node styling
-	var title = %MenuTitle if has_node("%MenuTitle") else null
-	if title:
-		title.add_theme_color_override("font_color", ThemeManager.text_color)
-		title.add_theme_font_size_override("font_size", 32)
+	# Main title (Multiplayer) and section headings (Host Game, Join Game, Lobby)
+	var main_title := _main_container.get_node_or_null("Title") if _main_container else null
+	if main_title is Label:
+		main_title.label_settings = null # Clear override from .tscn
+		main_title.add_theme_color_override("font_color", ThemeManager.text_color)
+		main_title.add_theme_font_size_override("font_size", 32)
 		if _serif_font:
-			title.add_theme_font_override("font", _serif_font)
+			main_title.add_theme_font_override("font", _serif_font)
 
-	# Section heading labels (Host/Join/Lobby subtitles)
-	for path in ["%HostHeading", "%JoinHeading", "%LobbyTitle"]:
-		var node = get_node_or_null(path)
-		if node is Label:
-			node.add_theme_color_override("font_color", ThemeManager.text_color)
-			node.add_theme_font_size_override("font_size", 22)
-			if _serif_font:
-				node.add_theme_font_override("font", _serif_font)
+	for container in [_host_container, _join_container]:
+		if container:
+			var heading: Node = container.get_node_or_null("Title")
+			if heading is Label:
+				heading.label_settings = null # Clear override from .tscn
+				heading.add_theme_color_override("font_color", ThemeManager.text_color)
+				heading.add_theme_font_size_override("font_size", 22)
+				if _serif_font:
+					heading.add_theme_font_override("font", _serif_font)
+	if _lobby_title:
+		_lobby_title.label_settings = null # Clear override from .tscn
+		_lobby_title.add_theme_color_override("font_color", ThemeManager.text_color)
+		_lobby_title.add_theme_font_size_override("font_size", 22)
+		if _serif_font:
+			_lobby_title.add_theme_font_override("font", _serif_font)
 
-	# Error label
+	# Error label (default neutral color; _show_error overrides to red when needed)
 	if _error_label:
+		_error_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
 		if _serif_font:
 			_error_label.add_theme_font_override("font", _serif_font)
 		_error_label.add_theme_font_size_override("font_size", 13)
+
+	for entry in _dividers:
+		var line: ColorRect = entry["line"]
+		if is_instance_valid(line):
+			line.color = ThemeManager.border_color
 
 
 func _style_container_recursive(container: Control) -> void:
@@ -144,6 +167,47 @@ func _style_container_recursive(container: Control) -> void:
 			_style_item_list(child)
 		elif child is Control:
 			_style_container_recursive(child)
+
+
+# ── Dividers ──────────────────────────────────────────────────────────────────
+
+func _build_dividers() -> void:
+	if not _inner_panel: return
+	for cont_name in _DIVIDERS_BY_CONTAINER:
+		var container = get_node_or_null("%" + cont_name)
+		if not container: continue
+		for btn_name in _DIVIDERS_BY_CONTAINER[cont_name]:
+			var btn = container.get_node_or_null(btn_name)
+			if not btn: continue
+			var line := ColorRect.new()
+			line.name = "Div_" + cont_name + "_" + btn_name
+			line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			line.color = ThemeManager.border_color
+			_inner_panel.add_child(line)
+			_dividers.append({"leader": btn, "line": line, "container": container})
+	_update_dividers()
+
+
+func _update_dividers() -> void:
+	if not _inner_panel: return
+	for entry in _dividers:
+		var leader: Control = entry["leader"]
+		var line: ColorRect  = entry["line"]
+		var container: Control = entry["container"]
+		if not is_instance_valid(leader) or not is_instance_valid(line):
+			continue
+		if not leader.visible or not container.visible:
+			line.visible = false
+			continue
+		line.visible = true
+		var y: float = leader.global_position.y - _inner_panel.global_position.y - 4.5
+		line.position = Vector2(16.0, y)
+		line.size     = Vector2(_inner_panel.size.x - 32.0, 1.0)
+
+
+func _process(_delta: float) -> void:
+	if visible and not _dividers.is_empty():
+		_update_dividers()
 
 
 func _style_label(lbl: Label) -> void:
@@ -247,28 +311,10 @@ func _style_line_edit(edit: LineEdit) -> void:
 
 
 func _style_option_button(btn: OptionButton) -> void:
-	_style_button(btn)
-
-	var popup := btn.get_popup()
-	if popup:
-		var dark := ThemeManager.is_dark_mode
-
-		var popup_bg := StyleBoxFlat.new()
-		popup_bg.bg_color = ThemeManager.bg_color
-		popup_bg.border_color = ThemeManager.border_color
-		popup_bg.border_width_left = 1
-		popup_bg.border_width_right = 1
-		popup_bg.border_width_top = 1
-		popup_bg.border_width_bottom = 1
-		popup_bg.set_corner_radius_all(5)
-		popup.add_theme_stylebox_override("panel", popup_bg)
-
-		popup.add_theme_color_override("font_color", ThemeManager.text_color)
-		popup.add_theme_color_override("font_hover_color", ThemeManager.text_color)
-
-		var popup_hover := StyleBoxFlat.new()
-		popup_hover.bg_color = Color(1, 1, 1, 0.06) if dark else Color(ThemeManager.border_color, 0.5)
-		popup.add_theme_stylebox_override("hover", popup_hover)
+	ThemeManager.style_option_button(btn)
+	if _serif_font:
+		btn.add_theme_font_override("font", _serif_font)
+		btn.get_popup().add_theme_font_override("font", _serif_font)
 
 
 # ── Animations ────────────────────────────────────────────────────────────────

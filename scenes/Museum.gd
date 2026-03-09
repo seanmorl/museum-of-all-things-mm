@@ -36,6 +36,7 @@ var _queue_running: bool = false
 var _global_item_queue_map: Dictionary = {}
 var _fog_tween: Tween = null
 var _queue_timer: Timer = null
+var _disco_hue: float = 0.0
 
 # =============================================================================
 # SUBSYSTEMS
@@ -185,6 +186,12 @@ func _ready() -> void:
 	UIEvents.reset_custom_door.connect(_reset_custom_door)
 	UIEvents.set_custom_door.connect(_set_custom_door)
 	SettingsEvents.language_changed.connect(_on_change_language)
+	ThemeManager.dark_mode_changed.connect(func(_d): _update_lighting())
+	
+	if TwitchManager:
+		TwitchManager.color_change_requested.connect(_on_twitch_color_requested)
+	
+	ThemeManager.disco_mode_changed.connect(_on_disco_mode_changed)
 
 
 func init(player: Node) -> void:
@@ -339,10 +346,34 @@ func _tween_fog_color(fog_color: Color, mood: int = ExhibitMood.Mood.DEFAULT) ->
 	_fog_tween.tween_property(environment, "fog_density", 10.0 / target_depth, 1.0)
 
 	# Ambient light
+	var is_dark = ThemeManager.is_dark_mode
 	var target_ambient_color: Color = ExhibitMood.get_ambient_color(mood)
-	var target_ambient_energy: float = ExhibitMood.get_ambient_energy(mood)
+	var target_ambient_energy: float = ExhibitMood.get_adjusted_ambient_energy(mood, is_dark)
 	_fog_tween.tween_property(environment, "ambient_light_color", target_ambient_color, 1.0)
 	_fog_tween.tween_property(environment, "ambient_light_energy", target_ambient_energy, 1.0)
+
+
+func _update_lighting() -> void:
+	var mood: int = _get_exhibit_mood(_current_room_title)
+	_tween_fog_color(ExhibitStyle.gen_fog(_current_room_title), mood)
+
+
+func _on_twitch_color_requested(color: Color) -> void:
+	if not _multiplayer_sync.is_local_player(_player) and NetworkManager.is_multiplayer_active():
+		return # Only host/local player processes Twitch input for the museum state
+		
+	var environment: Environment = $WorldEnvironment.environment
+	if _fog_tween and _fog_tween.is_valid():
+		_fog_tween.kill()
+	_fog_tween = create_tween()
+	_fog_tween.tween_property(environment, "ambient_light_color", color, 2.0)
+	_fog_tween.parallel().tween_property(environment, "ambient_light_energy", 0.5, 2.0)
+
+
+func _on_disco_mode_changed(enabled: bool) -> void:
+	if not enabled:
+		# Immediately restore the intended museum atmosphere
+		_update_lighting()
 
 
 # =============================================================================
@@ -432,6 +463,27 @@ func sync_to_exhibit(exhibit_title: String) -> void:
 # =============================================================================
 # ITEM QUEUE SYSTEM
 # =============================================================================
+func _process(delta: float) -> void:
+	if ThemeManager.disco_mode:
+		_disco_hue = fmod(_disco_hue + delta * 0.5, 1.0)
+		var disco_color = Color.from_hsv(_disco_hue, 0.8, 0.8)
+		get_node("WorldEnvironment").environment.ambient_light_color = disco_color
+		get_node("WorldEnvironment").environment.ambient_light_energy = 0.6 # Brighter during disco!
+
+	var queue: Array = _global_item_queue_map.get(_current_room_title, [])
+	if queue.is_empty():
+		_queue_running = false
+		return
+	var batch: int = 5 if Platform.is_web() else 1
+	for _i in batch:
+		if queue.is_empty():
+			break
+		var callable: Callable = queue.pop_front()
+		callable.call()
+	_queue_running = true
+	_queue_timer.start()
+
+
 func _process_item_queue() -> void:
 	var queue: Array = _global_item_queue_map.get(_current_room_title, [])
 	if queue.is_empty():

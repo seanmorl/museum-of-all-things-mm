@@ -10,15 +10,15 @@ signal resume
 	_vbox.get_node("DataSettings") if not Platform.is_web() else null,
 	_build_multiplayer_settings(),
 	_build_accessibility_settings(),
+	_build_twitch_settings(),
 ]
 
-var _serif_font: FontFile = null
-const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
+var _serif_font: Font = null
 var _content_panel_style: StyleBoxFlat = null
 var _current_tab: int = 0
 
 func _ready() -> void:
-	_serif_font = load(_FONT_PATH) as FontFile
+	_serif_font = ThemeManager.get_reading_font()
 	UIEvents.ui_cancel_pressed.connect(_on_resume)
 	for i in range(_tab_scenes.size()):
 		if _tab_scenes[i] == null:
@@ -26,6 +26,7 @@ func _ready() -> void:
 			_tab_bar.set_tab_hidden(i, true)
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
 
 func _apply_theme() -> void:
 	## Apply ThemeManager colors to the settings panel and tab bar.
@@ -38,7 +39,12 @@ func _apply_theme() -> void:
 	bg.shadow_color = Color(0, 0, 0, 0.30 if ThemeManager.is_dark_mode else 0.10)
 	bg.shadow_size = 14
 	bg.shadow_offset = Vector2(0, 5)
-	if get_node_or_null("ScrollContainer") is ScrollContainer:
+	var panel := get_node_or_null("ScrollContainer/MarginContainer/Panel")
+	if panel:
+		panel.add_theme_stylebox_override("panel", bg)
+	
+	# Fallback for ScrollContainer itself if no Panel is found
+	if not panel and get_node_or_null("ScrollContainer") is ScrollContainer:
 		get_node("ScrollContainer").add_theme_stylebox_override("panel", bg)
 	
 	if _tab_bar:
@@ -48,38 +54,169 @@ func _apply_theme() -> void:
 		if _serif_font:
 			_tab_bar.add_theme_font_override("font", _serif_font)
 		_tab_bar.add_theme_font_size_override("font_size", 14)
+		
+		# Ensure tab bar itself has no white background
+		var tab_bg := StyleBoxEmpty.new()
+		_tab_bar.add_theme_stylebox_override("tab_unselected", tab_bg)
+		_tab_bar.add_theme_stylebox_override("tab_selected", tab_bg)
+		_tab_bar.add_theme_constant_override("h_separation", 45)
+		_tab_bar.clip_tabs = false
+		
+		var hover_style := StyleBoxFlat.new()
+		hover_style.bg_color = Color(1, 1, 1, 0.05) if ThemeManager.is_dark_mode else Color(0, 0, 0, 0.05)
+		hover_style.set_corner_radius_all(4)
+		hover_style.content_margin_left = 12
+		hover_style.content_margin_right = 12
+		_tab_bar.add_theme_stylebox_override("tab_hovered", hover_style)
+		
+		# Add a subtle indicator for the selected tab
+		var selected_style := StyleBoxFlat.new()
+		selected_style.bg_color = Color(0, 0, 0, 0)
+		selected_style.border_color = Color(0.3, 0.5, 0.9) # blue underline
+		selected_style.border_width_bottom = 2
+		selected_style.content_margin_left = 12
+		selected_style.content_margin_right = 12
+		_tab_bar.add_theme_stylebox_override("tab_selected", selected_style)
+		
+		var unselected_style := StyleBoxEmpty.new()
+		unselected_style.content_margin_left = 12
+		unselected_style.content_margin_right = 12
+		_tab_bar.add_theme_stylebox_override("tab_unselected", unselected_style)
 
+	# Style the Back button
+	var back_btn := get_node_or_null("ScrollContainer/MarginContainer/VBoxContainer/HBoxContainer/BackButton") as Button
+	if back_btn:
+		_style_top_button(back_btn)
+
+	# Style separators
+	var h_sep := get_node_or_null("ScrollContainer/MarginContainer/VBoxContainer/HSeparator") as HSeparator
+	if h_sep:
+		var sep_style := StyleBoxLine.new()
+		sep_style.color = ThemeManager.border_color
+		sep_style.thickness = 1
+		h_sep.add_theme_stylebox_override("separator", sep_style)
+
+	_theme_control_tree(_vbox)
 	for scene in _tab_scenes:
 		if scene is Control:
 			_theme_control_tree(scene)
 
 func _theme_control_tree(node: Node) -> void:
 	if node is Label:
-		var lbl := node as Label
-		var role := lbl.get_meta("settings_role", "body") as String
-		match role:
-			"heading":
-				lbl.add_theme_color_override("font_color", ThemeManager.text_color)
-				lbl.add_theme_font_size_override("font_size", 18)
-			"hint":
-				lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
-			_:
-				lbl.add_theme_color_override("font_color", ThemeManager.text_color)
+		node.label_settings = null # Ensure theme overrides work
+		node.add_theme_color_override("font_color", ThemeManager.text_color)
+		if node.get_meta("settings_role", "") == "hint":
+			node.add_theme_color_override("font_color", ThemeManager.subtext_color)
 		if _serif_font:
-			lbl.add_theme_font_override("font", _serif_font)
-	elif node is Button or node is CheckButton:
+			node.add_theme_font_override("font", _serif_font)
+	elif node is Button:
+		_style_top_button(node)
+	elif node is OptionButton:
+		ThemeManager.style_option_button(node)
+		if _serif_font:
+			node.add_theme_font_override("font", _serif_font)
+			node.get_popup().add_theme_font_override("font", _serif_font)
+	elif node is CheckBox:
+		node.add_theme_color_override("font_color", ThemeManager.text_color)
+		node.add_theme_color_override("font_hover_color", ThemeManager.text_color)
+		node.add_theme_color_override("font_pressed_color", ThemeManager.text_color)
+		var empty := StyleBoxEmpty.new()
+		for state in ["normal", "pressed", "disabled", "hover", "focus"]:
+			node.add_theme_stylebox_override(state, empty)
+	elif node is Separator:
+		var sep_style := StyleBoxLine.new()
+		sep_style.color = ThemeManager.border_color
+		sep_style.thickness = 1
+		node.add_theme_stylebox_override("separator", sep_style)
+	elif node is PanelContainer:
+		var panel_style := StyleBoxEmpty.new()
+		node.add_theme_stylebox_override("panel", panel_style)
+	elif node is CheckButton:
 		var btn := node as BaseButton
 		for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 			btn.add_theme_color_override(state, ThemeManager.text_color)
 		if _serif_font:
 			btn.add_theme_font_override("font", _serif_font)
-		for child in node.get_children():
-			_theme_control_tree(child)
+		var empty := StyleBoxEmpty.new()
+		for state in ["normal", "pressed", "disabled", "hover", "focus"]:
+			btn.add_theme_stylebox_override(state, empty)
+	elif node is LineEdit:
+		_style_line_edit(node)
+	elif node is SpinBox:
+		var edit: LineEdit = node.get_line_edit()
+		if edit:
+			_style_line_edit(edit)
+	
+	for child in node.get_children():
+		_theme_control_tree(child)
+
+
+func _style_top_button(btn: Button) -> void:
+	## Styles smaller utility buttons like 'Back' or 'Restore' 
+	if not btn: return
+	var dark := ThemeManager.is_dark_mode
+	btn.add_theme_color_override("font_color", ThemeManager.text_color)
+	btn.add_theme_color_override("font_hover_color", ThemeManager.text_color)
+	btn.add_theme_color_override("font_pressed_color", ThemeManager.text_color)
+	btn.add_theme_font_size_override("font_size", 14)
+	if _serif_font:
+		btn.add_theme_font_override("font", _serif_font)
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0,0,0,0)
+	normal.border_color = ThemeManager.border_color
+	normal.border_width_left = 1; normal.border_width_right = 1
+	normal.border_width_top = 1; normal.border_width_bottom = 1
+	normal.set_corner_radius_all(4)
+	normal.content_margin_left = 12; normal.content_margin_right = 12
+	normal.content_margin_top = 4; normal.content_margin_bottom = 4
+	
+	btn.add_theme_stylebox_override("normal", normal)
+	
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(1,1,1,0.05) if dark else Color(0,0,0,0.05)
+	btn.add_theme_stylebox_override("hover", hover)
+	
+	var pressed := normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color(1,1,1,0.1) if dark else Color(0,0,0,0.1)
+	btn.add_theme_stylebox_override("pressed", pressed)
+
+
+func _style_line_edit(edit: LineEdit) -> void:
+	var dark := ThemeManager.is_dark_mode
+	if _serif_font:
+		edit.add_theme_font_override("font", _serif_font)
+	edit.add_theme_font_size_override("font_size", 14)
+
+	edit.add_theme_color_override("font_color", ThemeManager.text_color)
+	edit.add_theme_color_override("font_placeholder_color", ThemeManager.subtext_color)
+
+	var sn := StyleBoxFlat.new()
+	sn.bg_color = Color(0, 0, 0, 0.2) if dark else Color(1, 1, 1, 0.8)
+	sn.border_color = ThemeManager.border_color
+	sn.border_width_left = 1; sn.border_width_right = 1
+	sn.border_width_top = 1; sn.border_width_bottom = 1
+	sn.set_corner_radius_all(4)
+	sn.content_margin_left = 8; sn.content_margin_right = 8
+	sn.content_margin_top = 4; sn.content_margin_bottom = 4
+	edit.add_theme_stylebox_override("normal", sn)
+
+	var sf := sn.duplicate() as StyleBoxFlat
+	sf.border_color = ThemeManager.text_color
+	sf.border_width_left = 2; sf.border_width_right = 2
+	sf.border_width_top = 2; sf.border_width_bottom = 2
+	edit.add_theme_stylebox_override("focus", sf)
 
 func _on_visibility_changed() -> void:
 	if visible:
+		# Hide all tab scenes initially to prevent layout overlap/borking
+		for scene in _tab_scenes:
+			if scene:
+				scene.visible = false
+		
 		_apply_theme()
 		_tab_bar.set_current_tab(0)
+		_on_tab_bar_tab_changed(0) # Explicitly show first tab
 		_tab_bar.grab_focus()
 		var scroll := get_node_or_null("ScrollContainer") as Control
 		if scroll:
@@ -90,6 +227,11 @@ func _on_visibility_changed() -> void:
 			tw.tween_property(scroll, "modulate:a", 1.0, 0.30)
 			tw.tween_property(scroll, "position:y", 0.0, 0.30) \
 				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		_on_resume()
 
 func _on_tab_bar_tab_changed(tab: int) -> void:
 	var prev_scene: Control = _tab_scenes[_current_tab] if _current_tab < _tab_scenes.size() else null
@@ -198,8 +340,7 @@ func _build_multiplayer_settings() -> Control:
 
 	var hint := Label.new()
 	hint.text = "Hides the chat overlay while playing."
-	hint.add_theme_font_size_override("font_size", 11)
-	hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1.0))
+	hint.set_meta("settings_role", "hint")
 	container.add_child(hint)
 
 	var sound_on: bool = true
@@ -219,8 +360,7 @@ func _build_multiplayer_settings() -> Control:
 
 	var sound_hint := Label.new()
 	sound_hint.text = "Plays a subtle sound on each keypress in the chat box."
-	sound_hint.add_theme_font_size_override("font_size", 11)
-	sound_hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1.0))
+	sound_hint.set_meta("settings_role", "hint")
 	container.add_child(sound_hint)
 
 	var keybind_row := HBoxContainer.new()
@@ -239,8 +379,7 @@ func _build_multiplayer_settings() -> Control:
 
 	var key_hint := Label.new()
 	key_hint.text = "Press the button then press any key to rebind."
-	key_hint.add_theme_font_size_override("font_size", 11)
-	key_hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1.0))
+	key_hint.set_meta("settings_role", "hint")
 	container.add_child(key_hint)
 
 	_tab_bar.add_tab("Interface")
@@ -304,57 +443,8 @@ func _on_resume() -> void:
 		visible = false
 		resume.emit()
 
-# =============================================================================
-# DROPDOWN STYLING — mirrors GraphicsSettings for visual consistency
-# =============================================================================
-
 func _style_option_button(btn: OptionButton) -> void:
-	## Flat, rounded dropdown style matching GraphicsSettings.gd.
-	if not btn:
-		return
-	var normal := StyleBoxFlat.new()
-	normal.bg_color         = Color(0.97, 0.97, 0.97, 1.0)
-	normal.border_color     = Color(0.72, 0.72, 0.72, 1.0)
-	for s in ["left","right","top","bottom"]:
-		normal.set("border_width_" + s, 1)
-	for c in ["top_left","top_right","bottom_left","bottom_right"]:
-		normal.set("corner_radius_" + c, 5)
-	normal.content_margin_left   = 10
-	normal.content_margin_right  = 28
-	normal.content_margin_top    = 5
-	normal.content_margin_bottom = 5
-
-	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color     = Color(0.92, 0.93, 0.98, 1.0)
-	hover.border_color = Color(0.50, 0.55, 0.85, 1.0)
-
-	var pressed := normal.duplicate() as StyleBoxFlat
-	pressed.bg_color     = Color(0.88, 0.90, 0.97, 1.0)
-	pressed.border_color = Color(0.40, 0.45, 0.80, 1.0)
-
-	var focus := normal.duplicate() as StyleBoxFlat
-	focus.border_color = Color(0.40, 0.45, 0.80, 1.0)
-	for s in ["left","right","top","bottom"]:
-		focus.set("border_width_" + s, 2)
-
-	btn.add_theme_stylebox_override("normal",  normal)
-	btn.add_theme_stylebox_override("hover",   hover)
-	btn.add_theme_stylebox_override("pressed", pressed)
-	btn.add_theme_stylebox_override("focus",   focus)
-	btn.add_theme_font_size_override("font_size", 13)
-
-	var popup_style := StyleBoxFlat.new()
-	popup_style.bg_color     = Color(0.98, 0.98, 0.98, 1.0)
-	popup_style.border_color = Color(0.70, 0.70, 0.70, 1.0)
-	for s in ["left","right","top","bottom"]:
-		popup_style.set("border_width_" + s, 1)
-	for c in ["top_left","top_right","bottom_left","bottom_right"]:
-		popup_style.set("corner_radius_" + c, 5)
-	popup_style.shadow_color  = Color(0, 0, 0, 0.12)
-	popup_style.shadow_size   = 8
-	popup_style.shadow_offset = Vector2(0, 3)
-	btn.get_popup().add_theme_stylebox_override("panel", popup_style)
-	btn.get_popup().add_theme_font_size_override("font_size", 13)
+	ThemeManager.style_option_button(btn)
 
 
 
@@ -425,7 +515,7 @@ func _build_accessibility_settings() -> Control:
 		_save_accessibility("screen_reader_verbosity", idx)
 		_apply_screen_reader(saved.get("screen_reader", false))
 	)
-	_style_option_button(sr_option)
+	ThemeManager.style_option_button(sr_option)
 	sr_verbosity_row.add_child(sr_option)
 	container.add_child(sr_verbosity_row)
 
@@ -447,9 +537,10 @@ func _build_accessibility_settings() -> Control:
 	font_option.selected = font_choice
 	font_option.item_selected.connect(func(idx: int):
 		_save_accessibility("reading_font", idx)
+		ThemeManager.set_reading_font(idx)
 		_emit_accessibility_event("reading_font", idx)
 	)
-	_style_option_button(font_option)
+	ThemeManager.style_option_button(font_option)
 	font_row.add_child(font_option)
 	container.add_child(font_row)
 	container.add_child(_hint.call(
@@ -514,7 +605,7 @@ func _build_accessibility_settings() -> Control:
 		_save_accessibility("colorblind_mode", idx)
 		_apply_colorblind_filter(idx)
 	)
-	_style_option_button(cb_option)
+	ThemeManager.style_option_button(cb_option)
 	cb_row.add_child(cb_option)
 	container.add_child(cb_row)
 	container.add_child(_hint.call(
@@ -552,12 +643,121 @@ func _build_accessibility_settings() -> Control:
 
 	var ph_on: bool = saved.get("persistent_hints", false)
 	container.add_child(_toggle.call("Keep hints visible", ph_on,
-		func(on: bool): _save_accessibility("persistent_hints", on)
+		func(on: bool):
+			_save_accessibility("persistent_hints", on)
+			_emit_accessibility_event("persistent_hints", on)
 	))
 	container.add_child(_hint.call(
 		"Hint banners stay on screen until the race ends instead of fading after a few seconds."))
 
+	# Secret Disco Button
+	var disco_row := HBoxContainer.new()
+	disco_row.alignment = BoxContainer.ALIGNMENT_END
+	var disco_btn := Button.new()
+	disco_btn.text = "°" # Very tiny secret
+	disco_btn.flat = true
+	disco_btn.modulate.a = 0.2
+	disco_btn.pressed.connect(func():
+		ThemeManager.set_disco_mode(not ThemeManager.disco_mode)
+		Log.info("Settings", "🕺 Disco Mode: %s" % ThemeManager.disco_mode)
+	)
+	disco_row.add_child(disco_btn)
+	container.add_child(disco_row)
+
 	_tab_bar.add_tab("Accessibility")
+	return container
+
+
+func _build_twitch_settings() -> Control:
+	var container := VBoxContainer.new()
+	container.name = "TwitchSettings"
+	container.add_theme_constant_override("separation", 14)
+	_vbox.add_child(container)
+
+	var h := Label.new()
+	h.text = "Twitch Integration"
+	h.add_theme_font_size_override("font_size", 18)
+	container.add_child(h)
+
+	var hint := Label.new()
+	hint.text = "Connect to Twitch chat to allow viewers to vote for the race target and change ambient lighting colors."
+	hint.set_meta("settings_role", "hint")
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	container.add_child(hint)
+
+	var channel_row := HBoxContainer.new()
+	var lbl := Label.new()
+	lbl.text = "Twitch Channel"
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	channel_row.add_child(lbl)
+
+	var edit := LineEdit.new()
+	edit.placeholder_text = "channel_name"
+	edit.custom_minimum_size = Vector2(200, 0)
+	var saved = SettingsManager.get_settings("twitch")
+	if saved and saved.has("channel"):
+		edit.text = saved.channel
+	channel_row.add_child(edit)
+	container.add_child(channel_row)
+
+	var status_lbl := Label.new()
+	status_lbl.text = "Status: Disconnected"
+	status_lbl.set_meta("settings_role", "hint")
+	container.add_child(status_lbl)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_END
+	var connect_btn := Button.new()
+	connect_btn.text = "Connect"
+	
+	var update_ui = func():
+		if TwitchManager.is_connected:
+			connect_btn.text = "Disconnect"
+			status_lbl.text = "Status: Connected to #%s" % TwitchManager.channel_name
+			status_lbl.modulate = Color(0.4, 1.0, 0.4)
+		else:
+			connect_btn.text = "Connect"
+			status_lbl.text = "Status: Disconnected"
+			status_lbl.modulate = Color(1.0, 0.4, 0.4)
+
+	connect_btn.pressed.connect(func():
+		if TwitchManager.is_connected:
+			TwitchManager.disconnect_from_twitch()
+		else:
+			if edit.text.is_empty(): return
+			SettingsManager.save_settings("twitch", {"channel": edit.text})
+			TwitchManager.connect_to_twitch(edit.text)
+		update_ui.call()
+	)
+	
+	btn_row.add_child(connect_btn)
+	container.add_child(btn_row)
+	
+	container.add_child(HSeparator.new())
+	
+	var guide_h := Label.new()
+	guide_h.text = "How to integrate:"
+	guide_h.add_theme_font_size_override("font_size", 16)
+	container.add_child(guide_h)
+	
+	var guide := Label.new()
+	guide.text = "• Enter your Twitch channel name above and hit [Connect].\n" + \
+				 "• Connection is anonymous — no login or authorization required!\n" + \
+				 "• Once connected, your chat can interact with the game using these commands:\n\n" + \
+				 "    1, 2, 3, 4, 5 — Vote for candidates during a race start.\n" + \
+				 "    !color <name/hex> — Change the museum's ambient lighting.\n" + \
+				 "    !start <article> — Suggest a starting exhibit when in the lobby."
+	guide.set_meta("settings_role", "hint")
+	guide.autowrap_mode = TextServer.AUTOWRAP_WORD
+	container.add_child(guide)
+
+	# Listen for external disconnects
+	TwitchManager.connected.connect(update_ui)
+	TwitchManager.disconnected.connect(update_ui)
+	
+	update_ui.call()
+
+	# _tab_bar.add_tab("Twitch") # Hidden from user as it's still WIP
 	return container
 
 

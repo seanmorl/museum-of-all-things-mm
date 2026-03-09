@@ -2,7 +2,7 @@ extends VBoxContainer
 
 signal resume
 
-enum ScaleMode { BILINEAR, FSR1, FSR2 }
+enum ScaleMode { BILINEAR, FSR1, FSR2, NEAREST }
 
 var post_processing_options: Array[String] = ["none", "crt"]
 
@@ -40,6 +40,14 @@ var post_processing_options: Array[String] = ["none", "crt"]
 # Post-processing options
 @onready var post_processing_effect: OptionButton = %PostProcessingEffect
 
+# Anti-Aliasing options
+@onready var msaa_option: OptionButton = %MSAAOption
+@onready var use_fxaa_check: CheckBox = %UseFXAACheck
+@onready var use_taa_check: CheckBox = %UseTAACheck
+
+# Texture Filtering
+@onready var anisotropy_option: OptionButton = %AnisotropyOption
+
 var _loaded_settings: bool = false
 
 # ── SSR (Screen-Space Reflections) runtime nodes — built in _ready ────────────
@@ -71,55 +79,7 @@ func _ready() -> void:
 # =============================================================================
 
 func _style_option_button(btn: OptionButton) -> void:
-	## Applies a consistent flat/modern style to a single OptionButton.
-	## Rounded corners, border, subtle shadow, readable font size.
-	if not btn:
-		return
-
-	var normal := StyleBoxFlat.new()
-	normal.bg_color         = Color(0.97, 0.97, 0.97, 1.0)
-	normal.border_color     = Color(0.72, 0.72, 0.72, 1.0)
-	for s in ["left","right","top","bottom"]:
-		normal.set("border_width_" + s, 1)
-	for c in ["top_left","top_right","bottom_left","bottom_right"]:
-		normal.set("corner_radius_" + c, 5)
-	normal.content_margin_left  = 10
-	normal.content_margin_right = 28
-	normal.content_margin_top   = 5
-	normal.content_margin_bottom = 5
-
-	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color     = Color(0.92, 0.93, 0.98, 1.0)
-	hover.border_color = Color(0.50, 0.55, 0.85, 1.0)
-
-	var pressed := normal.duplicate() as StyleBoxFlat
-	pressed.bg_color     = Color(0.88, 0.90, 0.97, 1.0)
-	pressed.border_color = Color(0.40, 0.45, 0.80, 1.0)
-
-	var focus := normal.duplicate() as StyleBoxFlat
-	focus.border_color = Color(0.40, 0.45, 0.80, 1.0)
-	for s in ["left","right","top","bottom"]:
-		focus.set("border_width_" + s, 2)
-
-	btn.add_theme_stylebox_override("normal",  normal)
-	btn.add_theme_stylebox_override("hover",   hover)
-	btn.add_theme_stylebox_override("pressed", pressed)
-	btn.add_theme_stylebox_override("focus",   focus)
-	btn.add_theme_font_size_override("font_size", 13)
-
-	# Style the popup panel too
-	var popup_style := StyleBoxFlat.new()
-	popup_style.bg_color     = Color(0.98, 0.98, 0.98, 1.0)
-	popup_style.border_color = Color(0.70, 0.70, 0.70, 1.0)
-	for s in ["left","right","top","bottom"]:
-		popup_style.set("border_width_" + s, 1)
-	for c in ["top_left","top_right","bottom_left","bottom_right"]:
-		popup_style.set("corner_radius_" + c, 5)
-	popup_style.shadow_color  = Color(0, 0, 0, 0.12)
-	popup_style.shadow_size   = 8
-	popup_style.shadow_offset = Vector2(0, 3)
-	btn.get_popup().add_theme_stylebox_override("panel", popup_style)
-	btn.get_popup().add_theme_font_size_override("font_size", 13)
+	ThemeManager.style_option_button(btn)
 
 
 func _style_all_option_buttons() -> void:
@@ -196,7 +156,7 @@ func _build_ssr_section() -> void:
 	var heading := Label.new()
 	heading.text = "SSR Fine Tuning"
 	heading.add_theme_font_size_override("font_size", 12)
-	heading.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1.0))
+	heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	ref_options.add_child(heading)
 
 	# ── Max Steps (already exposed as ReflectionQuality — we keep it) ──
@@ -245,7 +205,7 @@ func _build_ssr_section() -> void:
 	var ssao_heading := Label.new()
 	ssao_heading.text = "SSAO (Ambient Occlusion)"
 	ssao_heading.add_theme_font_size_override("font_size", 12)
-	ssao_heading.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1.0))
+	ssao_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	ref_options.add_child(ssao_heading)
 
 	var ssao_check := CheckBox.new()
@@ -294,7 +254,7 @@ func _build_ssr_section() -> void:
 	var sdfgi_heading := Label.new()
 	sdfgi_heading.text = "SDFGI (Global Illumination)"
 	sdfgi_heading.add_theme_font_size_override("font_size", 12)
-	sdfgi_heading.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1.0))
+	sdfgi_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	ref_options.add_child(sdfgi_heading)
 
 	var sdfgi_check := CheckBox.new()
@@ -306,7 +266,7 @@ func _build_ssr_section() -> void:
 	var sdfgi_hint := Label.new()
 	sdfgi_hint.text = "High quality GI — significantly impacts performance on lower-end hardware."
 	sdfgi_hint.add_theme_font_size_override("font_size", 10)
-	sdfgi_hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	sdfgi_hint.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	sdfgi_hint.autowrap_mode = TextServer.AUTOWRAP_WORD
 	ref_options.add_child(sdfgi_hint)
 
@@ -326,7 +286,7 @@ func _build_ssr_section() -> void:
 	var glow_heading := Label.new()
 	glow_heading.text = "Glow"
 	glow_heading.add_theme_font_size_override("font_size", 12)
-	glow_heading.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1.0))
+	glow_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	ref_options.add_child(glow_heading)
 
 	var glow_check := CheckBox.new()
@@ -359,7 +319,7 @@ func _build_ssr_section() -> void:
 	var tm_heading := Label.new()
 	tm_heading.text = "Tone Mapping"
 	tm_heading.add_theme_font_size_override("font_size", 12)
-	tm_heading.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1.0))
+	tm_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	ref_options.add_child(tm_heading)
 
 	var tm_mode_btn := OptionButton.new()
@@ -435,6 +395,19 @@ func _load_settings() -> void:
 	var idx = post_processing_options.find(post_processing)
 	post_processing_effect.select(idx if idx >= 0 else 0)
 
+	# Anti-Aliasing
+	msaa_option.selected = GraphicsManager.msaa_3d
+	use_fxaa_check.button_pressed = GraphicsManager.use_fxaa
+	use_taa_check.button_pressed = GraphicsManager.use_taa
+
+	# Texture Filtering
+	match GraphicsManager.anisotropy_level:
+		1: anisotropy_option.selected = 0
+		2: anisotropy_option.selected = 1
+		4: anisotropy_option.selected = 2
+		8: anisotropy_option.selected = 3
+		16: anisotropy_option.selected = 4
+
 	# Refresh SSR fine-tuning sliders if they exist (built in _ready via _build_ssr_section)
 	if _ssr_fade_in_label:
 		_ssr_fade_in_label.text = "%.2f" % e.ssr_fade_in
@@ -496,12 +469,13 @@ func _update_scaling() -> void:
 	var selected_scale_mode: int = scale_mode.selected
 	GraphicsManager.set_scale_mode(selected_scale_mode)
 
-	# Show render scale if bilinear, FSR options otherwise
-	render_scale.visible = (selected_scale_mode == ScaleMode.BILINEAR)
-	get_tree().set_group("fsr_options", "visible", (selected_scale_mode != ScaleMode.BILINEAR))
+	# Show render scale if bilinear/nearest, FSR options otherwise
+	render_scale.visible = (selected_scale_mode == ScaleMode.BILINEAR or selected_scale_mode == ScaleMode.NEAREST)
+	get_tree().set_group("fsr_options", "visible", (selected_scale_mode != ScaleMode.BILINEAR and selected_scale_mode != ScaleMode.NEAREST))
 
-	if selected_scale_mode == ScaleMode.BILINEAR:
+	if selected_scale_mode == ScaleMode.BILINEAR or selected_scale_mode == ScaleMode.NEAREST:
 		GraphicsManager.set_render_scale(render_scale.value)
+		_update_render_scale_label(render_scale.value)
 		return
 
 	# FSR
@@ -516,10 +490,18 @@ func _update_scaling() -> void:
 
 	var current_scale = get_viewport().scaling_3d_scale
 	render_scale.value = current_scale
-	render_scale_value.text = "%.0f %%\n" % (current_scale * 100)
+	_update_render_scale_label(current_scale)
+
+func _update_render_scale_label(value: float) -> void:
+	## Shows percentage with an SSAA badge when scale exceeds 100% (supersampling).
+	var pct := int(round(value * 100.0))
+	if value > 1.0:
+		render_scale_value.text = "%d%% (SSAA)" % pct
+	else:
+		render_scale_value.text = "%d%%" % pct
 
 func _on_render_scale_value_changed(value: float) -> void:
-	render_scale_value.text = "%d %%\n" % (value * 100)
+	_update_render_scale_label(value)
 	_update_scaling()
 
 func _on_scale_mode_value_changed(value: int) -> void:
@@ -528,6 +510,9 @@ func _on_scale_mode_value_changed(value: int) -> void:
 			fsr_quality.select(0)
 		ScaleMode.FSR2:
 			fsr_quality.select(1)
+		ScaleMode.NEAREST:
+			# Reset to 1.0 so pixel-perfect retro rendering is the default.
+			render_scale.value = 1.0
 
 	_update_scaling()
 
@@ -544,3 +529,22 @@ func _on_post_processing_effect_item_selected(index: int) -> void:
 func _on_render_distance_value_changed(value: float) -> void:
 	render_distance_value.text = "%dm" % int(value * 30)
 	GraphicsManager.set_render_distance_multiplier(value)
+
+func _on_msaa_option_item_selected(index: int) -> void:
+	GraphicsManager.set_msaa_3d(index)
+
+func _on_use_fxaa_check_toggled(toggled_on: bool) -> void:
+	GraphicsManager.set_use_fxaa(toggled_on)
+
+func _on_use_taa_check_toggled(toggled_on: bool) -> void:
+	GraphicsManager.set_use_taa(toggled_on)
+
+func _on_anisotropy_option_item_selected(index: int) -> void:
+	var level: int = 4
+	match index:
+		0: level = 1
+		1: level = 2
+		2: level = 4
+		3: level = 8
+		4: level = 16
+	GraphicsManager.set_anisotropy_level(level)

@@ -4,6 +4,7 @@ signal resume
 signal settings
 signal vr_controls
 signal return_to_lobby
+signal return_to_main
 signal start_race
 
 const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
@@ -18,8 +19,9 @@ const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-Semi
 # The confirmation panel shown when the player presses Quit.
 @onready var _quit_container  = get_node_or_null("MarginContainer/CenterContainer/QuitContainer")
 
-var _serif_font: FontFile = null
+var _serif_font: Font = null
 var _panel_style: StyleBoxFlat = null
+var _quit_panel_style: StyleBoxFlat = null
 var _closing: bool = false
 var _race_control_override: bool = false
 var current_room: String = "Lobby"
@@ -34,10 +36,10 @@ var _loading_overlay: Control = null
 # Group leaders: a divider line is placed just above each of these nodes.
 # Names matched to the actual tscn — "Lobby" is the Return to Lobby button,
 # "AskQuit" is the Quit button visible in the pause panel.
-const _GROUP_LEADERS := ["Lobby", "Settings", "DarkMode"]
+const _GROUP_LEADERS := ["Resume", "Open", "Race", "CancelRace", "Lobby", "Settings", "Language", "DarkMode", "ReturnToMain", "AskQuit"]
 
 func _ready() -> void:
-	_serif_font = load(_FONT_PATH) as FontFile
+	_serif_font = ThemeManager.get_reading_font()
 
 	# Hide the spacer Labels that cause excessive gaps between button groups.
 	# These are empty Labels used as crude spacers in the scene; we replace
@@ -62,6 +64,7 @@ func _ready() -> void:
 
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
 
 	if Platform.is_web():
 		var aq = get_node_or_null("%AskQuit")
@@ -197,19 +200,83 @@ func _apply_theme() -> void:
 		_panel_style.shadow_color  = Color(0, 0, 0, 0.35 if dark else 0.12)
 		_panel_style.shadow_size   = 16
 		_panel_style.shadow_offset = Vector2(0, 6)
+		_panel_style.content_margin_left   = 30
+		_panel_style.content_margin_right  = 30
+		_panel_style.content_margin_top    = 24
+		_panel_style.content_margin_bottom = 24
 
 	if vbox:
 		var title = vbox.get_node_or_null("Title")
 		if title:
+			title.label_settings = null
 			title.add_theme_color_override("font_color", ThemeManager.text_color)
-			title.add_theme_font_size_override("font_size", 32)
+			title.add_theme_font_size_override("font_size", 24)
+			title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			title.custom_minimum_size.x = 0
 			if _serif_font:
 				title.add_theme_font_override("font", _serif_font)
 		for child in vbox.get_children():
 			if child is Button:
 				_style_button(child)
 			elif child is Label:
+				child.label_settings = null
 				child.add_theme_color_override("font_color", ThemeManager.text_color)
+	
+	# ── Full-screen dimming backdrop behind the quit dialog ───────────────────
+	var bg := get_node_or_null("QuitBackdrop")
+	if not bg:
+		bg = ColorRect.new()
+		bg.name = "QuitBackdrop"
+		bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		add_child(bg)
+		move_child(bg, 0)
+	bg.color   = Color(0, 0, 0, 0.65) if dark else Color(0, 0, 0, 0.35)
+	bg.visible = (_quit_container.visible if _quit_container else false)
+
+	# ── Quit confirmation dialog ──────────────────────────────────────────────
+	# After _ready reparents _quit_container to self, its children are at
+	# "QuitContainer/QuitPanel/..." relative to self.
+	var quit_panel: PanelContainer = null
+	if _quit_container:
+		quit_panel = _quit_container.get_node_or_null("QuitPanel") as PanelContainer
+	if quit_panel:
+		if not _quit_panel_style:
+			_quit_panel_style = StyleBoxFlat.new()
+			quit_panel.add_theme_stylebox_override("panel", _quit_panel_style)
+
+		_quit_panel_style.bg_color     = ThemeManager.bg_color
+		_quit_panel_style.bg_color.a   = 1.0  # always opaque
+		_quit_panel_style.border_color = ThemeManager.border_color
+		_quit_panel_style.set_border_width_all(1)
+		_quit_panel_style.set_corner_radius_all(12)
+		_quit_panel_style.shadow_color  = Color(0, 0, 0, 0.35 if dark else 0.12)
+		_quit_panel_style.shadow_size   = 16
+		_quit_panel_style.shadow_offset = Vector2(0, 6)
+		_quit_panel_style.content_margin_left   = 35
+		_quit_panel_style.content_margin_right  = 35
+		_quit_panel_style.content_margin_top    = 25
+		_quit_panel_style.content_margin_bottom = 25
+
+		var quit_content := quit_panel.get_node_or_null("QuitContent")
+		if quit_content:
+			quit_content.add_theme_constant_override("separation", 12)
+			for child in quit_content.get_children():
+				if child is Label:
+					if child.name.begins_with("Spacer") or child.text == "":
+						child.visible = false
+						child.custom_minimum_size = Vector2.ZERO
+						continue
+					child.label_settings = null
+					child.add_theme_color_override("font_color", ThemeManager.text_color)
+					child.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					if _serif_font:
+						child.add_theme_font_override("font", _serif_font)
+					child.add_theme_font_size_override("font_size", 21)
+				elif child is Button:
+					_style_button(child)
+					child.add_theme_font_size_override("font_size", 16)
 
 	for entry in _dividers:
 		var line: ColorRect = entry["line"]
@@ -234,8 +301,8 @@ func _style_button(btn: Button) -> void:
 	sn.bg_color          = Color(0, 0, 0, 0)
 	sn.content_margin_left   = 16
 	sn.content_margin_right  = 16
-	sn.content_margin_top    = 9
-	sn.content_margin_bottom = 9
+	sn.content_margin_top    = 10
+	sn.content_margin_bottom = 10
 	btn.add_theme_stylebox_override("normal", sn)
 
 	var sh := StyleBoxFlat.new()
@@ -243,8 +310,8 @@ func _style_button(btn: Button) -> void:
 	sh.set_corner_radius_all(5)
 	sh.content_margin_left   = 16
 	sh.content_margin_right  = 16
-	sh.content_margin_top    = 9
-	sh.content_margin_bottom = 9
+	sh.content_margin_top    = 10
+	sh.content_margin_bottom = 10
 	btn.add_theme_stylebox_override("hover", sh)
 
 	var sp := sh.duplicate() as StyleBoxFlat
@@ -255,6 +322,10 @@ func _style_button(btn: Button) -> void:
 	sf.border_color      = ThemeManager.text_color
 	sf.border_width_left = 2
 	btn.add_theme_stylebox_override("focus", sf)
+	
+	var sd := sn.duplicate() as StyleBoxFlat
+	sd.bg_color = Color(1, 1, 1, 0.02) if dark else Color(0, 0, 0, 0.02)
+	btn.add_theme_stylebox_override("disabled", sd)
 
 # ── Animations ────────────────────────────────────────────────────────────────
 
@@ -291,7 +362,7 @@ func set_current_room(room: String) -> void:
 	if vbox:
 		var title_node = vbox.get_node_or_null("Title")
 		if title_node:
-			title_node.text = current_room + (" - " + tr("Paused"))
+			title_node.text = current_room
 		var open_node = vbox.get_node_or_null("Open")
 		if open_node:
 			open_node.disabled = (current_room == "Lobby")
@@ -321,15 +392,23 @@ func _on_lobby_pressed() -> void:
 func _on_ask_quit_pressed() -> void:
 	if _quit_container:
 		_quit_container.visible = true
+		_apply_theme()  # ensures backdrop + panel reflect current dark/light mode
 
 # Called by the "Yes" button inside QuitContainer.
 func _on_quit_pressed() -> void:
 	_animate_out(func(): get_tree().quit())
 
+func _on_return_to_main_pressed() -> void:
+	_animate_out(func():
+		NetworkManager.disconnect_from_game()
+		get_tree().change_scene_to_file("res://scenes/Main.tscn")
+	)
+
 # Called by the "No" button inside QuitContainer.
 func _on_cancel_quit_pressed() -> void:
 	if _quit_container:
 		_quit_container.visible = false
+		_apply_theme()  # syncs backdrop visibility
 
 func _on_open_pressed() -> void:
 	OS.shell_open("https://" + TranslationServer.get_locale() + ".wikipedia.org/wiki/" + current_room)

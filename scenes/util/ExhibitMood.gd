@@ -91,6 +91,14 @@ static func get_ambient_energy(mood: int) -> float:
 	return MOOD_AMBIENT_ENERGY.get(mood, MOOD_AMBIENT_ENERGY[Mood.DEFAULT])
 
 
+static func get_adjusted_ambient_energy(mood: int, is_dark_mode: bool) -> float:
+	var base = get_ambient_energy(mood)
+	if is_dark_mode:
+		# Dim even further in dark mode (approx 15% of normal, lower floor)
+		return clamp(base * 0.15, 0.02, 0.12)
+	return base
+
+
 static func prefers_pool(mood: int) -> bool:
 	return mood == Mood.ASTRO or mood == Mood.NATURE
 

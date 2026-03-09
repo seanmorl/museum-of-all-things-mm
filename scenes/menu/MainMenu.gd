@@ -8,21 +8,27 @@ signal start_dedicated_host
 const _BTN_PATH := "MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer/"
 const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
 
-var _serif_font: FontFile = null
+var _serif_font: Font = null
 var _panel_style: StyleBoxFlat = null
 var _dedicated_host_btn: Button = null
+var _dark_mode_toggle: Button = null
 
 # Thin 1px divider lines placed above specific buttons, matching PauseMenu style.
 # A divider is drawn just above each button named here.
-const _DIVIDER_BEFORE := ["Settings", "Quit"]
+const _DIVIDER_BEFORE := ["Multiplayer", "DarkMode", "Settings", "DedicatedHost", "Quit", "Language"]
 var _dividers: Array[Dictionary] = []
 
 
 func _ready() -> void:
-	_serif_font = load(_FONT_PATH) as FontFile
+	_serif_font = ThemeManager.get_reading_font()
 	_build_dedicated_host_button()
+	_build_dark_mode_toggle()
 	_apply_theme()
-	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	ThemeManager.dark_mode_changed.connect(func(_d): 
+		_update_dark_mode_text()
+		_apply_theme()
+	)
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
 	if Platform.is_web():
 		var q = get_node_or_null("%Quit")
 		if q: q.visible = false
@@ -143,8 +149,10 @@ func _style_button(btn: Button) -> void:
 		btn.add_theme_color_override(state, ThemeManager.text_color)
 	btn.add_theme_color_override("font_disabled_color", ThemeManager.subtext_color)
 
-	var sn := StyleBoxFlat.new()
-	sn.bg_color = Color(0,0,0,0)
+	var sn: StyleBox
+	sn = StyleBoxFlat.new()
+	(sn as StyleBoxFlat).bg_color = Color(0,0,0,0)
+	
 	sn.content_margin_left = 16; sn.content_margin_right  = 16
 	sn.content_margin_top  =  9; sn.content_margin_bottom =  9
 	btn.add_theme_stylebox_override("normal", sn)
@@ -157,14 +165,38 @@ func _style_button(btn: Button) -> void:
 	sh.content_margin_top  =  9; sh.content_margin_bottom =  9
 	btn.add_theme_stylebox_override("hover", sh)
 
-	var sp := sh.duplicate() as StyleBoxFlat
-	sp.bg_color = Color(1,1,1,0.12) if dark else Color(ThemeManager.border_color, 0.85)
+	var sp: StyleBox
+	sp = sh.duplicate()
+	(sp as StyleBoxFlat).bg_color = Color(1,1,1,0.12) if dark else Color(ThemeManager.border_color, 0.85)
 	btn.add_theme_stylebox_override("pressed", sp)
 
-	var sf := sh.duplicate() as StyleBoxFlat
-	sf.border_color      = ThemeManager.text_color
-	sf.border_width_left = 2
+	var sf: StyleBox
+	sf = sh.duplicate()
+	(sf as StyleBoxFlat).border_color      = ThemeManager.text_color
+	(sf as StyleBoxFlat).border_width_left = 2
 	btn.add_theme_stylebox_override("focus", sf)
+
+
+func _build_dark_mode_toggle() -> void:
+	var container := get_node_or_null(_BTN_PATH.trim_suffix("/"))
+	if not container: return
+	
+	_dark_mode_toggle = Button.new()
+	_dark_mode_toggle.name = "DarkMode"
+	_dark_mode_toggle.pressed.connect(ThemeManager.toggle)
+	
+	container.add_child(_dark_mode_toggle)
+	var settings_btn := container.get_node_or_null("Settings")
+	if settings_btn:
+		container.move_child(_dark_mode_toggle, settings_btn.get_index()) # Place before Settings
+	
+	_update_dark_mode_text()
+	_style_button(_dark_mode_toggle)
+
+
+func _update_dark_mode_text() -> void:
+	if _dark_mode_toggle:
+		_dark_mode_toggle.text = "☾  Dark Mode" if not ThemeManager.is_dark_mode else "☀  Light Mode"
 
 
 # ── Animations ────────────────────────────────────────────────────────────────

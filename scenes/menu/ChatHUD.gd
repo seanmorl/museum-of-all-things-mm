@@ -3,28 +3,33 @@ class_name ChatHUD
 ## Top-right chat overlay. Messages appear as toast cards and fade after a timeout.
 ## T (rebindable) opens the input box. Enter sends, Escape cancels.
 
-const FONT_PATH        := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
+var _font: Font = null
 const TYPING_SOUND_PATH := "res://assets/sound/UI/UI Crystal 1.ogg"
-const MAX_TOASTS           := 20
+const MAX_TOASTS		   := 20
 const MESSAGE_DISPLAY_TIME := 10.0
-const FADE_TIME            := 2.0
+const FADE_TIME			:= 2.0
 const MAX_MESSAGE_LENGTH   := 200
 
-const PANEL_BG     := Color(1.0,  1.0,  1.0,  0.95)
-const PANEL_BORDER := Color(0.635, 0.663, 0.694, 1.0)
-const SYSTEM_BG    := Color(0.96, 0.96, 0.96, 0.90)
-const INPUT_BG     := Color(1.0,  1.0,  1.0,  0.98)
-const TEXT_DARK    := Color(0.12, 0.12, 0.12, 1.0)
-const TEXT_SUBTLE  := Color(0.45, 0.45, 0.45, 1.0)
+var _panel_bg: Color:
+	get: return Color(0.14, 0.14, 0.16, 0.95) if ThemeManager.is_dark_mode else Color(1.0, 1.0, 1.0, 0.95)
+var _panel_border: Color:
+	get: return ThemeManager.border_color
+var _system_bg: Color:
+	get: return Color(0.18, 0.18, 0.20, 0.90) if ThemeManager.is_dark_mode else Color(0.96, 0.96, 0.96, 0.90)
+var _input_bg: Color:
+	get: return Color(0.12, 0.12, 0.14, 0.98) if ThemeManager.is_dark_mode else Color(1.0, 1.0, 1.0, 0.98)
+var _text_primary: Color:
+	get: return ThemeManager.text_color
+var _text_subtle: Color:
+	get: return ThemeManager.subtext_color
 
 var _chat_system: ChatSystem = null
-var _font: FontFile = null
 var _typing_player: AudioStreamPlayer = null
 var _typing_sound_enabled: bool = false
 var _rebinding: bool = false
 var _input_open: bool = false
 
-# Toast nodes — Array of {panel, time, fading}
+# Toast nodes â€” Array of {panel, time, fading}
 var _toasts: Array = []
 
 # Node refs
@@ -34,23 +39,21 @@ var _input_field: LineEdit
 var _char_counter: Label
 var _hint_label: Label
 
-
 func init(chat_system: ChatSystem, _unused: Node = null) -> void:
 	_chat_system = chat_system
 
-
 func _ready() -> void:
-	if ResourceLoader.exists(FONT_PATH):
-		_font = load(FONT_PATH)
+	_font = ThemeManager.get_reading_font()
+	ThemeManager.reading_font_changed.connect(_on_reading_font_changed)
 
-	# Root — fixed 420px wide, anchored top-right, so it doesn't stretch on widescreen
+	# Root â€” fixed 420px wide, anchored top-right, so it doesn't stretch on widescreen
 	anchor_left   = 1.0
 	anchor_right  = 1.0
-	anchor_top    = 0.0
+	anchor_top	= 0.0
 	anchor_bottom = 0.55
 	offset_left   = -434   # 420px wide + 14px margin
 	offset_right  = -14
-	offset_top    = 12
+	offset_top	= 12
 	mouse_filter  = Control.MOUSE_FILTER_IGNORE
 
 	var vbox := VBoxContainer.new()
@@ -60,7 +63,7 @@ func _ready() -> void:
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(vbox)
 
-	# Messages stack — bottom-aligned toasts
+	# Messages stack â€” bottom-aligned toasts
 	_messages_container = VBoxContainer.new()
 	_messages_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_messages_container.alignment = BoxContainer.ALIGNMENT_END
@@ -72,7 +75,7 @@ func _ready() -> void:
 	_input_panel = PanelContainer.new()
 	_input_panel.visible = false
 	_input_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_input_panel.add_theme_stylebox_override("panel", _make_card_style(INPUT_BG))
+	_input_panel.add_theme_stylebox_override("panel", _make_card_style(_input_bg))
 	vbox.add_child(_input_panel)
 
 	var input_hbox := HBoxContainer.new()
@@ -87,9 +90,9 @@ func _ready() -> void:
 	_input_field.add_theme_stylebox_override("normal", empty)
 	_input_field.add_theme_stylebox_override("focus", empty)
 	_input_field.add_theme_stylebox_override("read_only", empty)
-	_input_field.add_theme_color_override("font_color", TEXT_DARK)
-	_input_field.add_theme_color_override("font_placeholder_color", TEXT_SUBTLE)
-	_input_field.add_theme_color_override("caret_color", TEXT_DARK)
+	_input_field.add_theme_color_override("font_color", _text_primary)
+	_input_field.add_theme_color_override("font_placeholder_color", _text_subtle)
+	_input_field.add_theme_color_override("caret_color", _text_primary)
 	if _font:
 		_input_field.add_theme_font_override("font", _font)
 	_input_field.add_theme_font_size_override("font_size", 20)
@@ -99,7 +102,7 @@ func _ready() -> void:
 
 	_char_counter = Label.new()
 	_char_counter.text = "0/%d" % MAX_MESSAGE_LENGTH
-	_char_counter.add_theme_color_override("font_color", TEXT_SUBTLE)
+	_char_counter.add_theme_color_override("font_color", _text_subtle)
 	if _font:
 		_char_counter.add_theme_font_override("font", _font)
 	_char_counter.add_theme_font_size_override("font_size", 13)
@@ -107,8 +110,8 @@ func _ready() -> void:
 	input_hbox.add_child(_char_counter)
 
 	_hint_label = Label.new()
-	_hint_label.text = "Enter to send  •  Esc to close"
-	_hint_label.add_theme_color_override("font_color", TEXT_SUBTLE)
+	_hint_label.text = "Enter to send  â€¢  Esc to close"
+	_hint_label.add_theme_color_override("font_color", _text_subtle)
 	if _font:
 		_hint_label.add_theme_font_override("font", _font)
 	_hint_label.add_theme_font_size_override("font_size", 13)
@@ -133,30 +136,54 @@ func _ready() -> void:
 	_apply_chat_enabled_setting()
 	_apply_typing_sound_setting()
 	_apply_saved_chat_key()
+	ThemeManager.dark_mode_changed.connect(func(_d): _refresh_theme())
 
 
-# ── StyleBox helper ──────────────────────────────────────────────────────────
+func _on_reading_font_changed(new_font: Font) -> void:
+	_font = new_font
+	if _input_field:
+		_input_field.add_theme_font_override("font", _font)
+	if _char_counter:
+		_char_counter.add_theme_font_override("font", _font)
+	if _hint_label:
+		_hint_label.add_theme_font_override("font", _font)
+
+
+func _refresh_theme() -> void:
+	if _input_panel:
+		_input_panel.add_theme_stylebox_override("panel", _make_card_style(_input_bg))
+	if _input_field:
+		_input_field.add_theme_color_override("font_color", _text_primary)
+		_input_field.add_theme_color_override("font_placeholder_color", _text_subtle)
+		_input_field.add_theme_color_override("caret_color", _text_primary)
+	if _char_counter:
+		_char_counter.add_theme_color_override("font_color", _text_subtle)
+	if _hint_label:
+		_hint_label.add_theme_color_override("font_color", _text_subtle)
+
+
+# â”€â”€ StyleBox helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func _make_card_style(bg: Color) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = bg
 	s.border_width_left   = 1
-	s.border_width_top    = 1
+	s.border_width_top	= 1
 	s.border_width_right  = 1
 	s.border_width_bottom = 1
-	s.border_color = PANEL_BORDER
-	s.corner_radius_top_left     = 2
-	s.corner_radius_top_right    = 2
+	s.border_color = _panel_border
+	s.corner_radius_top_left	 = 2
+	s.corner_radius_top_right	= 2
 	s.corner_radius_bottom_right = 2
 	s.corner_radius_bottom_left  = 2
 	s.content_margin_left   = 10.0
 	s.content_margin_right  = 10.0
-	s.content_margin_top    = 6.0
+	s.content_margin_top	= 6.0
 	s.content_margin_bottom = 6.0
 	return s
 
 
-# ── Animations ───────────────────────────────────────────────────────────────
+# â”€â”€ Animations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func _animate_in(node: Control) -> void:
 	node.scale = Vector2(0.88, 0.88)
@@ -179,26 +206,26 @@ func _animate_out(node: Control, on_done: Callable) -> void:
 	)
 
 
-# ── Public accessors ─────────────────────────────────────────────────────────
+# â”€â”€ Public accessors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func is_input_open() -> bool:
 	return _input_open
 
 
-# ── Rebind ───────────────────────────────────────────────────────────────────
+# â”€â”€ Rebind â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func start_chat_rebind() -> void:
 	_rebinding = true
 
 
-# ── Input ────────────────────────────────────────────────────────────────────
+# â”€â”€ Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func _input(event: InputEvent) -> void:
 	# If chat is disabled in settings, don't process any chat input
 	if not visible:
 		return
 
-	# Rebind capture — intercept next keypress
+	# Rebind capture â€” intercept next keypress
 	if _rebinding:
 		if event is InputEventKey and event.pressed and not event.echo:
 			get_viewport().set_input_as_handled()
@@ -227,7 +254,7 @@ func _input(event: InputEvent) -> void:
 				_close_input()
 
 
-# ── Open / close ─────────────────────────────────────────────────────────────
+# â”€â”€ Open / close â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func _open_input() -> void:
 	_input_open = true
@@ -265,10 +292,10 @@ func _close_input() -> void:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 
-# ── Messages ─────────────────────────────────────────────────────────────────
+# â”€â”€ Messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func _add_message(sender: String, message: String, sender_color: Color, is_system: bool) -> void:
-	var bg := SYSTEM_BG if is_system else PANEL_BG
+	var bg := _system_bg if is_system else _panel_bg
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_theme_stylebox_override("panel", _make_card_style(bg))
@@ -282,14 +309,15 @@ func _add_message(sender: String, message: String, sender_color: Color, is_syste
 		lbl.add_theme_font_override("normal_font", _font)
 		lbl.add_theme_font_override("bold_font",   _font)
 	lbl.add_theme_font_size_override("normal_font_size", 20)
-	lbl.add_theme_color_override("default_color", TEXT_DARK)
+	lbl.add_theme_color_override("default_color", _text_primary)
 
 	if is_system:
 		lbl.text = "[color=#777777][i]%s[/i][/color]" % sender
 	else:
 		var hex := sender_color.darkened(0.2).to_html(false)
-		lbl.text = "[color=#%s][b]%s[/b][/color]  [color=#1e1e1e]%s[/color]" \
-			% [hex, sender, message]
+		var msg_hex := _text_primary.to_html(false)
+		lbl.text = "[color=#%s][b]%s[/b][/color]  [color=#%s]%s[/color]" \
+			% [hex, sender, msg_hex, message]
 
 	panel.add_child(lbl)
 	_messages_container.add_child(panel)
@@ -310,7 +338,7 @@ func _on_chat_message_received(sender_name: String, pronouns: String, message: S
 func _on_player_joined(peer_id: int, _pname: String) -> void:
 	if not NetworkManager.is_multiplayer_active():
 		return
-	# Defer by one frame — player_info RPC (including pronouns) arrives shortly
+	# Defer by one frame â€” player_info RPC (including pronouns) arrives shortly
 	# after the peer_connected signal, so reading it immediately gives "".
 	await get_tree().process_frame
 	if not NetworkManager.is_multiplayer_active():
@@ -328,7 +356,7 @@ func _on_player_left(peer_id: int) -> void:
 	_add_message("%s%s left the museum" % [n, " (%s)" % p if p != "" else ""], "", Color.WHITE, true)
 
 
-# ── Input field callbacks ────────────────────────────────────────────────────
+# â”€â”€ Input field callbacks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func _on_input_changed(new_text: String) -> void:
 	_char_counter.text = "%d/%d" % [new_text.length(), MAX_MESSAGE_LENGTH]
@@ -347,7 +375,7 @@ func _on_text_submitted(text: String) -> void:
 	_close_input()
 
 
-# ── Toast fade ───────────────────────────────────────────────────────────────
+# â”€â”€ Toast fade â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func _process(delta: float) -> void:
 	for i in range(_toasts.size() - 1, -1, -1):
@@ -368,7 +396,7 @@ func _process(delta: float) -> void:
 			)
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func _get_local_player() -> Node:
 	var main := get_tree().get_first_node_in_group("main")

@@ -1,7 +1,6 @@
 extends Control
 
-const FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
-var _serif_font: FontFile = null
+var _serif_font: Font = null
 
 const TIMELINE_MODE := 0
 
@@ -28,7 +27,7 @@ var _hint_overlay: VBoxContainer = null      ## bottom-left overlay, separate fr
 
 
 func _ready() -> void:
-	_serif_font = load(FONT_PATH) as FontFile
+	_serif_font = ThemeManager.get_reading_font()
 
 	_race_panel      = _find("RacePanel")
 	_timer_label     = _find("TimerLabel")
@@ -94,8 +93,17 @@ func _ready() -> void:
 	RaceManager.race_hint_revealed.connect(_on_race_hint_revealed)
 	SettingsEvents.set_current_room.connect(_on_room_changed)
 	ThemeManager.dark_mode_changed.connect(_apply_theme)
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme(ThemeManager.is_dark_mode))
 	SettingsEvents.accessibility_changed.connect(_on_accessibility_changed)
+	_apply_initial_accessibility_settings()
 	_apply_theme(ThemeManager.is_dark_mode)
+
+func _apply_initial_accessibility_settings() -> void:
+	## Apply saved accessibility settings on load (in case broadcast from Main was missed).
+	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
+	if acc.get("large_hud_text", false):
+		_apply_large_hud_text(true)
+	_update_hint_persistence(acc.get("persistent_hints", false))
 
 func _on_accessibility_changed(key: String, value: Variant) -> void:
 	match key:
@@ -156,13 +164,17 @@ func _apply_theme(_dark: bool) -> void:
 	for node_name: String in ["TimerLabel", "WinLabel"]:
 		var lbl := _find(node_name) as Label
 		if lbl:
+			lbl.label_settings = null
 			lbl.add_theme_color_override("font_color", ThemeManager.text_color)
 			if _serif_font: lbl.add_theme_font_override("font", _serif_font)
 
+	var sec_color := ThemeManager.text_color
+	sec_color.a = 0.8 # higher contrast than subtext_color
 	for node_name: String in ["TargetLabel", "TimeLabel", "SubLabel", "TimelineLabel", "PathLabel"]:
 		var lbl := _find(node_name) as Label
 		if lbl:
-			lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+			lbl.label_settings = null
+			lbl.add_theme_color_override("font_color", sec_color)
 			if _serif_font: lbl.add_theme_font_override("font", _serif_font)
 
 	_refresh_timeline_colors()
@@ -193,7 +205,10 @@ func _make_label(text: String, role: String, size: int = 12) -> Label:
 		"start", "current", "target":
 			lbl.add_theme_color_override("font_color", ThemeManager.text_color)
 		_:
-			lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+			var sec_color := ThemeManager.text_color
+			sec_color.a = 0.8
+			lbl.add_theme_color_override("font_color", sec_color)
+	lbl.label_settings = null
 	return lbl
 
 
@@ -436,9 +451,6 @@ func _on_race_hint_revealed(hint_article: String, hint_number: int) -> void:
 		lbl.add_theme_font_size_override("font_size", 18)
 		
 	_hint_overlay.add_child(lbl)
-	
-	if not acc.get("persistent_hints", false):
-		_fade_out_hint(lbl, 8.0)
 
 func _fade_out_hint(lbl: Label, delay: float = 0.0) -> void:
 	var reduce_motion: bool = false

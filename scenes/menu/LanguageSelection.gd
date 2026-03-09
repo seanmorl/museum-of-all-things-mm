@@ -11,6 +11,8 @@ func _get_lang_array() -> Array:
 
 func _ready() -> void:
 	SettingsEvents.language_changed.connect(_on_set_language)
+	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	_apply_theme()
 
 	_languages = _get_lang_array()
 	for i in range(1, len(_languages)):
@@ -21,6 +23,9 @@ func _ready() -> void:
 	if idx >= 0:
 		select(idx)
 	item_selected.connect(_on_language_item_selected)
+
+func _apply_theme() -> void:
+	ThemeManager.style_option_button(self)
 
 func _on_language_item_selected(index: int) -> void:
 	var locale = _languages[index]

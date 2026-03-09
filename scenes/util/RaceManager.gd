@@ -46,6 +46,8 @@ var _timer_signal_accumulator: float = 0.0
 var _vote_candidates: Array = []
 ## peer_id -> candidate index voted for.
 var _votes: Dictionary = {}
+## twitch_user -> candidate index voted for.
+var _twitch_votes: Dictionary = {}
 ## Seconds remaining in the vote window.
 var _vote_timer: float = 0.0
 var _vote_timer_paused: bool = false
@@ -150,6 +152,7 @@ func begin_vote(candidates: Array, start_article: String = "") -> void:
 	_vote_candidates = candidates
 	_vote_start_article = start_article
 	_votes.clear()
+	_twitch_votes.clear()
 	_vote_active = true
 	_vote_timer = VOTE_DURATION
 	_vote_timer_paused = false  # always clear pause on new/rerolled vote
@@ -164,6 +167,15 @@ func cast_vote(candidate_index: int) -> void:
 	else:
 		_send_vote.rpc_id(1, candidate_index)
 
+func cast_twitch_vote(voter_name: String, candidate_index: int) -> void:
+	if not _vote_active or not NetworkManager.is_server():
+		return
+	if candidate_index < 0 or candidate_index >= _vote_candidates.size():
+		return
+	_twitch_votes[voter_name] = candidate_index
+	if OS.is_debug_build():
+		print("RaceManager: Twitch vote from ", voter_name, " for ", _vote_candidates[candidate_index])
+
 func _finish_vote() -> void:
 	if not _vote_active:
 		return
@@ -172,10 +184,17 @@ func _finish_vote() -> void:
 	var tally: Dictionary = {}
 	for idx in range(_vote_candidates.size()):
 		tally[idx] = 0
+	# Player votes
 	for pid in _votes:
 		var v: int = _votes[pid]
 		if tally.has(v):
 			tally[v] += 1
+	# Twitch votes
+	for vname in _twitch_votes:
+		var v: int = _twitch_votes[vname]
+		if tally.has(v):
+			tally[v] += 1
+			
 	# Find winner (random tiebreak)
 	var max_votes: int = 0
 	for idx in tally:
@@ -328,6 +347,7 @@ func is_vote_active() -> bool:
 func _sync_vote_start(candidates: Array) -> void:
 	_vote_candidates = candidates
 	_votes.clear()
+	_twitch_votes.clear()
 	_vote_active = true
 	_vote_timer = VOTE_DURATION
 	_vote_timer_paused = false  # clear on all peers, not just server

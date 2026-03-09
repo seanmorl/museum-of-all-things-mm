@@ -57,13 +57,15 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 selected = 0
-item_count = 3
+item_count = 4
 popup/item_0/text = "Bilinear"
 popup/item_0/id = 0
 popup/item_1/text = "AMD FSR 1"
 popup/item_1/id = 1
 popup/item_2/text = "AMD FSR 2"
 popup/item_2/id = 2
+popup/item_3/text = "Nearest (Retro)"
+popup/item_3/id = 3
 
 [node name="HBoxContainer3" type="HBoxContainer" parent="Settings/LCol/DisplayOptions" unique_id=1924110638]
 layout_mode = 2
@@ -128,7 +130,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 min_value = 0.1
-max_value = 1.0
+max_value = 2.0
 step = 0.05
 value = 1.0
 
@@ -249,6 +251,78 @@ layout_mode = 2
 button_pressed = true
 text = "Enable Fog"
 
+[node name="AntiAliasingOptions" type="VBoxContainer" parent="Settings/RCol" unique_id=135920330]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Settings/RCol/AntiAliasingOptions"]
+layout_mode = 2
+text = "Anti-Aliasing"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Settings/RCol/AntiAliasingOptions"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Settings/RCol/AntiAliasingOptions/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "MSAA"
+
+[node name="MSAAOption" type="OptionButton" parent="Settings/RCol/AntiAliasingOptions/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+selected = 0
+item_count = 4
+popup/item_0/text = "Disabled"
+popup/item_0/id = 0
+popup/item_1/text = "2x"
+popup/item_1/id = 1
+popup/item_2/text = "4x"
+popup/item_2/id = 2
+popup/item_3/text = "8x"
+popup/item_3/id = 3
+
+[node name="UseFXAACheck" type="CheckBox" parent="Settings/RCol/AntiAliasingOptions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Enable FXAA"
+
+[node name="UseTAACheck" type="CheckBox" parent="Settings/RCol/AntiAliasingOptions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Enable TAA"
+
+[node name="TextureFilteringOptions" type="VBoxContainer" parent="Settings/RCol" unique_id=365461230]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Settings/RCol/TextureFilteringOptions"]
+layout_mode = 2
+text = "Texture Filtering"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Settings/RCol/TextureFilteringOptions"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Settings/RCol/TextureFilteringOptions/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Anisotropy"
+
+[node name="AnisotropyOption" type="OptionButton" parent="Settings/RCol/TextureFilteringOptions/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+selected = 2
+item_count = 5
+popup/item_0/text = "1x"
+popup/item_0/id = 0
+popup/item_1/text = "2x"
+popup/item_1/id = 1
+popup/item_2/text = "4x"
+popup/item_2/id = 2
+popup/item_3/text = "8x"
+popup/item_3/id = 3
+popup/item_4/text = "16x"
+popup/item_4/id = 4
+
 [node name="FPSOptions" type="VBoxContainer" parent="Settings/RCol" unique_id=135920329]
 layout_mode = 2
 
@@ -328,6 +402,10 @@ text = "Restore Default Settings"
 [connection signal="toggled" from="Settings/RCol/ReflectionOptions/EnableReflections" to="." method="_on_enable_reflections_toggled"]
 [connection signal="value_changed" from="Settings/RCol/ReflectionOptions/HBoxContainer/ReflectionQuality" to="." method="_on_reflection_quality_value_changed"]
 [connection signal="toggled" from="Settings/RCol/FogOptions/EnableFog" to="." method="_on_enable_fog_toggled"]
+[connection signal="item_selected" from="Settings/RCol/AntiAliasingOptions/HBoxContainer/MSAAOption" to="." method="_on_msaa_option_item_selected"]
+[connection signal="toggled" from="Settings/RCol/AntiAliasingOptions/UseFXAACheck" to="." method="_on_use_fxaa_check_toggled"]
+[connection signal="toggled" from="Settings/RCol/AntiAliasingOptions/UseTAACheck" to="." method="_on_use_taa_check_toggled"]
+[connection signal="item_selected" from="Settings/RCol/TextureFilteringOptions/HBoxContainer/AnisotropyOption" to="." method="_on_anisotropy_option_item_selected"]
 [connection signal="toggled" from="Settings/RCol/FPSOptions/VSync" to="." method="_on_vsync_toggled"]
 [connection signal="value_changed" from="Settings/RCol/FPSOptions/HBoxContainer2/MaxFPS" to="." method="_on_max_fps_value_changed"]
 [connection signal="value_changed" from="Settings/RCol/RenderDistanceOptions/HBoxContainer/RenderDistance" to="." method="_on_render_distance_value_changed"]

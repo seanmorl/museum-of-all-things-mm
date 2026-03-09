@@ -7,6 +7,28 @@ func _ready() -> void:
 	NetworkManager.peer_disconnected.connect(_refresh)
 	NetworkManager.player_info_updated.connect(_refresh)
 	visibility_changed.connect(_on_visibility_changed)
+	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	_apply_theme()
+
+
+func _apply_theme() -> void:
+	var title = get_node_or_null("PanelContainer/MarginContainer/VBoxContainer/Title")
+	if title:
+		title.label_settings = null
+		title.add_theme_color_override("font_color", ThemeManager.text_color)
+		title.add_theme_font_override("font", ThemeManager.get_reading_font())
+	
+	var panel = get_node_or_null("PanelContainer")
+	if panel:
+		var style := StyleBoxFlat.new()
+		style.bg_color = ThemeManager.bg_color
+		style.border_color = ThemeManager.border_color
+		style.border_width_left = 1; style.border_width_top = 1
+		style.border_width_right = 1; style.border_width_bottom = 1
+		style.corner_radius_top_left = 8; style.corner_radius_top_right = 8
+		style.corner_radius_bottom_left = 8; style.corner_radius_bottom_right = 8
+		panel.add_theme_stylebox_override("panel", style)
+
 
 func _on_visibility_changed() -> void:
 	if visible:

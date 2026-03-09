@@ -27,6 +27,14 @@ func _ready() -> void:
 		if not Engine.is_editor_hint():
 			call_deferred("_connect_language")
 		_resize_text()
+	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
+	_on_dark_mode_changed(ThemeManager.is_dark_mode)
+
+func _on_dark_mode_changed(is_dark: bool) -> void:
+	# Illuminate lobby plaques in dark mode (soft white glow)
+	var color = Color(1.0, 1.0, 1.0) if is_dark else title_color
+	$Title.modulate = color
+	$Subtitle.modulate = color
 
 func _connect_language() -> void:
 	if Engine.is_editor_hint():

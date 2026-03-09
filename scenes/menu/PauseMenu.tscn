@@ -5,32 +5,6 @@
 [ext_resource type="PackedScene" uid="uid://cv3acpc23tjw0" path="res://scenes/menu/LanguageSelection.tscn" id="3_pjuoe"]
 [ext_resource type="FontFile" uid="uid://bxph8sc2vndn" path="res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf" id="4_serif"]
 
-[sub_resource type="LabelSettings" id="LabelSettings_qguvm"]
-font = ExtResource("4_serif")
-font_size = 48
-font_color = Color(0, 0, 0, 1)
-
-[sub_resource type="LabelSettings" id="LabelSettings_2s8qn"]
-font = ExtResource("4_serif")
-font_size = 48
-font_color = Color(0, 0, 0, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(1, 1, 1, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.635, 0.663, 0.694, 1)
-corner_radius_top_left = 2
-corner_radius_top_right = 2
-corner_radius_bottom_right = 2
-corner_radius_bottom_left = 2
-content_margin_left = 40.0
-content_margin_top = 30.0
-content_margin_right = 40.0
-content_margin_bottom = 30.0
-
 [node name="PauseMenu" type="Control" unique_id=1967430397]
 layout_mode = 3
 anchors_preset = 15
@@ -65,7 +39,6 @@ alignment = 1
 layout_mode = 2
 size_flags_horizontal = 4
 custom_minimum_size = Vector2(400, 0)
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="QuitContent" type="VBoxContainer" parent="MarginContainer/CenterContainer/QuitContainer/QuitPanel"]
 layout_mode = 2
@@ -74,7 +47,6 @@ layout_mode = 2
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 text = "Are you sure you want to Quit?"
-label_settings = SubResource("LabelSettings_qguvm")
 autowrap_mode = 2
 
 [node name="Spacer3" type="Label" parent="MarginContainer/CenterContainer/QuitContainer/QuitPanel/QuitContent" unique_id=1565274526]
@@ -99,21 +71,15 @@ alignment = 1
 layout_mode = 2
 size_flags_horizontal = 4
 custom_minimum_size = Vector2(400, 0)
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="PauseContent" type="VBoxContainer" parent="MarginContainer/CenterContainer/VBoxContainer/PausePanel"]
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="Title" type="Label" parent="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent" unique_id=279746053]
-custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 text = "Paused"
-label_settings = SubResource("LabelSettings_2s8qn")
 autowrap_mode = 3
-
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent"]
-layout_mode = 2
 
 [node name="Resume" type="Button" parent="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent" unique_id=1896738337]
 layout_mode = 2
@@ -155,6 +121,10 @@ layout_mode = 2
 layout_mode = 2
 text = "☾  Dark Mode"
 
+[node name="ReturnToMain" type="Button" parent="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent" unique_id=1189966349]
+layout_mode = 2
+text = "Return to Main Menu"
+
 [node name="AskQuit" type="Button" parent="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent" unique_id=19863420]
 unique_name_in_owner = true
 layout_mode = 2
@@ -171,3 +141,4 @@ text = "Quit"
 [connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent/Settings" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent/AskQuit" to="." method="_on_ask_quit_pressed"]
 [connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent/DarkMode" to="." method="_on_dark_mode_pressed"]
+[connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PausePanel/PauseContent/ReturnToMain" to="." method="_on_return_to_main_pressed"]
