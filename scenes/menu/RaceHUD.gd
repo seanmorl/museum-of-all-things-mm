@@ -164,13 +164,17 @@ func _apply_theme(_dark: bool) -> void:
 	for node_name: String in ["TimerLabel", "WinLabel"]:
 		var lbl := _find(node_name) as Label
 		if lbl:
+			lbl.label_settings = null
 			lbl.add_theme_color_override("font_color", ThemeManager.text_color)
 			if _serif_font: lbl.add_theme_font_override("font", _serif_font)
 
+	var sec_color := ThemeManager.text_color
+	sec_color.a = 0.8 # higher contrast than subtext_color
 	for node_name: String in ["TargetLabel", "TimeLabel", "SubLabel", "TimelineLabel", "PathLabel"]:
 		var lbl := _find(node_name) as Label
 		if lbl:
-			lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+			lbl.label_settings = null
+			lbl.add_theme_color_override("font_color", sec_color)
 			if _serif_font: lbl.add_theme_font_override("font", _serif_font)
 
 	_refresh_timeline_colors()
@@ -201,7 +205,10 @@ func _make_label(text: String, role: String, size: int = 12) -> Label:
 		"start", "current", "target":
 			lbl.add_theme_color_override("font_color", ThemeManager.text_color)
 		_:
-			lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+			var sec_color := ThemeManager.text_color
+			sec_color.a = 0.8
+			lbl.add_theme_color_override("font_color", sec_color)
+	lbl.label_settings = null
 	return lbl
 
 

@@ -5,9 +5,9 @@ class_name PlayerPointingSystem
 signal reaction_fired(reaction_index: int, point_target: Vector3)
 
 const BEAM_LENGTH: float = 100.0
-const BEAM_COLOR: Color = Color(1.0, 1.0, 0.7, 0.85)
-const HIGHLIGHT_ENERGY: float = 1.5
-const HIGHLIGHT_RANGE: float = 3.0
+const BEAM_COLOR: Color = Color(1.0, 1.0, 0.7, 0.4) # Softer alpha
+const HIGHLIGHT_ENERGY: float = 0.8 # Reduced
+const HIGHLIGHT_RANGE: float = 2.0 # Reduced
 const RAY_COLLISION_MASK: int = 0xFFFFFFFF
 
 var _player: CharacterBody3D = null
@@ -33,9 +33,9 @@ func init(player: CharacterBody3D) -> void:
 	mat.albedo_color = BEAM_COLOR
 	mat.emission_enabled = true
 	mat.emission = Color(1.0, 1.0, 0.7)
-	mat.emission_energy_multiplier = 4.0
+	mat.emission_energy_multiplier = 1.0 # Reduced from 4.0
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.no_depth_test = true
+	mat.no_depth_test = false # Disabled to prevent harsh overlay
 	_beam_mesh.material_override = mat
 	player.add_child(_beam_mesh)
 
@@ -60,8 +60,8 @@ func init(player: CharacterBody3D) -> void:
 	dot_mat.albedo_color = Color(1.0, 1.0, 0.7)
 	dot_mat.emission_enabled = true
 	dot_mat.emission = Color(1.0, 1.0, 0.7)
-	dot_mat.emission_energy_multiplier = 6.0
-	dot_mat.no_depth_test = true
+	dot_mat.emission_energy_multiplier = 1.5 # Reduced from 6.0
+	dot_mat.no_depth_test = false # Disabled
 	_endpoint_dot.material_override = dot_mat
 	player.add_child(_endpoint_dot)
 

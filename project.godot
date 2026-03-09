@@ -46,6 +46,7 @@ GameplayEvents="*uid://dudque40053y0"
 JournalManager="*res://scenes/util/JournalManager.gd"
 TraceManager="*res://scenes/util/TraceManager.gd"
 ThemeManager="*uid://dtohsvgxa3ly6"
+TwitchManager="*res://scenes/util/TwitchManager.gd"
 
 [display]
 

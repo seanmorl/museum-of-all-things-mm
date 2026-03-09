@@ -58,3 +58,17 @@ func set_message(msg: String, instant: bool = false) -> void:
 	var tmp: Label3D = top_label
 	top_label = bottom_label
 	bottom_label = tmp
+
+func _ready() -> void:
+	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
+	_on_dark_mode_changed(ThemeManager.is_dark_mode)
+
+func _on_dark_mode_changed(is_dark: bool) -> void:
+	# "Illuminate" the signs in dark mode by switching from black to a bright cyan
+	var color = Color(0.4, 0.9, 1.0) if is_dark else Color(0, 0, 0) # Slightly brighter
+	if top_label:
+		top_label.modulate = color
+		top_label.outline_modulate = Color(0, 0.2, 0.4, 0.5) if is_dark else Color(1, 1, 1, 0)
+	if bottom_label:
+		bottom_label.modulate = color
+		bottom_label.outline_modulate = Color(0, 0.2, 0.4, 0.5) if is_dark else Color(1, 1, 1, 0)

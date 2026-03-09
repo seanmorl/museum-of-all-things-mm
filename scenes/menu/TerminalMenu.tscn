@@ -133,23 +133,25 @@ layout_mode = 2
 size_flags_horizontal = 0
 text = "OK / Exit"
 
-[node name="Control" type="Control" parent="." unique_id=166076089]
-custom_minimum_size = Vector2(128, 128)
+[node name="LogoContainer" type="MarginContainer" parent="." unique_id=166076089]
 layout_mode = 1
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -40.0
-offset_top = -40.0
+offset_left = -128.0
+offset_top = -128.0
 grow_horizontal = 0
 grow_vertical = 0
-mouse_filter = 1
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
 
-[node name="MoatLogoSmall" type="Sprite2D" parent="Control" unique_id=1220984134]
-scale = Vector2(0.5, 0.5)
+[node name="MoatLogoSmall" type="TextureRect" parent="LogoContainer" unique_id=1220984134]
+layout_mode = 2
 texture = ExtResource("2_go2dw")
+expand_mode = 1
+stretch_mode = 5
 
 [connection signal="pressed" from="MarginContainer/StartPage/EnterExhibit" to="." method="_go_to_search_page"]
 [connection signal="pressed" from="MarginContainer/StartPage/RandomExhibit" to="." method="_get_random_page"]

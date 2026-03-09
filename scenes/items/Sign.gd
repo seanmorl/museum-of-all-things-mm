@@ -33,3 +33,55 @@ func _ready() -> void:
 		$Arrow.visible = false
 	else:
 		left = arrow_left
+	
+	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
+	_on_dark_mode_changed(ThemeManager.is_dark_mode)
+
+var _tween: Tween = null
+var _setup_complete: bool = false
+
+func _on_dark_mode_changed(is_dark: bool) -> void:
+	var target_text_color = Color(0.9, 0.9, 0.9) if is_dark else Color(0, 0, 0)
+	var target_outline_color = Color(1, 1, 1, 0.15) if is_dark else Color(1, 1, 1, 0)
+	var target_board_color = Color(0.04, 0.04, 0.04) if is_dark else Color(1, 1, 1)
+
+	if not _setup_complete:
+		$Text.modulate = target_text_color
+		$Text.outline_modulate = target_outline_color
+		$Arrow.modulate = target_text_color
+		$Arrow.outline_modulate = target_outline_color
+		_setup_complete = true
+		
+		var mesh: MeshInstance3D = $MeshInstance3D
+		if mesh:
+			var board_mat: StandardMaterial3D = mesh.get_surface_override_material(1)
+			if not board_mat:
+				var orig = mesh.mesh.surface_get_material(1)
+				board_mat = orig.duplicate() if orig else StandardMaterial3D.new()
+				mesh.set_surface_override_material(1, board_mat)
+			board_mat.albedo_color = target_board_color
+			board_mat.emission_enabled = false
+		return
+
+	if _tween and _tween.is_valid():
+		_tween.kill()
+	
+	_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	# Important: Allow the fade to happen even when the game is paused
+	_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	
+	_tween.tween_property($Text, "modulate", target_text_color, 0.35)
+	_tween.tween_property($Text, "outline_modulate", target_outline_color, 0.35)
+	_tween.tween_property($Arrow, "modulate", target_text_color, 0.35)
+	_tween.tween_property($Arrow, "outline_modulate", target_outline_color, 0.35)
+	
+	var mesh: MeshInstance3D = $MeshInstance3D
+	if mesh:
+		var board_mat: StandardMaterial3D = mesh.get_surface_override_material(1)
+		if not board_mat:
+			var orig = mesh.mesh.surface_get_material(1)
+			board_mat = orig.duplicate() if orig else StandardMaterial3D.new()
+			mesh.set_surface_override_material(1, board_mat)
+		
+		board_mat.emission_enabled = false
+		_tween.tween_property(board_mat, "albedo_color", target_board_color, 0.35)

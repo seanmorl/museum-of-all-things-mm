@@ -6,11 +6,20 @@ extends Node
 
 func _on_node_added(node):
 	if node is Button:
-		node.pressed.connect(_play.bind(button_press_sound))
-		node.focus_entered.connect(_play.bind(focus_sound))
+		var press_callable = _play.bind(button_press_sound)
+		if not node.pressed.is_connected(press_callable):
+			node.pressed.connect(press_callable)
+		
+		var focus_callable = _play.bind(focus_sound)
+		if not node.focus_entered.is_connected(focus_callable):
+			node.focus_entered.connect(focus_callable)
 	elif node is Slider:
-		node.value_changed.connect(_slider_value_changed)
-		node.focus_entered.connect(_play.bind(focus_sound))
+		if not node.value_changed.is_connected(_slider_value_changed):
+			node.value_changed.connect(_slider_value_changed)
+		
+		var focus_callable = _play.bind(focus_sound)
+		if not node.focus_entered.is_connected(focus_callable):
+			node.focus_entered.connect(focus_callable)
 
 func _slider_value_changed(_value):
 	_play(drag_ended_sound)

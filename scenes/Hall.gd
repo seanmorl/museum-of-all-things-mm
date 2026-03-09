@@ -26,6 +26,28 @@ const _GRID_WRAPPER: PackedScene = preload("res://scenes/util/GridWrapper.tscn")
 @onready var from_sign: Node3D = $FromSign
 @onready var to_sign: Node3D = $ToSign
 
+var _disco_hue: float = randf()
+
+func _ready() -> void:
+	ThemeManager.disco_mode_changed.connect(_on_disco_mode_changed)
+	_on_dark_mode_changed(ThemeManager.is_dark_mode)
+
+func _process(delta: float) -> void:
+	if ThemeManager.disco_mode:
+		_disco_hue = fmod(_disco_hue + delta * 0.8, 1.0)
+		$Light.light_color = Color.from_hsv(_disco_hue, 0.9, 1.0)
+		$Light.light_energy = 1.5 # Pump it up
+
+func _on_disco_mode_changed(enabled: bool) -> void:
+	if not enabled:
+		# Reset once when disco ends
+		_on_dark_mode_changed(ThemeManager.is_dark_mode)
+
+func _on_dark_mode_changed(is_dark: bool) -> void:
+	# Dim the hallway light in dark mode for atmosphere
+	$Light.light_energy = 0.05 if is_dark else 0.4
+	$Light.light_color = Color.WHITE
+
 var _grid: Node = null
 var hall_type: Array = [true, FLAT]
 var floor_type: int = 0

@@ -4,6 +4,7 @@ signal resume
 signal settings
 signal vr_controls
 signal return_to_lobby
+signal return_to_main
 signal start_race
 
 const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
@@ -34,7 +35,7 @@ var _loading_overlay: Control = null
 # Group leaders: a divider line is placed just above each of these nodes.
 # Names matched to the actual tscn — "Lobby" is the Return to Lobby button,
 # "AskQuit" is the Quit button visible in the pause panel.
-const _GROUP_LEADERS := ["Lobby", "Settings", "DarkMode"]
+const _GROUP_LEADERS := ["Open", "Race", "CancelRace", "Lobby", "Settings", "Language", "DarkMode", "ReturnToMain", "AskQuit"]
 
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
@@ -202,18 +203,74 @@ func _apply_theme() -> void:
 	if vbox:
 		var title = vbox.get_node_or_null("Title")
 		if title:
-			# Clear LabelSettings (set in .tscn with hardcoded black font_color)
-			# so that add_theme_color_override can actually take effect.
 			title.label_settings = null
 			title.add_theme_color_override("font_color", ThemeManager.text_color)
-			title.add_theme_font_size_override("font_size", 48)
+			# Even more condensed for very long room names
+			title.add_theme_font_size_override("font_size", 22)
+			title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			title.custom_minimum_size.x = 350 # Prevent menu from stretching too wide
 			if _serif_font:
 				title.add_theme_font_override("font", _serif_font)
 		for child in vbox.get_children():
 			if child is Button:
 				_style_button(child)
 			elif child is Label:
+				child.label_settings = null
 				child.add_theme_color_override("font_color", ThemeManager.text_color)
+	
+	# 1. Handle Full-screen Backdrop (Moved to root for full coverage)
+	var bg = get_node_or_null("QuitBackdrop")
+	if not bg:
+		bg = ColorRect.new()
+		bg.name = "QuitBackdrop"
+		bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		add_child(bg)
+		move_child(bg, 0)
+	
+	bg.color = Color(0, 0, 0, 0.75) if dark else Color(0, 0, 0, 0.3)
+	bg.visible = (_quit_container.visible if _quit_container else false)
+
+	# 2. Style the Quit Dialog
+	# Path correction: _quit_container is reparented to self in _ready()
+	var quit_panel = get_node_or_null("QuitContainer/QuitPanel")
+	if quit_panel:
+		var qs := StyleBoxFlat.new()
+		qs.bg_color = ThemeManager.bg_color
+		qs.border_color = ThemeManager.border_color
+		qs.set_border_width_all(1)
+		qs.set_corner_radius_all(12)
+		qs.bg_color.a = 1.0 # Solid for the dialog
+		
+		# Compact margins
+		qs.content_margin_top = 25
+		qs.content_margin_bottom = 25
+		qs.content_margin_left = 35
+		qs.content_margin_right = 35
+		quit_panel.add_theme_stylebox_override("panel", qs)
+		
+		# Compact fixed width
+		quit_panel.custom_minimum_size = Vector2(360, 0)
+		
+		var quit_content = quit_panel.get_node_or_null("QuitContent")
+		if quit_content:
+			quit_content.add_theme_constant_override("separation", 12) # Closer buttons
+			for child in quit_content.get_children():
+				if child is Label:
+					# Hide spacers used in the .tscn
+					if child.name.begins_with("Spacer") or child.text == "":
+						child.visible = false
+						child.custom_minimum_size = Vector2.ZERO
+						continue
+					
+					child.label_settings = null # Clear tscn overrides
+					child.add_theme_color_override("font_color", ThemeManager.text_color)
+					child.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					if _serif_font:
+						child.add_theme_font_override("font", _serif_font)
+					child.add_theme_font_size_override("font_size", 21)
+				elif child is Button:
+					_style_button(child)
+					child.add_theme_font_size_override("font_size", 16)
 
 	for entry in _dividers:
 		var line: ColorRect = entry["line"]
@@ -259,6 +316,10 @@ func _style_button(btn: Button) -> void:
 	sf.border_color      = ThemeManager.text_color
 	sf.border_width_left = 2
 	btn.add_theme_stylebox_override("focus", sf)
+	
+	var sd := sn.duplicate() as StyleBoxFlat
+	sd.bg_color = Color(1, 1, 1, 0.02) if dark else Color(0, 0, 0, 0.02)
+	btn.add_theme_stylebox_override("disabled", sd)
 
 # ── Animations ────────────────────────────────────────────────────────────────
 
@@ -295,7 +356,7 @@ func set_current_room(room: String) -> void:
 	if vbox:
 		var title_node = vbox.get_node_or_null("Title")
 		if title_node:
-			title_node.text = current_room + (" - " + tr("Paused"))
+			title_node.text = current_room
 		var open_node = vbox.get_node_or_null("Open")
 		if open_node:
 			open_node.disabled = (current_room == "Lobby")
@@ -325,15 +386,25 @@ func _on_lobby_pressed() -> void:
 func _on_ask_quit_pressed() -> void:
 	if _quit_container:
 		_quit_container.visible = true
+		var bg = get_node_or_null("QuitBackdrop")
+		if bg: bg.visible = true
 
 # Called by the "Yes" button inside QuitContainer.
 func _on_quit_pressed() -> void:
 	_animate_out(func(): get_tree().quit())
 
+func _on_return_to_main_pressed() -> void:
+	_animate_out(func():
+		NetworkManager.disconnect_from_game()
+		get_tree().change_scene_to_file("res://scenes/Main.tscn")
+	)
+
 # Called by the "No" button inside QuitContainer.
 func _on_cancel_quit_pressed() -> void:
 	if _quit_container:
 		_quit_container.visible = false
+		var bg = get_node_or_null("QuitBackdrop")
+		if bg: bg.visible = false
 
 func _on_open_pressed() -> void:
 	OS.shell_open("https://" + TranslationServer.get_locale() + ".wikipedia.org/wiki/" + current_room)

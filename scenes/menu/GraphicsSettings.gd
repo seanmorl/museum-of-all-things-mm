@@ -71,55 +71,7 @@ func _ready() -> void:
 # =============================================================================
 
 func _style_option_button(btn: OptionButton) -> void:
-	## Applies a consistent flat/modern style to a single OptionButton.
-	## Rounded corners, border, subtle shadow, readable font size.
-	if not btn:
-		return
-
-	var normal := StyleBoxFlat.new()
-	normal.bg_color         = Color(0.97, 0.97, 0.97, 1.0)
-	normal.border_color     = Color(0.72, 0.72, 0.72, 1.0)
-	for s in ["left","right","top","bottom"]:
-		normal.set("border_width_" + s, 1)
-	for c in ["top_left","top_right","bottom_left","bottom_right"]:
-		normal.set("corner_radius_" + c, 5)
-	normal.content_margin_left  = 10
-	normal.content_margin_right = 28
-	normal.content_margin_top   = 5
-	normal.content_margin_bottom = 5
-
-	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color     = Color(0.92, 0.93, 0.98, 1.0)
-	hover.border_color = Color(0.50, 0.55, 0.85, 1.0)
-
-	var pressed := normal.duplicate() as StyleBoxFlat
-	pressed.bg_color     = Color(0.88, 0.90, 0.97, 1.0)
-	pressed.border_color = Color(0.40, 0.45, 0.80, 1.0)
-
-	var focus := normal.duplicate() as StyleBoxFlat
-	focus.border_color = Color(0.40, 0.45, 0.80, 1.0)
-	for s in ["left","right","top","bottom"]:
-		focus.set("border_width_" + s, 2)
-
-	btn.add_theme_stylebox_override("normal",  normal)
-	btn.add_theme_stylebox_override("hover",   hover)
-	btn.add_theme_stylebox_override("pressed", pressed)
-	btn.add_theme_stylebox_override("focus",   focus)
-	btn.add_theme_font_size_override("font_size", 13)
-
-	# Style the popup panel too
-	var popup_style := StyleBoxFlat.new()
-	popup_style.bg_color     = Color(0.98, 0.98, 0.98, 1.0)
-	popup_style.border_color = Color(0.70, 0.70, 0.70, 1.0)
-	for s in ["left","right","top","bottom"]:
-		popup_style.set("border_width_" + s, 1)
-	for c in ["top_left","top_right","bottom_left","bottom_right"]:
-		popup_style.set("corner_radius_" + c, 5)
-	popup_style.shadow_color  = Color(0, 0, 0, 0.12)
-	popup_style.shadow_size   = 8
-	popup_style.shadow_offset = Vector2(0, 3)
-	btn.get_popup().add_theme_stylebox_override("panel", popup_style)
-	btn.get_popup().add_theme_font_size_override("font_size", 13)
+	ThemeManager.style_option_button(btn)
 
 
 func _style_all_option_buttons() -> void:
@@ -196,7 +148,7 @@ func _build_ssr_section() -> void:
 	var heading := Label.new()
 	heading.text = "SSR Fine Tuning"
 	heading.add_theme_font_size_override("font_size", 12)
-	heading.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1.0))
+	heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	ref_options.add_child(heading)
 
 	# ── Max Steps (already exposed as ReflectionQuality — we keep it) ──
@@ -245,7 +197,7 @@ func _build_ssr_section() -> void:
 	var ssao_heading := Label.new()
 	ssao_heading.text = "SSAO (Ambient Occlusion)"
 	ssao_heading.add_theme_font_size_override("font_size", 12)
-	ssao_heading.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1.0))
+	ssao_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	ref_options.add_child(ssao_heading)
 
 	var ssao_check := CheckBox.new()
@@ -294,7 +246,7 @@ func _build_ssr_section() -> void:
 	var sdfgi_heading := Label.new()
 	sdfgi_heading.text = "SDFGI (Global Illumination)"
 	sdfgi_heading.add_theme_font_size_override("font_size", 12)
-	sdfgi_heading.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1.0))
+	sdfgi_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	ref_options.add_child(sdfgi_heading)
 
 	var sdfgi_check := CheckBox.new()
@@ -306,7 +258,7 @@ func _build_ssr_section() -> void:
 	var sdfgi_hint := Label.new()
 	sdfgi_hint.text = "High quality GI — significantly impacts performance on lower-end hardware."
 	sdfgi_hint.add_theme_font_size_override("font_size", 10)
-	sdfgi_hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	sdfgi_hint.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	sdfgi_hint.autowrap_mode = TextServer.AUTOWRAP_WORD
 	ref_options.add_child(sdfgi_hint)
 
@@ -326,7 +278,7 @@ func _build_ssr_section() -> void:
 	var glow_heading := Label.new()
 	glow_heading.text = "Glow"
 	glow_heading.add_theme_font_size_override("font_size", 12)
-	glow_heading.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1.0))
+	glow_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	ref_options.add_child(glow_heading)
 
 	var glow_check := CheckBox.new()
@@ -359,7 +311,7 @@ func _build_ssr_section() -> void:
 	var tm_heading := Label.new()
 	tm_heading.text = "Tone Mapping"
 	tm_heading.add_theme_font_size_override("font_size", 12)
-	tm_heading.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1.0))
+	tm_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	ref_options.add_child(tm_heading)
 
 	var tm_mode_btn := OptionButton.new()

@@ -89,10 +89,12 @@ func _apply_theme(_dark: bool) -> void:
 
 	# Style labels
 	if _countdown_label:
+		_countdown_label.label_settings = null
 		_countdown_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
 		if _serif_font:
 			_countdown_label.add_theme_font_override("font", _serif_font)
 	if _status_label:
+		_status_label.label_settings = null
 		_status_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
 		if _serif_font:
 			_status_label.add_theme_font_override("font", _serif_font)
@@ -100,6 +102,12 @@ func _apply_theme(_dark: bool) -> void:
 	# Style reroll button
 	if _reroll_button:
 		_style_vote_button(_reroll_button)
+
+	# Style the "X" close button in the top right
+	var close_btn = _panel.get_node_or_null("Content/TitleRow/CloseButton") if _panel else null
+	if close_btn:
+		_style_vote_button(close_btn)
+		close_btn.add_theme_font_size_override("font_size", 18)
 
 	# Style candidate buttons
 	for btn in _candidate_buttons:
@@ -146,6 +154,10 @@ func _style_vote_button(btn: Button) -> void:
 	sf.border_width_left = 2
 	btn.add_theme_stylebox_override("focus", sf)
 
+	var sd := sn.duplicate() as StyleBoxFlat
+	sd.bg_color = Color(1, 1, 1, 0.02) if dark else Color(0, 0, 0, 0.02)
+	btn.add_theme_stylebox_override("disabled", sd)
+
 
 func _style_host_panel(panel: Control) -> void:
 	for child in panel.get_children():
@@ -154,6 +166,7 @@ func _style_host_panel(panel: Control) -> void:
 		elif child is HBoxContainer or child is VBoxContainer:
 			_style_host_panel(child)
 		elif child is Label:
+			child.label_settings = null
 			child.add_theme_color_override("font_color", ThemeManager.subtext_color)
 			if _serif_font:
 				child.add_theme_font_override("font", _serif_font)

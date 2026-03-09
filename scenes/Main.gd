@@ -195,6 +195,8 @@ func _ready() -> void:
 	call_deferred("_play_sting")
 	
 	_world_light.visible = Platform.is_compatibility_renderer()
+	ThemeManager.dark_mode_changed.connect(func(_d): _update_world_light_intensity())
+	_update_world_light_intensity()
 	
 	_pause_game()
 
@@ -218,6 +220,10 @@ func _recreate_player() -> void:
 
 func _change_post_processing(post_processing: String) -> void:
 	_crt_post_processing.visible = post_processing == "crt"
+
+func _update_world_light_intensity() -> void:
+	if _world_light:
+		_world_light.light_energy = 0.05 if ThemeManager.is_dark_mode else 0.35
 
 func _start_game() -> void:
 	if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
