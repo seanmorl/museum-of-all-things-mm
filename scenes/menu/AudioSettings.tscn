@@ -141,8 +141,14 @@ size_flags_stretch_ratio = 0.1
 text = "100%"
 horizontal_alignment = 1
 
+[node name="TTSButton" type="CheckBox" parent="VolumeOptions" unique_id=999999999]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Enable Text-to-Speech (TTS)"
+
 [connection signal="visibility_changed" from="." to="." method="_on_visibility_changed"]
 [connection signal="value_changed" from="VolumeOptions/HBoxContainer/GlobalVolume" to="." method="_on_global_volume_changed"]
 [connection signal="value_changed" from="VolumeOptions/HBoxContainer2/SoundVolume" to="." method="_on_sound_volume_changed"]
 [connection signal="value_changed" from="VolumeOptions/HBoxContainer3/AmbienceVolume" to="." method="_on_ambience_volume_changed"]
 [connection signal="value_changed" from="VolumeOptions/HBoxContainer4/MusicVolume" to="." method="_on_music_volume_changed"]
+[connection signal="toggled" from="VolumeOptions/TTSButton" to="." method="_on_tts_button_toggled"]

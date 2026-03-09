@@ -15,6 +15,7 @@ var ignore_sections: Array[String] = [
 ]
 
 var IMAGE_REGEX: RegEx = RegEx.new()
+var AUDIO_REGEX: RegEx = RegEx.new()
 var s2_re: RegEx = RegEx.new()
 var template_re: RegEx = RegEx.new()
 var links_re: RegEx = RegEx.new()
@@ -39,6 +40,7 @@ var PROCESSOR_QUEUE: String = "ItemProcessor"
 
 func _ready() -> void:
 	IMAGE_REGEX.compile("\\.(png|jpg|jpeg|webp|svg)$")
+	AUDIO_REGEX.compile("\\.(ogg)$")
 	s2_re.compile("^==[^=]")
 	template_re.compile("\\{\\{.*?\\}\\}")
 	links_re.compile("\\[\\[([^|\\]]*?\\|)?(.*?)\\]\\]")
@@ -107,8 +109,11 @@ func _clean_section(s: String) -> String:
 	return s.replace("=", "").strip_edges()
 
 var trim_filename_front: int = len("File:")
-func _clean_filename(s: String) -> String:
+func _clean_filename_img(s: String) -> String:
 	return IMAGE_REGEX.sub(s.substr(trim_filename_front), "")
+
+func _clean_filename_aud(s: String) -> String:
+	return AUDIO_REGEX.sub(s.substr(trim_filename_front), "")
 
 func _create_text_items(title: String, extract: String) -> Array:
 	var items: Array = []
@@ -264,13 +269,22 @@ func commons_images_to_items(title: String, images: Array, extra_text: Array) ->
 			if len(extra_text) > 0 and rng.randi() % 2 == 0:
 				items.append(extra_text.pop_front())
 
-		if image and IMAGE_REGEX.search(image) and not exclude_image_re.search(image.to_lower()):
+		var is_image = image and IMAGE_REGEX.search(image) and not exclude_image_re.search(image.to_lower())
+		var is_audio = image and AUDIO_REGEX.search(image) and not exclude_image_re.search(image.to_lower())
+		
+		if is_image or is_audio:
+			var item_type := "image"
+			var text_clean := _clean_filename_img(image)
+			if is_audio:
+				item_type = "audio"
+				text_clean = _clean_filename_aud(image)
+				
 			items.append({
-				"type": "image",
+				"type": item_type,
 				"material": material,
 				"plate": plate,
 				"title": image,
-				"text": _clean_filename(image),
+				"text": text_clean,
 			})
 
 	return items
@@ -306,13 +320,22 @@ func _create_items(title: String, result: Dictionary, prev_title: String, race_t
 			var target: String = _to_link_case(image_name_re.sub(link.get_slice("|", 0), "File:"))
 			var caption: RegExMatch = alt_re.search(link)
 
-			if target.begins_with("File:") and IMAGE_REGEX.search(target):
+			var is_image_target = target.begins_with("File:") and IMAGE_REGEX.search(target)
+			var is_audio_target = target.begins_with("File:") and AUDIO_REGEX.search(target)
+			
+			if is_image_target or is_audio_target:
+				var item_type := "image"
+				var text_clean := _clean_filename_img(target)
+				if is_audio_target:
+					item_type = "audio"
+					text_clean = _clean_filename_aud(target)
+					
 				image_items.append({
-					"type": "image",
+					"type": item_type,
 					"material": material,
 					"plate": plate,
 					"title": target,
-					"text": caption.get_string(1) if caption else _clean_filename(target),
+					"text": caption.get_string(1) if caption else text_clean,
 				})
 
 			elif type == "template":
@@ -322,16 +345,25 @@ func _create_items(title: String, result: Dictionary, prev_title: String, race_t
 						var image_title: String = image_name_re.sub(img_match.get_string(1), "File:")
 						if image_title.find("\n") >= 0:
 							print("newline in file name ", image_title)
-						if not image_title or not IMAGE_REGEX.search(image_title):
+						var is_img_tm = image_title and IMAGE_REGEX.search(image_title)
+						var is_aud_tm = image_title and AUDIO_REGEX.search(image_title)
+						if not is_img_tm and not is_aud_tm:
 							continue
 						if not image_title.begins_with("File:"):
 							image_title = "File:" + image_title
+							
+						var item_type := "image"
+						var text_clean := _clean_filename_img(image_title)
+						if is_aud_tm:
+							item_type = "audio"
+							text_clean = _clean_filename_aud(image_title)
+							
 						image_items.append({
-							"type": "image",
+							"type": item_type,
 							"material": material,
 							"plate": plate,
 							"title": image_title,
-							"text": caption.get_string(1) if caption else _clean_filename(image_title),
+							"text": caption.get_string(1) if caption else text_clean,
 						})
 
 			elif type == "link" and target and target.find(":") < 0:

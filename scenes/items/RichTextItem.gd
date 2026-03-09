@@ -6,8 +6,10 @@ const MAX_TRIM_RETRIES := 20
 
 var _layout_retries := 0
 var _trim_retries := 0
+var _text: String = ""
 
 func init(text: String) -> void:
+	_text = text
 	_layout_retries = 0
 	_trim_retries = 0
 	var label: RichTextLabel = $SubViewport/Control/RichTextLabel
@@ -19,6 +21,10 @@ func init(text: String) -> void:
 	# Disable auto-render; _center_vertically will trigger it once positioning is done
 	$SubViewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	call_deferred("_center_vertically", label)
+
+func interact() -> void:
+	if TTSManager:
+		TTSManager.toggle_narration(_text)
 
 func _apply_accessibility(text_content: String, label: RichTextLabel) -> String:
 	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}

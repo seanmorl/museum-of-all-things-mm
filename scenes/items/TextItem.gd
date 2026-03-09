@@ -2,13 +2,20 @@ extends Node3D
 
 static var max_chars := 2500
 
+var _text: String = ""
+
 func _ready() -> void:
 	SettingsEvents.accessibility_changed.connect(_on_accessibility_changed)
 
 func init(text: String) -> void:
+	_text = text
 	var t : String = TextUtils.strip_markup(text).substr(0, max_chars)
 	$Label.text = t if len(t) < max_chars else t + "..."
 	_apply_accessibility()
+
+func interact() -> void:
+	if TTSManager:
+		TTSManager.toggle_narration(_text)
 
 func _apply_accessibility() -> void:
 	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}

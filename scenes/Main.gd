@@ -28,7 +28,9 @@ var _chat_hud: Node = null
 @onready var player_list_overlay: Control = %PlayerListOverlay
 @onready var _server_console_overlay: Control = %ServerConsoleOverlay
 @onready var _map_overlay: Control = %ExhibitMapOverlay
+@onready var _minimap_hud: Control = %MinimapHUD
 @onready var _guestbook_overlay: GuestbookOverlay = %GuestbookOverlay
+@onready var _prompt_hud: Control = %PromptHUD
 @onready var _menu_layer: CanvasLayer = %MenuLayer
 @onready var _fps_label: Label = %FpsLabel
 @onready var _museum: Node3D = %Museum
@@ -225,6 +227,15 @@ func _recreate_player() -> void:
 	_player.dampening = smooth_movement_dampening
 	_player.position = starting_point
 	_player.set_player_color(NetworkManager.local_player_color)
+	if _minimap_hud and _minimap_hud.has_method("init"):
+		_minimap_hud.init(_player)
+	if _prompt_hud and _prompt_hud.has_method("init"):
+		_prompt_hud.init(_player)
+	
+	# Fix Minimap Viewport World
+	var map_viewport: SubViewport = _player.get_node_or_null("MapCameraContainer/MapViewport")
+	if map_viewport:
+		map_viewport.world_3d = get_viewport().find_world_3d()
 
 func _change_post_processing(post_processing: String) -> void:
 	_crt_post_processing.visible = post_processing == "crt"
@@ -239,6 +250,8 @@ func _start_game() -> void:
 	_player.start()
 	_menu_controller.close_menus()
 	_map_overlay.restore_after_pause()
+	if _minimap_hud and _minimap_hud.has_method("restore_after_pause"):
+		_minimap_hud.restore_after_pause()
 	if not game_started:
 		game_started = true
 		_museum.init(_player)
@@ -253,6 +266,8 @@ func _pause_game() -> void:
 		_menu_controller.open_main_menu()
 
 func _use_terminal() -> void:
+	if _minimap_hud and _minimap_hud.has_method("set_hidden"):
+		_minimap_hud.set_hidden()
 	_player.pause()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_menu_controller.open_terminal_menu()
@@ -395,14 +410,20 @@ func _input(event: InputEvent) -> void:
 			if _multiplayer_controller.is_multiplayer_game():
 				_server_console_overlay.toggle()
 		
-		if event.is_action_pressed("toggle_journal"):
-			if _journal_overlay:
-				if _journal_overlay.is_open():
-					_journal_overlay.close()
-				else:
-					_journal_overlay.open()
-					Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-					_player.pause()
+		# Guard journal/map/etc behind menu check
+		if not _menu_layer.visible:
+			if event.is_action_pressed("toggle_journal"):
+				if _journal_overlay:
+					if _journal_overlay.is_open():
+						_journal_overlay.close()
+					else:
+						_journal_overlay.open()
+						Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+						_player.pause()
+			
+			if event.is_action_pressed("toggle_map"):
+				if _minimap_hud and _minimap_hud.has_method("toggle"):
+					_minimap_hud.toggle()
 		
 		# UI scale keyboard shortcuts — work in any state
 		if event.is_action_pressed("ui_scale_in"):
@@ -415,11 +436,9 @@ func _input(event: InputEvent) -> void:
 			_adjust_ui_scale(0.0)
 			get_viewport().set_input_as_handled()
 		
-		if event.is_action_pressed("toggle_map") and not _menu_layer.visible:
-			_map_overlay.cycle_mode()
-		
 		if event.is_action_pressed("pause"):
-			_map_overlay.set_hidden()
+			if _minimap_hud and _minimap_hud.has_method("set_hidden"):
+				_minimap_hud.set_hidden()
 			_pause_game()
 		
 		if event.is_action_pressed("free_pointer"):

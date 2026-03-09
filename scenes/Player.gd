@@ -9,6 +9,8 @@ const BOB_AMPLITUDE: float = 0.05
 const DEFAULT_PIVOT_Y: float = 1.35
 const PITCH_CLAMP: float = 1.2
 
+signal interactable_target_changed(target: Node)
+
 var _gravity: float = -30.0
 var _bob_time: float = 0.0
 var _body_mesh_base_y: float = 0.667
@@ -44,6 +46,8 @@ var _target_pivot_rot_x: float = 0.0
 var _target_pivot_pos_y: float = DEFAULT_PIVOT_Y
 var _has_network_target: bool = false
 
+var _last_interactable_target: Node = null
+
 # Subsystems
 var _crouch_system: PlayerCrouchSystem = null
 var _mount_system: PlayerMountSystem = null
@@ -56,6 +60,8 @@ var _footprint_system: PlayerFootprintSystem = null
 @onready var camera: Camera3D = $Pivot/Camera3D
 @onready var _pivot: Node3D = $Pivot
 @onready var _footstep_player: Node = $FootstepPlayer
+@onready var _map_camera: Camera3D = $MapCameraContainer/MapViewport/MapCamera
+@onready var _map_viewport: SubViewport = $MapCameraContainer/MapViewport
 @onready var _raycast: RayCast3D = $Pivot/Camera3D/RayCast3D
 @onready var _multiplayer_sync: MultiplayerSynchronizer = get_node_or_null("MultiplayerSynchronizer")
 @onready var _name_label: Label3D = get_node_or_null("NameLabel")
@@ -83,6 +89,9 @@ func _ready() -> void:
 
 	if _body_mesh:
 		_body_mesh_base_y = _body_mesh.position.y
+
+	if is_local:
+		add_to_group("local_player")
 
 	# Initialize subsystems
 	_crouch_system = PlayerCrouchSystem.new()
@@ -193,7 +202,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _painting_system and _painting_system.try_steal_target():
 			pass  # Steal initiated
 		else:
-			_mount_system.try_mount_target()
+			var collider: Node = _raycast.get_collider()
+			if collider:
+				if collider.has_method("interact"):
+					collider.interact()
+				elif collider.get_parent() and collider.get_parent().has_method("interact"):
+					collider.get_parent().interact()
+				else:
+					_mount_system.try_mount_target()
+			else:
+				_mount_system.try_mount_target()
 
 	# Interact handling (equip skin, etc.) — skip if carrying a painting (right-click is eat)
 	if event.is_action_pressed("interact") and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
@@ -275,11 +293,16 @@ func _physics_process(delta: float) -> void:
 		_pivot.rotate_x(delta_vec.y * _joy_sensitivity)
 		_pivot.rotation.x = clamp(_pivot.rotation.x, -PITCH_CLAMP, PITCH_CLAMP)
 
-	if smooth_movement:
-		rotate_y(_camera_v.y)
-		_pivot.rotate_x(_camera_v.x)
-		_pivot.rotation.x = clamp(_pivot.rotation.x, -PITCH_CLAMP, PITCH_CLAMP)
-		_camera_v *= 0.95
+	# Camera smoothing
+	if smooth_movement and is_local and _enabled:
+		rotation.y = lerp_angle(rotation.y, rotation.y - _camera_v.y, delta * 30.0)
+		_pivot.rotation.x = clamp(lerp_angle(_pivot.rotation.x, _pivot.rotation.x - _camera_v.x, delta * 30.0), -PITCH_CLAMP, PITCH_CLAMP)
+		_camera_v = _camera_v.lerp(Vector2.ZERO, delta * 20.0)
+		
+	if is_local and is_instance_valid(_map_camera):
+		# Camera is 10m above player, looking down with near=7 far=11
+		# This skips ceilings (2-3m above) and sees floors/walls
+		_map_camera.global_position = Vector3(global_position.x, global_position.y + 10.0, global_position.z)
 
 	_footstep_player.set_on_floor(is_on_floor())
 
@@ -303,6 +326,12 @@ func _physics_process(delta: float) -> void:
 	# Process stillness for ghost placement
 	if _footprint_system:
 		_footprint_system.process_stillness(delta)
+
+	# Update interactable target tracking
+	var current_collider: Node = _raycast.get_collider()
+	if current_collider != _last_interactable_target:
+		_last_interactable_target = current_collider
+		interactable_target_changed.emit(current_collider)
 
 	if Input.is_action_just_pressed("pin_to_journal") and _journal_system:
 		_journal_system.try_pin_item()
@@ -422,8 +451,10 @@ func set_player_authority(peer_id: int) -> void:
 	if _multiplayer_sync:
 		_multiplayer_sync.set_multiplayer_authority(peer_id)
 	is_local = (peer_id == multiplayer.get_unique_id())
-	if is_local and camera:
-		camera.make_current()
+	if is_local:
+		add_to_group("local_player")
+		if camera:
+			camera.make_current()
 
 
 func set_player_name(new_name: String) -> void:
@@ -440,7 +471,12 @@ func set_player_pronouns(pronouns: String) -> void:
 		return
 	var lbl := _get_or_create_pronoun_label()
 	lbl.text = pronouns
-	lbl.visible = (_name_label == null or _name_label.visible)
+	lbl.visible = NetworkManager.show_nameplates and pronouns != ""
+
+func get_minimap_texture() -> Texture2D:
+	if _map_viewport:
+		return _map_viewport.get_texture()
+	return null
 
 
 func _get_or_create_pronoun_label() -> Label3D:

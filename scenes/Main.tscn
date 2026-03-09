@@ -19,6 +19,8 @@
 [ext_resource type="PackedScene" path="res://scenes/menu/GuestbookOverlay.tscn" id="17_bb450"]
 [ext_resource type="PackedScene" path="res://scenes/menu/VoteHUD.tscn" id="18_votehud"]
 [ext_resource type="PackedScene" uid="uid://crh1ugdfaifsn" path="res://scenes/items/StartLine.tscn" id="19_nfivy"]
+[ext_resource type="PackedScene" uid="uid://minihud1234" path="res://scenes/ui/MinimapHUD.tscn" id="20_minihud"]
+[ext_resource type="PackedScene" uid="uid://c7mjt8p4k1c6u" path="res://scenes/ui/PromptHUD.tscn" id="21_prompthud"]
 
 [node name="Main" type="Node" unique_id=557895252]
 script = ExtResource("1_d7g3n")
@@ -42,6 +44,7 @@ mouse_filter = 1
 
 [node name="MenuLayer" type="CanvasLayer" parent="." unique_id=1160602503]
 unique_name_in_owner = true
+layer = 10
 
 [node name="ColorRect" type="ColorRect" parent="MenuLayer" unique_id=1505598716]
 z_index = -6
@@ -114,6 +117,10 @@ anchors_preset = -1
 unique_name_in_owner = true
 visible = false
 
+[node name="MinimapHUD" parent="TabMenu" unique_id=904511922 instance=ExtResource("20_minihud")]
+unique_name_in_owner = true
+visible = false
+
 [node name="JournalOverlay" parent="TabMenu" unique_id=1483033310 instance=ExtResource("16_ft6cd")]
 unique_name_in_owner = true
 visible = false
@@ -121,6 +128,9 @@ visible = false
 [node name="GuestbookOverlay" parent="TabMenu" unique_id=1573667143 instance=ExtResource("17_bb450")]
 unique_name_in_owner = true
 visible = false
+
+[node name="PromptHUD" parent="TabMenu" unique_id=1573667144 instance=ExtResource("21_prompthud")]
+unique_name_in_owner = true
 
 [node name="StartLine" parent="." unique_id=2087091294 instance=ExtResource("19_nfivy")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.051032305, 4.035794, 23.94235)

@@ -6,6 +6,7 @@ signal mount_requested(target: Node)
 signal dismount_requested
 
 const MOUNT_HEIGHT_OFFSET: float = 1.95
+const SEAT_HEIGHT_OFFSET: float = 0.65
 
 var _player: CharacterBody3D = null
 var _crouch_system: PlayerCrouchSystem = null
@@ -52,8 +53,9 @@ func process_mount(delta: float) -> void:
 
 	# Follow mount's position
 	if is_instance_valid(mounted_on):
+		var is_seat: bool = mounted_on.is_in_group("Seat")
 		# Calculate height offset accounting for mount's crouch state
-		var height_offset: float = MOUNT_HEIGHT_OFFSET
+		var height_offset: float = SEAT_HEIGHT_OFFSET if is_seat else MOUNT_HEIGHT_OFFSET
 		if "_crouch_system" in mounted_on and mounted_on._crouch_system:
 			var mount_crouch: PlayerCrouchSystem = mounted_on._crouch_system
 			var crouch_factor: float = mount_crouch.get_crouch_factor()
@@ -136,9 +138,11 @@ func execute_mount(target: Node, target_peer_id: int = -1) -> void:
 	mount_peer_id = target_peer_id
 	_is_mounted = true
 
+	var is_seat: bool = target.is_in_group("Seat")
 	# Initialize lerp transition - calculate offset from target mount position
 	_mount_lerp_time = 0.0
-	var initial_target: Vector3 = target.global_position + Vector3(0, MOUNT_HEIGHT_OFFSET, 0)
+	var h_offset: float = SEAT_HEIGHT_OFFSET if is_seat else MOUNT_HEIGHT_OFFSET
+	var initial_target: Vector3 = target.global_position + Vector3(0, h_offset, 0)
 	_mount_initial_offset = _player.global_position - initial_target
 
 	# Clear velocity and disable all collision while mounted
@@ -171,7 +175,13 @@ func execute_dismount() -> void:
 		return
 
 	# Get dismount position (offset to the side of mount)
-	var dismount_pos: Vector3 = mounted_on.global_position + mounted_on.global_transform.basis.x * 1.0
+	var is_seat: bool = mounted_on.is_in_group("Seat")
+	var dismount_pos: Vector3 = mounted_on.global_position
+	if is_seat:
+		dismount_pos += -mounted_on.global_transform.basis.z * 1.5
+	else:
+		dismount_pos += mounted_on.global_transform.basis.x * 1.0
+	
 	dismount_pos.y = mounted_on.global_position.y
 
 	# Tell mount we're leaving

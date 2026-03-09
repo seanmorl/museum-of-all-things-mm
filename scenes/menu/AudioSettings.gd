@@ -8,6 +8,7 @@ extends "res://scenes/menu/BaseSettingsPanel.gd"
 @onready var sound_value: Label = %SoundValue
 @onready var ambience_value: Label = %AmbienceValue
 @onready var music_value: Label = %MusicValue
+@onready var tts_button: CheckBox = %TTSButton
 
 var global_bus_name: String = "Master"
 var global_bus_idx: int
@@ -31,6 +32,11 @@ func _apply_settings(settings: Dictionary) -> void:
 	sound_volume.value = settings.sound
 	ambience_volume.value = settings.ambience
 	music_volume.value = settings.music
+	
+	if settings.has("tts_enabled"):
+		tts_button.button_pressed = settings.tts_enabled
+	else:
+		tts_button.button_pressed = true
 
 func _create_settings_obj() -> Dictionary:
 	return {
@@ -38,6 +44,7 @@ func _create_settings_obj() -> Dictionary:
 		"sound": sound_volume.value,
 		"ambience": ambience_volume.value,
 		"music": music_volume.value,
+		"tts_enabled": tts_button.button_pressed,
 	}
 
 func _on_global_volume_changed(value: float) -> void:
@@ -58,3 +65,7 @@ func _on_music_volume_changed(value: float) -> void:
 
 func _change_volume(idx: int, value: float) -> void:
 	AudioServer.set_bus_volume_db(idx, linear_to_db(value))
+
+func _on_tts_button_toggled(toggled_on: bool) -> void:
+	if not toggled_on:
+		TTSManager.stop()

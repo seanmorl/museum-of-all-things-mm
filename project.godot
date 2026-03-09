@@ -47,6 +47,7 @@ JournalManager="*res://scenes/util/JournalManager.gd"
 TraceManager="*res://scenes/util/TraceManager.gd"
 ThemeManager="*res://scenes/util/ThemeManager.gd"
 TwitchManager="*res://scenes/util/TwitchManager.gd"
+TTSManager="*res://scenes/autoload/TTSManager.gd"
 
 [display]
 

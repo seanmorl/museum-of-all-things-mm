@@ -42,10 +42,23 @@ func _refresh(_id: Variant = null) -> void:
 		child.queue_free()
 
 	for peer_id in NetworkManager.get_player_list():
+		var vbox := VBoxContainer.new()
+		
 		var label = Label.new()
 		var player_name = NetworkManager.get_player_name(peer_id)
 		var suffix = " (Host)" if peer_id == 1 else ""
 		var you = " (You)" if peer_id == NetworkManager.get_unique_id() else ""
 		label.text = player_name + suffix + you
 		label.add_theme_color_override("font_color", NetworkManager.get_player_color(peer_id))
-		player_container.add_child(label)
+		label.add_theme_font_override("font", ThemeManager.get_reading_font())
+		vbox.add_child(label)
+		
+		var room_label := Label.new()
+		var room_name := NetworkManager.get_player_room(peer_id)
+		room_label.text = "  Location: " + room_name
+		room_label.add_theme_font_size_override("font_size", 10)
+		room_label.add_theme_color_override("font_color", Color(ThemeManager.text_color.r, ThemeManager.text_color.g, ThemeManager.text_color.b, 0.7))
+		room_label.add_theme_font_override("font", ThemeManager.get_reading_font())
+		vbox.add_child(room_label)
+		
+		player_container.add_child(vbox)

@@ -23,6 +23,7 @@ var _max_room_dimension: int = 5
 # Scenes
 var TiledExhibitGenerator: PackedScene = preload("res://scenes/TiledExhibitGenerator.tscn")
 var WallItem: PackedScene = preload("res://scenes/items/WallItem.tscn")
+var GramophoneItem: PackedScene = preload("res://scenes/items/Gramophone.tscn")
 
 
 func init(museum: Node3D, config: Dictionary) -> void:
@@ -210,7 +211,8 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	var item_queue: Array = []
 	for item_data: Dictionary in items:
 		if item_data:
-			if item_data.type == "image" and item_data.has("title") and item_data.title != "":
+			var t: String = item_data.get("type", "") as String
+			if (t == "image" or t == "audio") and item_data.has("title") and item_data.title != "":
 				image_titles.append(item_data.title)
 			item_queue.append(_add_item.bind(new_exhibit, item_data))
 
@@ -368,7 +370,8 @@ func _on_secret_room_fetch_complete(context: Dictionary) -> void:
 		if slot_idx >= secret_slots.size():
 			break
 		if item_data and item_data.has("type"):
-			if item_data.type == "image" and item_data.has("title") and item_data.title != "":
+			var t: String = item_data.get("type", "") as String
+			if (t == "image" or t == "audio") and item_data.has("title") and item_data.title != "":
 				image_titles.append(item_data.title)
 			var slot: Array = secret_slots[slot_idx]
 			_museum._queue_item(context.exhibit_title, _add_item_at_slot.bind(exhibit, item_data, slot))
@@ -414,7 +417,13 @@ func _add_item(exhibit: Node3D, item_data: Dictionary) -> void:
 				_logged_slot_cap = true
 		return
 
-	var item: Node3D = WallItem.instantiate()
+	var t: String = item_data.get("type", "") as String
+	var item: Node3D
+	if t == "audio":
+		item = GramophoneItem.instantiate()
+	else:
+		item = WallItem.instantiate()
+	
 	item.position = GridUtils.grid_to_world(slot[0]) - slot[1] * 0.01
 	item.rotation.y = GridUtils.vec_to_rot(slot[1])
 
@@ -424,7 +433,15 @@ func _add_item(exhibit: Node3D, item_data: Dictionary) -> void:
 func _init_item(exhibit: Node3D, item: Node3D, data: Dictionary) -> void:
 	if is_instance_valid(exhibit) and is_instance_valid(item):
 		exhibit.add_child(item)
-		item.init(data)
+		var t: String = data.get("type", "") as String
+		if t == "audio":
+			var get_res = ExhibitFetcher.get_result(data.get("title", ""))
+			var media_url: String = ""
+			if get_res and get_res.has("url"):
+				media_url = get_res.url
+			item.init(exhibit.title, data.get("text", ""), media_url)
+		else:
+			item.init(data)
 		
 		# Check if this painting should be stolen (missing)
 		if data.type == "image":

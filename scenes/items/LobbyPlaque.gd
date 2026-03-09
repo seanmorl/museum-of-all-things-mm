@@ -27,8 +27,11 @@ func _ready() -> void:
 		if not Engine.is_editor_hint():
 			call_deferred("_connect_language")
 		_resize_text()
-	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
-	_on_dark_mode_changed(ThemeManager.is_dark_mode)
+	if not Engine.is_editor_hint():
+		ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
+		_on_dark_mode_changed(ThemeManager.is_dark_mode)
+	else:
+		_on_dark_mode_changed(false)
 
 func _on_dark_mode_changed(is_dark: bool) -> void:
 	# Illuminate lobby plaques in dark mode (soft white glow)
