@@ -20,8 +20,13 @@ func get_mount_state() -> Dictionary:
 func request_mount(target: Node, local_player: Node) -> void:
 	if not _multiplayer_controller.is_multiplayer_game() or not NetworkManager.is_multiplayer_active():
 		# Single player - just mount directly
-		if is_instance_valid(target) and not target.has_rider:
+		if is_instance_valid(target) and (not "has_rider" in target or not target.has_rider):
 			local_player.execute_mount(target)
+		return
+
+	# Handle static seats (benches, chairs)
+	if is_instance_valid(target) and target.is_in_group("Seat"):
+		local_player.execute_mount(target)
 		return
 
 	# Multiplayer - find peer_id of target

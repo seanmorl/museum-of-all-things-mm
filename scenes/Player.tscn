@@ -14,6 +14,14 @@ radius = 0.3
 radius = 0.25
 height = 1.2
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_marker"]
+albedo_color = Color(1, 0, 0, 1)
+disable_receive_shadows = true
+shading_mode = 0
+
+[sub_resource type="PrismMesh" id="PrismMesh_marker"]
+size = Vector3(1.0, 1.0, 0.2)
+
 [node name="Player" type="CharacterBody3D" unique_id=923866932 groups=["Player"]]
 collision_layer = 524288
 collision_mask = 524289
@@ -24,6 +32,7 @@ smooth_movement = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
 
 [node name="Camera3D" type="Camera3D" parent="Pivot" unique_id=1956912596]
+cull_mask = 1048063
 far = 2000.0
 
 [node name="RayCast3D" type="RayCast3D" parent="Pivot/Camera3D" unique_id=197620397]
@@ -48,3 +57,27 @@ target_position = Vector3(0, 2.5, 0)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
 mesh = SubResource("CapsuleMesh_body")
 surface_material_override/0 = ExtResource("3_skin")
+
+[node name="MapMarker" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0.5, 0)
+layers = 8388608
+mesh = SubResource("PrismMesh_marker")
+surface_material_override/0 = SubResource("StandardMaterial3D_marker")
+
+[node name="MapCameraContainer" type="Node3D" parent="."]
+top_level = true
+
+[node name="MapViewport" type="SubViewport" parent="MapCameraContainer"]
+unique_name_in_owner = true
+transparent_bg = true
+size = Vector2i(512, 512)
+render_target_update_mode = 4
+
+[node name="MapCamera" type="Camera3D" parent="MapCameraContainer/MapViewport"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 10, 0)
+cull_mask = 8388609
+projection = 1
+size = 20.0
+near = 7.0
+far = 11.0

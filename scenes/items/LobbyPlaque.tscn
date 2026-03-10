@@ -23,6 +23,7 @@ distance_fade_begin = 30.0
 spot_attenuation = 0.5
 spot_angle = 37.73
 
+
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.37975, 1.3236)
 mesh = ExtResource("2_ummoj")

@@ -1,12 +1,10 @@
 extends VBoxContainer
-
 signal resume
 
 enum ScaleMode { BILINEAR, FSR1, FSR2, NEAREST }
-
 var post_processing_options: Array[String] = ["none", "crt"]
 
-# Display options
+## Display options
 @onready var scale_mode: OptionButton = %ScaleMode
 @onready var fsr_quality: OptionButton = %FSRQuality
 @onready var sharpness_scale: HSlider = %SharpnessScale
@@ -15,75 +13,83 @@ var post_processing_options: Array[String] = ["none", "crt"]
 @onready var render_scale_value: Label = %RenderScaleValue
 @onready var fullscreen: Button = %Fullscreen
 
-# Light options
+## Resolution dropdown — built at runtime
+var _resolution_option: OptionButton = null
+
+## Light options
 @onready var ambient_light: HSlider = %AmbientLight
 @onready var ambient_light_value: Label = %AmbientLightValue
 @onready var enable_ssil: CheckBox = %EnableSSIL
+@onready var enable_ssao: CheckBox = %EnableSSAO
 
-# Reflection options
+## Reflection options
 @onready var reflection_quality: HSlider = %ReflectionQuality
 @onready var reflection_quality_value: Label = %ReflectionQualityValue
 @onready var enable_reflections: CheckBox = %EnableReflections
 
-# Fog options
+## Fog options
 @onready var enable_fog: CheckBox = %EnableFog
+@onready var enable_volumetric_fog: CheckBox = %EnableVolumetricFog
 
-# FPS options
+## FPS options
 @onready var max_fps: HSlider = %MaxFPS
 @onready var max_fps_value: Label = %MaxFPSValue
 @onready var vsync: CheckBox = %VSync
 
-# Render distance options
+## Render distance options
 @onready var render_distance: HSlider = %RenderDistance
 @onready var render_distance_value: Label = %RenderDistanceValue
 
-# Post-processing options
+## Post-processing options
 @onready var post_processing_effect: OptionButton = %PostProcessingEffect
+@onready var enable_glow: CheckBox = %EnableGlow
 
-# Anti-Aliasing options
+## Anti-Aliasing options
 @onready var msaa_option: OptionButton = %MSAAOption
 @onready var use_fxaa_check: CheckBox = %UseFXAACheck
 @onready var use_taa_check: CheckBox = %UseTAACheck
 
-# Texture Filtering
+## Texture Filtering
 @onready var anisotropy_option: OptionButton = %AnisotropyOption
+
+## Shadow quality
+@onready var shadow_quality_option: OptionButton = %ShadowQualityOption
 
 var _loaded_settings: bool = false
 
-# ── SSR (Screen-Space Reflections) runtime nodes — built in _ready ────────────
-var _ssr_section: VBoxContainer = null
-var _ssr_enabled_check: CheckBox = null
-var _ssr_steps_slider: HSlider = null
-var _ssr_steps_label: Label = null
-var _ssr_fade_in_slider: HSlider = null
-var _ssr_fade_in_label: Label = null
-var _ssr_fade_out_slider: HSlider = null
-var _ssr_fade_out_label: Label = null
-var _ssr_depth_tolerance_slider: HSlider = null
-var _ssr_depth_tolerance_label: Label = null
+## ── SSR (Screen-Space Reflections) runtime nodes
 var _ssr_roughness_check: CheckBox = null
+
+## ── DOF runtime nodes
+var _dof_enabled_check: CheckBox = null
+var _dof_amount_slider: HSlider = null
+var _dof_amount_label: Label = null
+var _dof_distance_slider: HSlider = null
+var _dof_distance_label: Label = null
+var _dof_range_slider: HSlider = null
+var _dof_range_label: Label = null
+
 
 func _ready() -> void:
 	UIEvents.fullscreen_toggled.connect(_on_fullscreen_toggled)
 	_build_ssr_section()
+	_build_dof_section()
+	_build_resolution_dropdown()
 	_style_all_option_buttons()
 	_load_settings()
-
+	_connect_new_signals()
+	
 	if scale_mode.selected == ScaleMode.BILINEAR:
 		get_tree().set_group("fsr_options", "visible", false)
 	else:
 		render_scale.hide()
 
-# =============================================================================
-# DROPDOWN STYLING — consistent modern look across all OptionButtons
-# =============================================================================
 
 func _style_option_button(btn: OptionButton) -> void:
 	ThemeManager.style_option_button(btn)
 
 
 func _style_all_option_buttons() -> void:
-	## Walk the whole scene tree under this node and style every OptionButton.
 	_walk_and_style(self)
 
 
@@ -93,9 +99,6 @@ func _walk_and_style(node: Node) -> void:
 	for child in node.get_children():
 		_walk_and_style(child)
 
-# =============================================================================
-# SSR (Screen-Space Reflections) SECTION — built at runtime
-# =============================================================================
 
 func _make_row(label_text: String, widget: Control) -> HBoxContainer:
 	var row := HBoxContainer.new()
@@ -136,415 +139,269 @@ func _make_slider_row(label_text: String, min_v: float, max_v: float, step_v: fl
 	return row
 
 
+# =============================================================================
+# SSR Section (Screen‑Space Reflections)
+# =============================================================================
 func _build_ssr_section() -> void:
-	## Builds a comprehensive SSR control block and inserts it into RCol/ReflectionOptions.
-	## All controls read from and write to the current Environment via GraphicsManager.get_env().
 	var ref_options := get_node_or_null("%ReflectionOptions") as VBoxContainer
 	if not ref_options:
-		push_warning("GraphicsSettings: Could not find ReflectionOptions node for SSR section.")
 		return
-
+	
 	var e: Environment = GraphicsManager.get_env()
-
-	# ── Master enable (already in scene as %EnableReflections + %ReflectionQuality) ──
-	# We add richer controls below the existing ones.
-
 	var sep := HSeparator.new()
-	sep.add_theme_constant_override("separation", 6)
 	ref_options.add_child(sep)
 
-	var heading := Label.new()
-	heading.text = "SSR Fine Tuning"
-	heading.add_theme_font_size_override("font_size", 12)
-	heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	ref_options.add_child(heading)
+	# Fade-in slider
+	var fade_in_lbl := Label.new()
+	ref_options.add_child(_make_slider_row("Fade-in dist", 0.0, 3.0, 0.05, e.ssr_fade_in, fade_in_lbl, "%.2f", 
+		func(v): e.ssr_fade_in = v))
+	
+	# Fade-out slider
+	var fade_out_lbl := Label.new()
+	ref_options.add_child(_make_slider_row("Fade-out dist", 0.0, 30.0, 0.5, e.ssr_fade_out, fade_out_lbl, "%.1f", 
+		func(v): e.ssr_fade_out = v))
 
-	# ── Max Steps (already exposed as ReflectionQuality — we keep it) ──
+	# Roughness checkbox (only if the property exists)
+	if "ssr_roughness" in e:
+		_ssr_roughness_check = CheckBox.new()
+		_ssr_roughness_check.text = "Roughness-aware SSR"
+		_ssr_roughness_check.button_pressed = e.get("ssr_roughness")
+		_ssr_roughness_check.toggled.connect(func(on): e.set("ssr_roughness", on))
+		ref_options.add_child(_ssr_roughness_check)
+	
+	# Additional SSAO / Glow controls can be added here.
 
-	# ── Fade-In Distance ──────────────────────────────────────────────────────
-	_ssr_fade_in_label = Label.new()
-	var fade_in_row := _make_slider_row(
-		"Fade-in dist", 0.0, 3.0, 0.05, e.ssr_fade_in,
-		_ssr_fade_in_label, "%.2f",
-		func(v: float): GraphicsManager.get_env().ssr_fade_in = v
+
+# =============================================================================
+# Depth of Field Section
+# =============================================================================
+func _build_dof_section() -> void:
+	var lcol := get_node_or_null("%LCol") as VBoxContainer
+	if not lcol:
+		return
+	
+	lcol.add_child(HSeparator.new())
+	
+	_dof_enabled_check = CheckBox.new()
+	_dof_enabled_check.text = "Enable Depth of Field"
+	_dof_enabled_check.button_pressed = GraphicsManager.dof_enabled
+	_dof_enabled_check.toggled.connect(_on_dof_toggled)
+	lcol.add_child(_dof_enabled_check)
+
+	# Blur amount row
+	_dof_amount_label = Label.new()
+	var row1 = _make_slider_row("Blur amount", 0.01, 0.5, 0.01, GraphicsManager.dof_blur_amount, _dof_amount_label, "%.2f", 
+		func(v): GraphicsManager.set_dof_blur_amount(v))
+	lcol.add_child(row1)
+	
+	# Focus distance row
+	_dof_distance_label = Label.new()
+	var row2 = _make_slider_row("Focus distance", 1.0, 50.0, 0.5, GraphicsManager.dof_focus_distance, _dof_distance_label, "%.1fm", 
+		func(v): GraphicsManager.set_dof_focus_distance(v))
+	lcol.add_child(row2)
+
+	# Focus range row (if needed)
+	_dof_range_label = Label.new()
+	var row3 = _make_slider_row("Focus range", 1.0, 30.0, 0.5, GraphicsManager.dof_focus_range, _dof_range_label, "%.1fm", 
+		func(v): GraphicsManager.set_dof_focus_range(v))
+	lcol.add_child(row3)
+
+	# Hide sliders if DOF is disabled initially
+	_on_dof_toggled(GraphicsManager.dof_enabled)
+
+
+func _on_dof_toggled(on: bool) -> void:
+	GraphicsManager.set_dof_enabled(on)
+	# Show/hide the slider rows based on the enabled state
+	if _dof_amount_label and _dof_amount_label.get_parent() is HBoxContainer:
+		_dof_amount_label.get_parent().visible = on
+	if _dof_distance_label and _dof_distance_label.get_parent() is HBoxContainer:
+		_dof_distance_label.get_parent().visible = on
+	if _dof_range_label and _dof_range_label.get_parent() is HBoxContainer:
+		_dof_range_label.get_parent().visible = on
+
+
+# =============================================================================
+# Resolution Dropdown
+# =============================================================================
+func _build_resolution_dropdown() -> void:
+	var fullscreen_parent := fullscreen.get_parent()
+	_resolution_option = OptionButton.new()
+	_resolution_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for res in GraphicsManager.RESOLUTION_PRESETS:
+		var label = "Native" if res == Vector2i(-1, -1) else "%d × %d" % [res.x, res.y]
+		_resolution_option.add_item(label)
+	_resolution_option.item_selected.connect(func(idx):
+		GraphicsManager.set_resolution(GraphicsManager.RESOLUTION_PRESETS[idx])
 	)
-	ref_options.add_child(fade_in_row)
+	fullscreen_parent.add_child(_make_row("Resolution", _resolution_option))
 
-	# ── Fade-Out Distance ─────────────────────────────────────────────────────
-	_ssr_fade_out_label = Label.new()
-	var fade_out_row := _make_slider_row(
-		"Fade-out dist", 0.0, 30.0, 0.5, e.ssr_fade_out,
-		_ssr_fade_out_label, "%.1f",
-		func(v: float): GraphicsManager.get_env().ssr_fade_out = v
-	)
-	ref_options.add_child(fade_out_row)
-
-	# ── Depth Tolerance ───────────────────────────────────────────────────────
-	_ssr_depth_tolerance_label = Label.new()
-	var depth_row := _make_slider_row(
-		"Depth tolerance", 0.01, 1.0, 0.01, e.ssr_depth_tolerance,
-		_ssr_depth_tolerance_label, "%.2f",
-		func(v: float): GraphicsManager.get_env().ssr_depth_tolerance = v
-	)
-	ref_options.add_child(depth_row)
-
-	# ── Roughness ─────────────────────────────────────────────────────────────
-	_ssr_roughness_check = CheckBox.new()
-	_ssr_roughness_check.text = "Roughness-aware SSR"
-	_ssr_roughness_check.button_pressed = e.ssr_roughness
-	_ssr_roughness_check.toggled.connect(func(on: bool):
-		GraphicsManager.get_env().ssr_roughness = on
-	)
-	ref_options.add_child(_ssr_roughness_check)
-
-	# ── SSAO Section ─────────────────────────────────────────────────────────
-	var ssao_sep := HSeparator.new()
-	ssao_sep.add_theme_constant_override("separation", 6)
-	ref_options.add_child(ssao_sep)
-
-	var ssao_heading := Label.new()
-	ssao_heading.text = "SSAO (Ambient Occlusion)"
-	ssao_heading.add_theme_font_size_override("font_size", 12)
-	ssao_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	ref_options.add_child(ssao_heading)
-
-	var ssao_check := CheckBox.new()
-	ssao_check.text = "Enable SSAO"
-	ssao_check.button_pressed = e.ssao_enabled
-	ssao_check.toggled.connect(func(on: bool): GraphicsManager.get_env().ssao_enabled = on)
-	ref_options.add_child(ssao_check)
-
-	var ssao_radius_lbl := Label.new()
-	var ssao_radius_row := _make_slider_row(
-		"Radius", 0.1, 4.0, 0.1, e.ssao_radius,
-		ssao_radius_lbl, "%.1f",
-		func(v: float): GraphicsManager.get_env().ssao_radius = v
-	)
-	ref_options.add_child(ssao_radius_row)
-
-	var ssao_intensity_lbl := Label.new()
-	var ssao_intensity_row := _make_slider_row(
-		"Intensity", 0.0, 4.0, 0.1, e.ssao_intensity,
-		ssao_intensity_lbl, "%.1f",
-		func(v: float): GraphicsManager.get_env().ssao_intensity = v
-	)
-	ref_options.add_child(ssao_intensity_row)
-
-	var ssao_power_lbl := Label.new()
-	var ssao_power_row := _make_slider_row(
-		"Power", 0.5, 4.0, 0.1, e.ssao_power,
-		ssao_power_lbl, "%.1f",
-		func(v: float): GraphicsManager.get_env().ssao_power = v
-	)
-	ref_options.add_child(ssao_power_row)
-
-	var ssao_detail_lbl := Label.new()
-	var ssao_detail_row := _make_slider_row(
-		"Detail", 0.0, 1.0, 0.05, e.ssao_detail,
-		ssao_detail_lbl, "%.2f",
-		func(v: float): GraphicsManager.get_env().ssao_detail = v
-	)
-	ref_options.add_child(ssao_detail_row)
-
-	# ── SDFGI Section ─────────────────────────────────────────────────────────
-	var sdfgi_sep := HSeparator.new()
-	sdfgi_sep.add_theme_constant_override("separation", 6)
-	ref_options.add_child(sdfgi_sep)
-
-	var sdfgi_heading := Label.new()
-	sdfgi_heading.text = "SDFGI (Global Illumination)"
-	sdfgi_heading.add_theme_font_size_override("font_size", 12)
-	sdfgi_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	ref_options.add_child(sdfgi_heading)
-
-	var sdfgi_check := CheckBox.new()
-	sdfgi_check.text = "Enable SDFGI"
-	sdfgi_check.button_pressed = e.sdfgi_enabled
-	sdfgi_check.toggled.connect(func(on: bool): GraphicsManager.get_env().sdfgi_enabled = on)
-	ref_options.add_child(sdfgi_check)
-
-	var sdfgi_hint := Label.new()
-	sdfgi_hint.text = "High quality GI — significantly impacts performance on lower-end hardware."
-	sdfgi_hint.add_theme_font_size_override("font_size", 10)
-	sdfgi_hint.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	sdfgi_hint.autowrap_mode = TextServer.AUTOWRAP_WORD
-	ref_options.add_child(sdfgi_hint)
-
-	var sdfgi_bounces_lbl := Label.new()
-	var sdfgi_bounces_row := _make_slider_row(
-		"Bounces", 1.0, 8.0, 1.0, float(e.sdfgi_bounces),
-		sdfgi_bounces_lbl, "%.0f",
-		func(v: float): GraphicsManager.get_env().sdfgi_bounces = int(v)
-	)
-	ref_options.add_child(sdfgi_bounces_row)
-
-	# ── Glow Section ──────────────────────────────────────────────────────────
-	var glow_sep := HSeparator.new()
-	glow_sep.add_theme_constant_override("separation", 6)
-	ref_options.add_child(glow_sep)
-
-	var glow_heading := Label.new()
-	glow_heading.text = "Glow"
-	glow_heading.add_theme_font_size_override("font_size", 12)
-	glow_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	ref_options.add_child(glow_heading)
-
-	var glow_check := CheckBox.new()
-	glow_check.text = "Enable Glow"
-	glow_check.button_pressed = e.glow_enabled
-	glow_check.toggled.connect(func(on: bool): GraphicsManager.get_env().glow_enabled = on)
-	ref_options.add_child(glow_check)
-
-	var glow_intensity_lbl := Label.new()
-	var glow_intensity_row := _make_slider_row(
-		"Intensity", 0.0, 2.0, 0.05, e.glow_intensity,
-		glow_intensity_lbl, "%.2f",
-		func(v: float): GraphicsManager.get_env().glow_intensity = v
-	)
-	ref_options.add_child(glow_intensity_row)
-
-	var glow_bloom_lbl := Label.new()
-	var glow_bloom_row := _make_slider_row(
-		"Bloom threshold", 0.0, 4.0, 0.05, e.glow_bloom,
-		glow_bloom_lbl, "%.2f",
-		func(v: float): GraphicsManager.get_env().glow_bloom = v
-	)
-	ref_options.add_child(glow_bloom_row)
-
-	# ── Tone Mapping ──────────────────────────────────────────────────────────
-	var tm_sep := HSeparator.new()
-	tm_sep.add_theme_constant_override("separation", 6)
-	ref_options.add_child(tm_sep)
-
-	var tm_heading := Label.new()
-	tm_heading.text = "Tone Mapping"
-	tm_heading.add_theme_font_size_override("font_size", 12)
-	tm_heading.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	ref_options.add_child(tm_heading)
-
-	var tm_mode_btn := OptionButton.new()
-	tm_mode_btn.add_item("Linear",     Environment.TONE_MAPPER_LINEAR)
-	tm_mode_btn.add_item("Reinhard",   Environment.TONE_MAPPER_REINHARDT)
-	tm_mode_btn.add_item("Filmic",     Environment.TONE_MAPPER_FILMIC)
-	tm_mode_btn.add_item("ACES",       Environment.TONE_MAPPER_ACES)
-	# Select the item whose id matches current tone_mapper
-	for i in tm_mode_btn.item_count:
-		if tm_mode_btn.get_item_id(i) == e.tonemap_mode:
-			tm_mode_btn.selected = i
-			break
-	tm_mode_btn.item_selected.connect(func(idx: int):
-		GraphicsManager.get_env().tonemap_mode = tm_mode_btn.get_item_id(idx)
-	)
-	_style_option_button(tm_mode_btn)
-	var tm_row := _make_row("Tone mapper", tm_mode_btn)
-	ref_options.add_child(tm_row)
-
-	var tm_exposure_lbl := Label.new()
-	var tm_exposure_row := _make_slider_row(
-		"Exposure", 0.1, 4.0, 0.05, e.tonemap_exposure,
-		tm_exposure_lbl, "%.2f",
-		func(v: float): GraphicsManager.get_env().tonemap_exposure = v
-	)
-	ref_options.add_child(tm_exposure_row)
-
-	var tm_white_lbl := Label.new()
-	var tm_white_row := _make_slider_row(
-		"White point", 0.1, 16.0, 0.1, e.tonemap_white,
-		tm_white_lbl, "%.1f",
-		func(v: float): GraphicsManager.get_env().tonemap_white = v
-	)
-	ref_options.add_child(tm_white_row)
-
-	# Style any OptionButtons we just added
-	_walk_and_style(ref_options)
+func _connect_new_signals() -> void:
+	enable_ssao.toggled.connect(_on_enable_ssao_toggled)
+	enable_glow.toggled.connect(_on_enable_glow_toggled)
+	enable_volumetric_fog.toggled.connect(_on_enable_volumetric_fog_toggled)
 
 
-
-func ui_cancel_pressed() -> void:
-	if visible:
-		call_deferred("_on_resume_pressed")
-
-func _on_visibility_changed() -> void:
-	if is_visible_in_tree():
-		_load_settings()
-	elif _loaded_settings:
-		GraphicsManager.save_settings()
-
+# =============================================================================
+# Load / Save
+# =============================================================================
 func _load_settings() -> void:
-	var e = GraphicsManager.get_env()
 	_loaded_settings = true
-
+	var e = GraphicsManager.get_env()
+	
 	render_distance.value = GraphicsManager.render_distance_multiplier
-	if GraphicsManager.limit_fps:
-		max_fps.value = GraphicsManager.fps_limit
-	else:
-		max_fps.value = max_fps.min_value
-	_update_fps_label()
 	vsync.button_pressed = GraphicsManager.vsync_enabled
 	fullscreen.button_pressed = GraphicsManager.fullscreen
 	render_scale.value = GraphicsManager.render_scale
 	scale_mode.selected = GraphicsManager.scale_mode
 	fsr_quality.selected = GraphicsManager.fsr_quality
 	sharpness_scale.value = GraphicsManager.fsr_sharpness
-	reflection_quality.value = e.ssr_max_steps
-	enable_reflections.button_pressed = e.ssr_enabled
-	ambient_light.value = e.ambient_light_energy
-	enable_ssil.button_pressed = e.ssil_enabled
-	enable_fog.button_pressed = e.fog_enabled
-	var post_processing = GraphicsManager.post_processing
-	var idx = post_processing_options.find(post_processing)
-	post_processing_effect.select(idx if idx >= 0 else 0)
-
-	# Anti-Aliasing
+	# Safe selection for post_processing_effect
+	var pp_index = post_processing_options.find(GraphicsManager.post_processing)
+	if pp_index >= 0:
+		post_processing_effect.selected = pp_index
 	msaa_option.selected = GraphicsManager.msaa_3d
 	use_fxaa_check.button_pressed = GraphicsManager.use_fxaa
 	use_taa_check.button_pressed = GraphicsManager.use_taa
-
-	# Texture Filtering
-	match GraphicsManager.anisotropy_level:
-		1: anisotropy_option.selected = 0
-		2: anisotropy_option.selected = 1
-		4: anisotropy_option.selected = 2
-		8: anisotropy_option.selected = 3
-		16: anisotropy_option.selected = 4
-
-	# Refresh SSR fine-tuning sliders if they exist (built in _ready via _build_ssr_section)
-	if _ssr_fade_in_label:
-		_ssr_fade_in_label.text = "%.2f" % e.ssr_fade_in
-	if _ssr_fade_out_label:
-		_ssr_fade_out_label.text = "%.1f" % e.ssr_fade_out
-	if _ssr_depth_tolerance_label:
-		_ssr_depth_tolerance_label.text = "%.2f" % e.ssr_depth_tolerance
-	if _ssr_roughness_check:
-		_ssr_roughness_check.button_pressed = e.ssr_roughness
-
+	# Convert anisotropy level (2,4,8,16) to option index 0..3
+	anisotropy_option.selected = (GraphicsManager.anisotropy_level / 2) - 1
+	shadow_quality_option.selected = GraphicsManager.shadow_quality
+	ambient_light.value = e.ambient_light_energy
+	enable_ssil.button_pressed = e.ssil_enabled
+	enable_fog.button_pressed = e.fog_enabled
+	enable_volumetric_fog.button_pressed = e.volumetric_fog_enabled
+	enable_reflections.button_pressed = e.ssr_enabled
+	enable_ssao.button_pressed = e.ssao_enabled
+	enable_glow.button_pressed = e.glow_enabled
+	
+	if _ssr_roughness_check and "ssr_roughness" in e:
+		_ssr_roughness_check.button_pressed = e.get("ssr_roughness")
+	
 	_update_scaling()
 
-func _on_restore_pressed() -> void:
-	GraphicsManager.restore_default_settings()
-	_load_settings()
 
 func _on_resume_pressed() -> void:
 	GraphicsManager.save_settings()
 	resume.emit()
 
-func _on_reflection_quality_value_changed(value: float) -> void:
-	GraphicsManager.get_env().ssr_max_steps = int(value)
-	reflection_quality_value.text = str(int(value))
-
-func _on_enable_reflections_toggled(toggled_on: bool) -> void:
-	GraphicsManager.get_env().ssr_enabled = toggled_on
-
-func _on_enable_ssil_toggled(toggled_on: bool) -> void:
-	GraphicsManager.get_env().ssil_enabled = toggled_on
-
-func _on_ambient_light_value_changed(value: float) -> void:
-	GraphicsManager.get_env().ambient_light_energy = value
-	ambient_light_value.text = "%3.2f" % value
-
-func _on_max_fps_value_changed(value: float) -> void:
-	var is_unlimited = value <= max_fps.min_value
-	GraphicsManager.enable_fps_limit(not is_unlimited)
-	if not is_unlimited:
-		GraphicsManager.set_fps_limit(value)
-	_update_fps_label()
-
-func _update_fps_label() -> void:
-	if max_fps.value <= max_fps.min_value:
-		max_fps_value.text = "Unlimited"
-	else:
-		max_fps_value.text = str(int(max_fps.value))
-
-func _on_vsync_toggled(toggled_on: bool) -> void:
-	GraphicsManager.set_vsync_enabled(toggled_on)
-
-func _on_enable_fog_toggled(toggled_on: bool) -> void:
-	GraphicsManager.get_env().fog_enabled = toggled_on
-
-func _on_fullscreen_toggled(toggled_on: bool) -> void:
-	GraphicsManager.set_fullscreen(toggled_on)
-	fullscreen.set_pressed_no_signal(toggled_on)
 
 func _update_scaling() -> void:
-	var selected_scale_mode: int = scale_mode.selected
-	GraphicsManager.set_scale_mode(selected_scale_mode)
+	var mode: int = scale_mode.selected
+	GraphicsManager.set_scale_mode(mode)
+	
+	# Show/hide FSR‑related controls
+	var fsr_options_visible = (mode == ScaleMode.FSR1 or mode == ScaleMode.FSR2)
+	
+	var fsr_quality_node = get_node_or_null("%FSRQuality")
+	if fsr_quality_node:
+		fsr_quality_node.visible = fsr_options_visible
+	
+	var sharpness_scale_node = get_node_or_null("%SharpnessScale")
+	if sharpness_scale_node:
+		sharpness_scale_node.visible = fsr_options_visible
+	
+	var sharpness_value_node = get_node_or_null("%SharpnessScaleValue")
+	if sharpness_value_node:
+		sharpness_value_node.visible = fsr_options_visible
+	
+	# Show/hide render scale slider (only in Bilinear mode)
+	var render_scale_node = get_node_or_null("%RenderScale")
+	if render_scale_node:
+		render_scale_node.visible = (mode == ScaleMode.BILINEAR)
+	
+	var render_value_node = get_node_or_null("%RenderScaleValue")
+	if render_value_node:
+		render_value_node.visible = (mode == ScaleMode.BILINEAR)
 
-	# Show render scale if bilinear/nearest, FSR options otherwise
-	render_scale.visible = (selected_scale_mode == ScaleMode.BILINEAR or selected_scale_mode == ScaleMode.NEAREST)
-	get_tree().set_group("fsr_options", "visible", (selected_scale_mode != ScaleMode.BILINEAR and selected_scale_mode != ScaleMode.NEAREST))
 
-	if selected_scale_mode == ScaleMode.BILINEAR or selected_scale_mode == ScaleMode.NEAREST:
-		GraphicsManager.set_render_scale(render_scale.value)
-		_update_render_scale_label(render_scale.value)
-		return
+# =============================================================================
+# Signal Handlers
+# =============================================================================
+func _on_fullscreen_toggled(on: bool) -> void:
+	fullscreen.button_pressed = on
+	GraphicsManager.set_fullscreen(on)
 
-	# FSR
-	if selected_scale_mode == ScaleMode.FSR1:  # FSR 1 has no "ultra performance"
-		fsr_quality.set_item_disabled(0, false)
-		fsr_quality.set_item_disabled(4, true)
-	if selected_scale_mode == ScaleMode.FSR2:  # FSR 2 has no "ultra quality"
-		fsr_quality.set_item_disabled(0, true)
-		fsr_quality.set_item_disabled(4, false)
 
-	GraphicsManager.set_fsr_quality(fsr_quality.selected)
-
-	var current_scale = get_viewport().scaling_3d_scale
-	render_scale.value = current_scale
-	_update_render_scale_label(current_scale)
-
-func _update_render_scale_label(value: float) -> void:
-	## Shows percentage with an SSAA badge when scale exceeds 100% (supersampling).
-	var pct := int(round(value * 100.0))
-	if value > 1.0:
-		render_scale_value.text = "%d%% (SSAA)" % pct
-	else:
-		render_scale_value.text = "%d%%" % pct
-
-func _on_render_scale_value_changed(value: float) -> void:
-	_update_render_scale_label(value)
+func _on_scale_mode_item_selected(index: int) -> void:
 	_update_scaling()
 
-func _on_scale_mode_value_changed(value: int) -> void:
-	match value:
-		ScaleMode.FSR1:
-			fsr_quality.select(0)
-		ScaleMode.FSR2:
-			fsr_quality.select(1)
-		ScaleMode.NEAREST:
-			# Reset to 1.0 so pixel-perfect retro rendering is the default.
-			render_scale.value = 1.0
-
-	_update_scaling()
 
 func _on_fsr_quality_item_selected(index: int) -> void:
-	_update_scaling()
+	GraphicsManager.set_fsr_quality(index)
+
 
 func _on_sharpness_scale_value_changed(value: float) -> void:
+	sharpness_scale_value.text = "%.2f" % value
 	GraphicsManager.set_fsr_sharpness(value)
-	sharpness_scale_value.text = str(value)
+
+
+func _on_render_scale_value_changed(value: float) -> void:
+	render_scale_value.text = "%.2f" % value
+	GraphicsManager.set_render_scale(value)
+
+
+func _on_vsync_toggled(button_pressed: bool) -> void:
+	GraphicsManager.set_vsync_enabled(button_pressed)
+
+
+func _on_max_fps_value_changed(value: float) -> void:
+	max_fps_value.text = "%d" % value
+	GraphicsManager.set_fps_limit(value)
+
+
+func _on_render_distance_value_changed(value: float) -> void:
+	render_distance_value.text = "%.1f" % value
+	GraphicsManager.set_render_distance_multiplier(value)
+
 
 func _on_post_processing_effect_item_selected(index: int) -> void:
 	GraphicsManager.set_post_processing(post_processing_options[index])
 
-func _on_render_distance_value_changed(value: float) -> void:
-	render_distance_value.text = "%dm" % int(value * 30)
-	GraphicsManager.set_render_distance_multiplier(value)
 
 func _on_msaa_option_item_selected(index: int) -> void:
 	GraphicsManager.set_msaa_3d(index)
 
-func _on_use_fxaa_check_toggled(toggled_on: bool) -> void:
-	GraphicsManager.set_use_fxaa(toggled_on)
 
-func _on_use_taa_check_toggled(toggled_on: bool) -> void:
-	GraphicsManager.set_use_taa(toggled_on)
+func _on_use_fxaa_check_toggled(button_pressed: bool) -> void:
+	GraphicsManager.set_use_fxaa(button_pressed)
+
+
+func _on_use_taa_check_toggled(button_pressed: bool) -> void:
+	GraphicsManager.set_use_taa(button_pressed)
+
 
 func _on_anisotropy_option_item_selected(index: int) -> void:
-	var level: int = 4
-	match index:
-		0: level = 1
-		1: level = 2
-		2: level = 4
-		3: level = 8
-		4: level = 16
+	# index 0 → 2, 1 → 4, 2 → 8, 3 → 16
+	var level = (index + 1) * 2
 	GraphicsManager.set_anisotropy_level(level)
+
+
+func _on_shadow_quality_option_item_selected(index: int) -> void:
+	GraphicsManager.set_shadow_quality(index)
+
+
+func _on_ambient_light_value_changed(value: float) -> void:
+	ambient_light_value.text = "%.2f" % value
+	GraphicsManager.get_env().ambient_light_energy = value
+
+
+func _on_enable_ssil_toggled(button_pressed: bool) -> void:
+	GraphicsManager.get_env().ssil_enabled = button_pressed
+
+
+func _on_enable_fog_toggled(button_pressed: bool) -> void:
+	GraphicsManager.get_env().fog_enabled = button_pressed
+
+
+func _on_enable_reflections_toggled(button_pressed: bool) -> void:
+	GraphicsManager.get_env().ssr_enabled = button_pressed
+
+func _on_enable_ssao_toggled(on: bool) -> void:
+	GraphicsManager.set_ssao_enabled(on)
+
+
+func _on_enable_glow_toggled(on: bool) -> void:
+	GraphicsManager.set_glow_enabled(on)
+
+func _on_enable_volumetric_fog_toggled(on: bool) -> void:
+	GraphicsManager.set_volumetric_fog_enabled(on)

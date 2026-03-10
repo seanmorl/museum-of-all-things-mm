@@ -647,6 +647,8 @@ func _on_images_request_complete(res: Dictionary, ctx: Dictionary, caller_ctx: V
 						_set_page_field(file, "artist", md.Artist.value)
 				if info.has("thumburl"):
 					_set_page_field(file, "src", info.thumburl)
+				if info.has("url"):
+					_set_page_field(file, "url", info.url)
 
 	if len(file_batch) > 0:
 		_cache_all(file_batch)
@@ -677,6 +679,8 @@ func _on_commons_images_request_complete(res: Dictionary, ctx: Dictionary, calle
 						_set_page_field(file, "artist", md.Artist.value)
 				if info.has("thumburl"):
 					_set_page_field(file, "src", info.thumburl)
+				if info.has("url"):
+					_set_page_field(file, "url", info.url)
 				file_batch.append(file)
 				_append_page_field(ctx.category, "images", [file])
 

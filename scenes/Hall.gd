@@ -22,21 +22,28 @@ const _GRID_WRAPPER: PackedScene = preload("res://scenes/util/GridWrapper.tscn")
 @onready var loader: Area3D = $LoaderTrigger
 @onready var entry_door: Node3D = $EntryDoor
 @onready var exit_door: Node3D = $ExitDoor
+@onready var entry_marker: MeshInstance3D = $EntryMarker
+@onready var exit_marker: MeshInstance3D = $ExitMarker
+@onready var entry_label: Label3D = $EntryLabel
+@onready var exit_label: Label3D = $ExitLabel
 @onready var _detector: Area3D = $HallDirectionDetector
 @onready var from_sign: Node3D = $FromSign
 @onready var to_sign: Node3D = $ToSign
+@onready var light: OmniLight3D = $HallLight
 
 var _disco_hue: float = randf()
 
 func _ready() -> void:
 	ThemeManager.disco_mode_changed.connect(_on_disco_mode_changed)
+	ThemeManager.reading_font_changed.connect(_on_font_changed)
 	_on_dark_mode_changed(ThemeManager.is_dark_mode)
+	_on_font_changed(ThemeManager.get_reading_font())
 
 func _process(delta: float) -> void:
-	if ThemeManager.disco_mode:
+	if ThemeManager.disco_mode and light:
 		_disco_hue = fmod(_disco_hue + delta * 0.8, 1.0)
-		$Light.light_color = Color.from_hsv(_disco_hue, 0.9, 1.0)
-		$Light.light_energy = 1.5 # Pump it up
+		light.light_color = Color.from_hsv(_disco_hue, 0.9, 1.0)
+		light.light_energy = 1.5 # Pump it up
 
 func _on_disco_mode_changed(enabled: bool) -> void:
 	if not enabled:
@@ -45,8 +52,17 @@ func _on_disco_mode_changed(enabled: bool) -> void:
 
 func _on_dark_mode_changed(is_dark: bool) -> void:
 	# Dim the hallway light in dark mode for atmosphere
-	$Light.light_energy = 0.05 if is_dark else 0.4
-	$Light.light_color = Color.WHITE
+	if light:
+		light.light_energy = 0.05 if is_dark else 0.4
+		light.light_color = Color.WHITE
+
+func _on_font_changed(font: Font) -> void:
+	if entry_label:
+		entry_label.font = font
+		entry_label.hide()
+	if exit_label:
+		exit_label.font = font
+		exit_label.hide()
 
 var _grid: Node = null
 var hall_type: Array = [true, FLAT]
@@ -70,12 +86,16 @@ var from_title: String:
 		return from_sign.text
 	set(v):
 		from_sign.text = v
+		if is_instance_valid(entry_label):
+			entry_label.text = v
 
 var to_title: String:
 	get:
 		return to_sign.text
 	set(v):
 		to_sign.text = v
+		if is_instance_valid(exit_label):
+			exit_label.text = v
 
 
 static func valid_hall_types(grid: Node, hall_start: Vector3, hall_dir: Vector3) -> Array:
@@ -148,6 +168,16 @@ func init(grid: Variant, p_from_title: String, p_to_title: String, hall_start: V
 	exit_door.rotation.y = GridUtils.vec_to_rot(to_dir)
 	entry_door.set_open(true, true)
 	exit_door.set_open(false, true)
+	
+	entry_marker.position = entry_door.position
+	entry_marker.position.y = 0.5
+	exit_marker.position = exit_door.position
+	exit_marker.position.y = 0.5
+	
+	entry_label.position = entry_marker.position + Vector3(0, 1.5, 0)
+	entry_label.text = p_from_title
+	exit_label.position = exit_marker.position + Vector3(0, 1.5, 0)
+	exit_label.text = p_to_title
 
 	var center_pos: Vector3 = GridUtils.grid_to_world((from_pos + to_pos) / 2) + Vector3(0, 4, 0) - position
 
@@ -174,7 +204,8 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 		_grid.set_cell_item(hall_corner, INTERNAL_HALL_TURN, corner_ori)
 		_grid.set_cell_item(hall_corner - Vector3.UP, floor_type, 0)
 		_grid.set_cell_item(hall_corner + Vector3.UP, WALL, 0)
-		$Light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 2
+		light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 4
+		light.rotation_degrees = Vector3(180, 0, 0)
 	elif level == UP:
 		_grid.set_cell_item(hall_start, HALL_STAIRS_UP, ori)
 		if _grid.get_cell_item(hall_start + Vector3.UP) != -1:
@@ -182,7 +213,8 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 		if _grid.get_cell_item(hall_corner + Vector3.UP) != -1:
 			_grid.set_cell_item(hall_corner + Vector3.UP, -1, ori)
 		_grid.set_cell_item(hall_corner, HALL_STAIRS_TURN, corner_ori)
-		$Light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 4
+		light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 8
+		light.rotation_degrees = Vector3(180, 0, 0)
 	elif level == DOWN:
 		_grid.set_cell_item(hall_start, HALL_STAIRS_DOWN, ori)
 		if _grid.get_cell_item(hall_start + Vector3.UP) != -1:
@@ -190,7 +222,8 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 		if _grid.get_cell_item(hall_corner) != -1:
 			_grid.set_cell_item(hall_corner, -1, ori)
 		_grid.set_cell_item(hall_corner - Vector3.UP, HALL_STAIRS_TURN, corner_ori)
-		$Light.global_position = GridUtils.grid_to_world(hall_corner)
+		light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 4
+		light.rotation_degrees = Vector3(180, 0, 0)
 
 	var exit_hall_dir: Vector3 = hall_dir.rotated(Vector3.UP, (3 if is_right else 1) * PI / 2)
 	var exit_hall: Vector3 = hall_corner + exit_hall_dir

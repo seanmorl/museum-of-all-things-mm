@@ -26,6 +26,7 @@ const _GROUP_SCENERY := &"Scenery"
 const _POOL_SCENE: PackedScene = preload("res://scenes/items/Pool.tscn")
 const _PLANTER_SCENE: PackedScene = preload("res://scenes/items/Planter.tscn")
 const _SMALL_PLANTER_SCENE: PackedScene = preload("res://scenes/items/SmallPlanter.tscn")
+const _BENCH_SCENE: PackedScene = preload("res://scenes/items/Bench.tscn")
 const _HALL_SCENE: PackedScene = preload("res://scenes/Hall.tscn")
 const _GRID_WRAPPER: PackedScene = preload("res://scenes/util/GridWrapper.tscn")
 
@@ -404,6 +405,13 @@ func _place_benches_and_walls(center: Vector3, width: int, length: int) -> void:
 				bench_slots.push_front([pos - item_dir * 0.075, item_dir])
 				bench_slots.append([pos + item_dir * 0.075, -item_dir])
 			elif valid_bench:
+				var b: Node3D = _BENCH_SCENE.instantiate()
+				b.position = GridUtils.grid_to_world(pos)
+				if bench_area_ori != 0:
+					b.rotation.y = PI / 2
+				add_child(b)
+				# Still set the grid item for logic/collision if needed, or leave it empty?
+				# The generator uses the grid for room carve checks. Let's keep BENCH item for grid-level tracking.
 				_grid.set_cell_item(pos, BENCH, bench_area_ori)
 	for slot: Array in bench_slots:
 		add_item_slot(slot)

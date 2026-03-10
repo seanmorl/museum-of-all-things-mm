@@ -22,6 +22,14 @@ radius = 0.3
 radius = 0.25
 height = 1.2
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_marker"]
+albedo_color = Color(1, 0, 0, 1)
+disable_receive_shadows = true
+shading_mode = 0
+
+[sub_resource type="PrismMesh" id="PrismMesh_marker"]
+size = Vector3(1.5, 1.5, 0.5)
+
 [node name="NetworkPlayer" type="CharacterBody3D" unique_id=1515458623 groups=["NetworkPlayer", "Player"]]
 collision_layer = 524288
 collision_mask = 524289
@@ -76,3 +84,9 @@ font = ExtResource("4_408m0")
 font_size = 128
 outline_size = 32
 vertical_alignment = 2
+
+[node name="MapMarker" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0.5, 0)
+layers = 8388608
+mesh = SubResource("PrismMesh_marker")
+surface_material_override/0 = SubResource("StandardMaterial3D_marker")

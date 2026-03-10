@@ -28,7 +28,9 @@ var _chat_hud: Node = null
 @onready var player_list_overlay: Control = %PlayerListOverlay
 @onready var _server_console_overlay: Control = %ServerConsoleOverlay
 @onready var _map_overlay: Control = %ExhibitMapOverlay
+@onready var _minimap_hud: Control = %MinimapHUD
 @onready var _guestbook_overlay: GuestbookOverlay = %GuestbookOverlay
+@onready var _prompt_hud: Control = %PromptHUD
 @onready var _menu_layer: CanvasLayer = %MenuLayer
 @onready var _fps_label: Label = %FpsLabel
 @onready var _museum: Node3D = %Museum
@@ -36,6 +38,7 @@ var _chat_hud: Node = null
 @onready var _crt_post_processing: CanvasLayer = %CRTPostProcessing
 @onready var _world_light: DirectionalLight3D = %WorldLight
 @onready var _pause_menu: Control = %PauseMenu
+@onready var _wip_label: Label = %WIPLabel
 
 var game_started: bool = false
 ## True when running as a UI-based dedicated host (no local player spawned)
@@ -67,6 +70,11 @@ func _ready() -> void:
 	var ui_saved = SettingsManager.get_settings("ui")
 	if ui_saved and ui_saved.has("scale"):
 		get_tree().root.content_scale_factor = float(ui_saved.scale)
+	
+	# WIP Label font management
+	if _wip_label:
+		_wip_label.add_theme_font_override("font", ThemeManager.get_reading_font())
+		ThemeManager.reading_font_changed.connect(func(f): _wip_label.add_theme_font_override("font", f))
 	
 	# Initialize subsystems first
 	_menu_controller = MainMenuController.new()
@@ -219,6 +227,15 @@ func _recreate_player() -> void:
 	_player.dampening = smooth_movement_dampening
 	_player.position = starting_point
 	_player.set_player_color(NetworkManager.local_player_color)
+	if _minimap_hud and _minimap_hud.has_method("init"):
+		_minimap_hud.init(_player)
+	if _prompt_hud and _prompt_hud.has_method("init"):
+		_prompt_hud.init(_player)
+	
+	# Fix Minimap Viewport World
+	var map_viewport: SubViewport = _player.get_node_or_null("MapCameraContainer/MapViewport")
+	if map_viewport:
+		map_viewport.world_3d = get_viewport().find_world_3d()
 
 func _change_post_processing(post_processing: String) -> void:
 	_crt_post_processing.visible = post_processing == "crt"
@@ -233,6 +250,8 @@ func _start_game() -> void:
 	_player.start()
 	_menu_controller.close_menus()
 	_map_overlay.restore_after_pause()
+	if _minimap_hud and _minimap_hud.has_method("restore_after_pause"):
+		_minimap_hud.restore_after_pause()
 	if not game_started:
 		game_started = true
 		_museum.init(_player)
@@ -247,6 +266,8 @@ func _pause_game() -> void:
 		_menu_controller.open_main_menu()
 
 func _use_terminal() -> void:
+	if _minimap_hud and _minimap_hud.has_method("set_hidden"):
+		_minimap_hud.set_hidden()
 	_player.pause()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_menu_controller.open_terminal_menu()
@@ -389,14 +410,20 @@ func _input(event: InputEvent) -> void:
 			if _multiplayer_controller.is_multiplayer_game():
 				_server_console_overlay.toggle()
 		
-		if event.is_action_pressed("toggle_journal"):
-			if _journal_overlay:
-				if _journal_overlay.is_open():
-					_journal_overlay.close()
-				else:
-					_journal_overlay.open()
-					Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-					_player.pause()
+		# Guard journal/map/etc behind menu check
+		if not _menu_layer.visible:
+			if event.is_action_pressed("toggle_journal"):
+				if _journal_overlay:
+					if _journal_overlay.is_open():
+						_journal_overlay.close()
+					else:
+						_journal_overlay.open()
+						Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+						_player.pause()
+			
+			if event.is_action_pressed("toggle_map"):
+				if _minimap_hud and _minimap_hud.has_method("toggle"):
+					_minimap_hud.toggle()
 		
 		# UI scale keyboard shortcuts — work in any state
 		if event.is_action_pressed("ui_scale_in"):
@@ -409,11 +436,9 @@ func _input(event: InputEvent) -> void:
 			_adjust_ui_scale(0.0)
 			get_viewport().set_input_as_handled()
 		
-		if event.is_action_pressed("toggle_map") and not _menu_layer.visible:
-			_map_overlay.cycle_mode()
-		
 		if event.is_action_pressed("pause"):
-			_map_overlay.set_hidden()
+			if _minimap_hud and _minimap_hud.has_method("set_hidden"):
+				_minimap_hud.set_hidden()
 			_pause_game()
 		
 		if event.is_action_pressed("free_pointer"):
@@ -563,7 +588,7 @@ func _load_saved_skin() -> void:
 func _on_start_race_pressed() -> void:
 	if RaceManager.is_race_active():
 		return
-	if NetworkManager.is_server():
+	if not NetworkManager.is_multiplayer_active() or NetworkManager.is_server():
 		_debug_log("Main: Fetching random articles for race vote...")
 		_race_candidates.clear()
 		_race_start_article = ""
@@ -810,6 +835,12 @@ func _on_network_peer_connected(peer_id: int) -> void:
 			var state: Array = _painting_controller.get_placed_paintings_state()
 			if state.size() > 0:
 				_sync_placed_paintings_to_peer.rpc_id(peer_id, state)
+		
+		# Sync stolen paintings to late joiner
+		if _painting_controller:
+			var stolen_state: Dictionary = _painting_controller.get_stolen_paintings_state()
+			if not stolen_state.is_empty():
+				_sync_stolen_paintings_to_peer.rpc_id(peer_id, stolen_state)
 
 func _on_network_peer_disconnected(peer_id: int) -> void:
 	if _painting_controller:
@@ -881,6 +912,12 @@ func restore_placed_painting(exhibit: Node3D, exhibit_title: String,
 	if _painting_controller:
 		_painting_controller.restore_placed_painting(exhibit, exhibit_title,
 			image_title, image_url, wall_position, wall_normal, image_size)
+
+func check_painting_stolen(exhibit_title: String, image_title: String) -> bool:
+	## Called by ExhibitLoader/WallItem to see if a painting was previously stolen.
+	if _painting_controller:
+		return _painting_controller.is_painting_stolen(exhibit_title, image_title)
+	return false
 
 func _request_eat_painting(exhibit_title: String, image_title: String) -> void:
 	_painting_controller.request_eat(exhibit_title, image_title, _player)
@@ -1031,6 +1068,12 @@ func _sync_placed_paintings_to_peer(state: Array) -> void:
 	if _painting_controller:
 		_painting_controller.apply_placed_paintings_state(state, _player)
 
+@rpc("authority", "call_remote", "reliable")
+func _sync_stolen_paintings_to_peer(state: Dictionary) -> void:
+	## Received by a newly-joined client. Populates the stolen painting map.
+	if _painting_controller:
+		_painting_controller.apply_stolen_paintings_state(state)
+
 ## Syncs the race starting exhibit to all non-server peers so they also
 ## open the search door and load the starting article.
 @rpc("authority", "call_remote", "reliable")
@@ -1038,6 +1081,21 @@ func _sync_race_start_article(start_article: String) -> void:
 	_museum.reset_to_lobby()
 	UIEvents.emit_set_custom_door(start_article)
 	_start_game()
+
+func sync_custom_door(page: String) -> void:
+	## Synchronises the search corridor door to a specific page for all players.
+	## If called by a client, it requests the server to broadcast the change.
+	if not NetworkManager.is_multiplayer_active() or NetworkManager.is_server():
+		if NetworkManager.is_multiplayer_active():
+			_sync_race_start_article.rpc(page)
+		UIEvents.emit_set_custom_door(page)
+	else:
+		_request_sync_custom_door.rpc_id(1, page)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_sync_custom_door(page: String) -> void:
+	if NetworkManager.is_server():
+		sync_custom_door(page)
 
 @rpc("authority", "call_remote", "reliable")
 func _grant_race_control() -> void:

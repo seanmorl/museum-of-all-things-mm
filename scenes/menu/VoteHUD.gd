@@ -307,8 +307,20 @@ func _on_vote_started(candidates: Array) -> void:
 		_style_host_panel(_host_panel)
 		_host_panel.visible = true
 	else:
-		_status_label.text = "Waiting for host to start the race..."
-		_candidates_container.visible = false
+		_status_label.text = "Waiting for players to vote (vote for start)..."
+		
+		# Show candidates for clients too so they can vote
+		for i in candidates.size():
+			var btn := Button.new()
+			btn.text = candidates[i]
+			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			btn.pressed.connect(_on_candidate_pressed.bind(i))
+			_candidates_container.add_child(btn)
+			_candidate_buttons.append(btn)
+			_style_vote_button(btn)
+			
+		_candidates_container.visible = true
 		_reroll_button.visible = false
 		if _host_panel:
 			_host_panel.visible = false

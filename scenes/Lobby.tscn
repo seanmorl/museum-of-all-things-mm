@@ -357,3 +357,4 @@ If you prefer to go straight to a particular subject, you may access the search 
 
 [node name="SimpleLeaderboard" parent="." instance=ExtResource("40_slb")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 13, 41)
+
