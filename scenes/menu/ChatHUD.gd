@@ -283,12 +283,13 @@ func _close_input() -> void:
 		_input_panel.modulate.a = 1.0
 	)
 	_hint_label.visible = false
-	var vote_open := false
-	var main_node := get_tree().get_first_node_in_group("main")
-	if main_node:
-		var vh := main_node.get_node_or_null("TabMenu/VoteHUD")
-		vote_open = vh != null and vh.visible
-	if not vote_open:
+	# Only recapture mouse if no other overlay that needs it is open.
+	# Use group membership so VoteHUD (or any future overlay) can register itself
+	# as "mouse_overlay" and we won't accidentally recapture over it.
+	var mouse_overlay_open := get_tree().get_nodes_in_group("mouse_overlay").any(
+		func(n: Node) -> bool: return is_instance_valid(n) and n.visible
+	)
+	if not mouse_overlay_open:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 

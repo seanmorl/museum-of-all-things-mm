@@ -4,9 +4,11 @@
 [ext_resource type="PackedScene" uid="uid://u4b0awts0vdi" path="res://scenes/Lobby.tscn" id="3_exsdv"]
 [ext_resource type="PackedScene" uid="uid://b67kdt23qph25" path="res://scenes/AmbienceController.tscn" id="3_udk7u"]
 [ext_resource type="PackedScene" uid="uid://dcr63oanyv85b" path="res://scenes/MusicController.tscn" id="4_uv22m"]
+[ext_resource type="Environment" uid="uid://lobby_sky_env" path="res://assets/textures/lobby_sky_environment.tres" id="42_skyenv"]
 
 [sub_resource type="Environment" id="Environment_g30yg"]
-background_mode = 1
+background_mode = 2
+sky = ExtResource("42_skyenv")
 ambient_light_source = 2
 ambient_light_color = Color(1, 0.960784, 0.882353, 1)
 ambient_light_energy = 0.4
@@ -27,7 +29,7 @@ fog_depth_end = 294.3
 volumetric_fog_temporal_reprojection_enabled = false
 volumetric_fog_temporal_reprojection_amount = 0.5
 
-[node name="Museum" type="Node3D"]
+[node name="Museum" type="Node3D" groups=["museum"]]
 script = ExtResource("1_7pjtd")
 max_teleport_distance = 20.0
 max_exhibits_loaded = 5

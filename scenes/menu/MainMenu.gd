@@ -12,6 +12,8 @@ var _serif_font: Font = null
 var _panel_style: StyleBoxFlat = null
 var _dedicated_host_btn: Button = null
 var _dark_mode_toggle: Button = null
+var _patch_notes_popup: Control = null
+var _patch_notes_panel: PanelContainer = null
 
 # Thin 1px divider lines placed above specific buttons, matching PauseMenu style.
 # A divider is drawn just above each button named here.
@@ -23,8 +25,9 @@ func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
 	_build_dedicated_host_button()
 	_build_dark_mode_toggle()
+	_build_patch_notes_popup()
 	_apply_theme()
-	ThemeManager.dark_mode_changed.connect(func(_d): 
+	ThemeManager.dark_mode_changed.connect(func(_d):
 		_update_dark_mode_text()
 		_apply_theme()
 	)
@@ -87,6 +90,14 @@ func _apply_theme() -> void:
 		if is_instance_valid(line):
 			line.color = ThemeManager.border_color
 
+	# Update patch notes popup theme
+	if _patch_notes_panel:
+		var style := _patch_notes_panel.get_theme_stylebox("panel") as StyleBoxFlat
+		if style:
+			style.bg_color = ThemeManager.bg_color
+			style.border_color = ThemeManager.border_color
+			style.shadow_color = Color(0, 0, 0, 0.35 if dark else 0.12)
+
 
 # ── Dividers ──────────────────────────────────────────────────────────────────
 
@@ -140,7 +151,7 @@ func _style_label(path: String, color: Color, size: int) -> void:
 		lbl.add_theme_font_override("font", _serif_font)
 
 
-func _style_button(btn: Button) -> void:
+func _style_button(btn: Button, primary: bool = false) -> void:
 	var dark := ThemeManager.is_dark_mode
 	if _serif_font:
 		btn.add_theme_font_override("font", _serif_font)
@@ -152,7 +163,7 @@ func _style_button(btn: Button) -> void:
 	var sn: StyleBox
 	sn = StyleBoxFlat.new()
 	(sn as StyleBoxFlat).bg_color = Color(0,0,0,0)
-	
+
 	sn.content_margin_left = 16; sn.content_margin_right  = 16
 	sn.content_margin_top  =  9; sn.content_margin_bottom =  9
 	btn.add_theme_stylebox_override("normal", sn)
@@ -176,6 +187,19 @@ func _style_button(btn: Button) -> void:
 	(sf as StyleBoxFlat).border_width_left = 2
 	btn.add_theme_stylebox_override("focus", sf)
 
+	if not primary:
+		return
+	# Primary button styling (optional emphasis)
+	var sh_primary := StyleBoxFlat.new()
+	sh_primary.bg_color = ThemeManager.border_color
+	for corner in ["top_left","top_right","bottom_left","bottom_right"]:
+		sh_primary.set("corner_radius_" + corner, 5)
+	sh_primary.content_margin_left = 16
+	sh_primary.content_margin_right = 16
+	sh_primary.content_margin_top = 9
+	sh_primary.content_margin_bottom = 9
+	btn.add_theme_stylebox_override("hover", sh_primary)
+
 
 func _build_dark_mode_toggle() -> void:
 	var container := get_node_or_null(_BTN_PATH.trim_suffix("/"))
@@ -197,6 +221,177 @@ func _build_dark_mode_toggle() -> void:
 func _update_dark_mode_text() -> void:
 	if _dark_mode_toggle:
 		_dark_mode_toggle.text = "☾  Dark Mode" if not ThemeManager.is_dark_mode else "☀  Light Mode"
+
+
+# ── Patch Notes Popup ─────────────────────────────────────────────────────────
+
+func _build_patch_notes_popup() -> void:
+	var container := get_node_or_null(_BTN_PATH.trim_suffix("/"))
+	if not container: return
+
+	# Add Patch Notes button
+	var patch_btn := Button.new()
+	patch_btn.name = "PatchNotes"
+	patch_btn.text = "ⓘ  Latest Changes"
+	patch_btn.pressed.connect(_show_patch_notes)
+	container.add_child(patch_btn)
+	
+	# Place before Quit button
+	var quit_btn := container.get_node_or_null("Quit")
+	if quit_btn:
+		container.move_child(patch_btn, quit_btn.get_index() - 1)
+	_style_button(patch_btn)
+
+	# Build popup
+	_patch_notes_popup = Control.new()
+	_patch_notes_popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_patch_notes_popup.mouse_filter = Control.MOUSE_FILTER_STOP
+	_patch_notes_popup.visible = false
+	_patch_notes_popup.z_index = 100  # Render on top of everything
+	add_child(_patch_notes_popup)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.60)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_patch_notes_popup.add_child(dim)
+
+	_patch_notes_panel = PanelContainer.new()
+	_patch_notes_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_patch_notes_panel.offset_left   = -350.0
+	_patch_notes_panel.offset_top    = -280.0
+	_patch_notes_panel.offset_right  = 350.0
+	_patch_notes_panel.offset_bottom = 280.0
+	_patch_notes_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_patch_notes_panel.grow_vertical   = Control.GROW_DIRECTION_BOTH
+	_patch_notes_panel.z_index = 1  # Above the dim background
+	_patch_notes_popup.add_child(_patch_notes_panel)
+
+	var panel_style := StyleBoxFlat.new()
+	_patch_notes_panel.add_theme_stylebox_override("panel", panel_style)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left",   24)
+	margin.add_theme_constant_override("margin_right",  24)
+	margin.add_theme_constant_override("margin_top",    20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	_patch_notes_panel.add_child(margin)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "🎉 Latest Changes"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if _serif_font: title.add_theme_font_override("font", _serif_font)
+	title.add_theme_font_size_override("font_size", 24)
+	vbox.add_child(title)
+
+	var separator := HSeparator.new()
+	vbox.add_child(separator)
+
+	var content := [
+		{"text": "📅 Daily Challenge System", "size": 16, "color": ThemeManager.text_color},
+		{"text": "• Race against the clock to find a specific Wikipedia article", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Daily rotating target article", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Streak tracking and global leaderboard", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "", "size": 0, "color": Color()},
+		{"text": "🔒 Anti-Cheat Measures", "size": 16, "color": ThemeManager.text_color},
+		{"text": "• Terminal disabled during Daily Challenge", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Prevents cheating via search", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "", "size": 0, "color": Color()},
+		{"text": "🎮 Power-ups (All Working!)", "size": 16, "color": ThemeManager.text_color},
+		{"text": "• 🏃 Speed Boost - 2x movement speed", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• 🧠 Perfect Knowledge - Reveals room labels", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• 🔫 Teleport Gun - Teleport players to lobby", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• 🪤 Teleport Trap - Place traps", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• 🗼 Tower of Babel - Random language Wikipedia", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• 💡 Lights Out - Dims all lights", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• 🧲 Magnet - Pull players to your room", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• 🕷️ Spider Grapple - Swing from walls/ceilings", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• 🔮 Omniscience - Reveal all players", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "", "size": 0, "color": Color()},
+		{"text": "🐛 Bug Fixes", "size": 16, "color": ThemeManager.text_color},
+		{"text": "• Fixed ESC not opening pause menu during challenge", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Fixed HUD visibility issues", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Improved light mode text readability", "size": 13, "color": ThemeManager.subtext_color},
+	]
+
+	for entry in content:
+		if entry.text == "":
+			continue
+		var lbl := Label.new()
+		lbl.text = entry.text
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if _serif_font: lbl.add_theme_font_override("font", _serif_font)
+		lbl.add_theme_font_size_override("font_size", entry.size)
+		lbl.add_theme_color_override("font_color", entry.color)
+		vbox.add_child(lbl)
+
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer)
+
+	var close_btn := Button.new()
+	close_btn.text = "Got it!"
+	close_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	close_btn.custom_minimum_size = Vector2(0, 40)
+	close_btn.pressed.connect(_hide_patch_notes)
+	if _serif_font: close_btn.add_theme_font_override("font", _serif_font)
+	vbox.add_child(close_btn)
+
+	# Style panel
+	panel_style.bg_color = ThemeManager.bg_color
+	panel_style.border_color = ThemeManager.border_color
+	for s in ["left", "right", "top", "bottom"]:
+		panel_style.set("border_width_" + s, 1)
+	for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+		panel_style.set("corner_radius_" + c, 10)
+	panel_style.shadow_color = Color(0, 0, 0, 0.35 if ThemeManager.is_dark_mode else 0.12)
+	panel_style.shadow_size = 16
+	panel_style.shadow_offset = Vector2(0, 6)
+
+	_style_button(close_btn, true)
+
+func _animate_patch_notes_in() -> void:
+	if _patch_notes_panel:
+		_patch_notes_panel.modulate.a = 0.0
+		_patch_notes_panel.position.y = 14.0
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(_patch_notes_panel, "modulate:a", 1.0, 0.35).set_delay(0.05)
+		tw.tween_property(_patch_notes_panel, "position:y", 0.0, 0.35) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(0.05)
+
+func _animate_patch_notes_out(then: Callable) -> void:
+	if _patch_notes_panel:
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(_patch_notes_panel, "modulate:a", 0.0, 0.16)
+		tw.tween_property(_patch_notes_panel, "position:y", 10.0, 0.16) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.chain().tween_callback(then)
+	else:
+		then.call()
+
+func _show_patch_notes() -> void:
+	_patch_notes_popup.visible = true
+	_animate_patch_notes_in()
+
+func _hide_patch_notes() -> void:
+	_animate_patch_notes_out(func(): _patch_notes_popup.visible = false)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _patch_notes_popup and _patch_notes_popup.visible and event.is_action_pressed("ui_cancel"):
+		_hide_patch_notes()
+		get_viewport().set_input_as_handled()
 
 
 # ── Animations ────────────────────────────────────────────────────────────────

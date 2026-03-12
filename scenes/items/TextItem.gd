@@ -15,7 +15,8 @@ func init(text: String) -> void:
 
 func interact() -> void:
 	if TTSManager:
-		TTSManager.toggle_narration(_text)
+		var plain_text: String = TextUtils.strip_markup(_text)
+		TTSManager.toggle_narration(plain_text)
 
 func _apply_accessibility() -> void:
 	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
@@ -45,4 +46,3 @@ func _apply_accessibility() -> void:
 func _on_accessibility_changed(key: String, _value: Variant) -> void:
 	if key in ["reading_font", "high_contrast_text", "exhibit_text_size"]:
 		_apply_accessibility()
-

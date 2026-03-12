@@ -104,6 +104,10 @@ func remove_network_player(peer_id: int, local_player: Node, mount_state: Dictio
 		if mount_state.has(peer_id):
 			mount_state.erase(peer_id)
 
+		# Clear powerups for disconnected player
+		if PowerupManager:
+			PowerupManager.clear_player_powerups_on_disconnect(peer_id)
+
 		MultiplayerEvents.emit_player_left(peer_id)
 		player_removed.emit(peer_id)
 

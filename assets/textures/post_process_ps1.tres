@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://shaders/post_process_ps1.gdshader" id="1"]
+
+[resource]
+shader = ExtResource("1")
+shader_parameter/target_resolution = Vector2(320, 240)
+shader_parameter/color_steps = 8.0
+shader_parameter/wobble_amount = 0.15
+shader_parameter/dither_strength = 0.4
+

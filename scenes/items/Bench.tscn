@@ -6,9 +6,6 @@
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wood"]
 albedo_color = Color(0.4, 0.25, 0.1, 1)
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_bench"]
-size = Vector3(4, 1.2, 1.2)
-
 [node name="Bench" type="StaticBody3D" groups=["Seat"]]
 collision_layer = 1048577
 script = ExtResource("1_1")
@@ -20,4 +17,3 @@ surface_material_override/0 = SubResource("StandardMaterial3D_wood")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
-shape = SubResource("BoxShape3D_bench")

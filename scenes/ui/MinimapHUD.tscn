@@ -16,13 +16,16 @@ corner_radius_bottom_left = 12
 
 [node name="MinimapHUD" type="Control"]
 layout_mode = 3
-anchors_preset = 2
+anchors_preset = 4
+anchor_left = 1.0
 anchor_top = 1.0
+anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 20.0
+offset_left = -270.0
 offset_top = -270.0
-offset_right = 270.0
+offset_right = -20.0
 offset_bottom = -20.0
+grow_horizontal = 0
 grow_vertical = 0
 script = ExtResource("1_1")
 

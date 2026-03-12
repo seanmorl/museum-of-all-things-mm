@@ -56,13 +56,15 @@ var _painting_system: PlayerPaintingSystem = null
 var _pointing_system: PlayerPointingSystem = null
 var _journal_system: PlayerJournalSystem = null
 var _footprint_system: PlayerFootprintSystem = null
+var _powerup_system: PlayerPowerupSystem = null
 
 @onready var camera: Camera3D = $Pivot/Camera3D
 @onready var _pivot: Node3D = $Pivot
 @onready var _footstep_player: Node = $FootstepPlayer
-@onready var _map_camera: Camera3D = $MapCameraContainer/MapViewport/MapCamera
-@onready var _map_viewport: SubViewport = $MapCameraContainer/MapViewport
+@onready var _map_camera: Camera3D = get_node_or_null("MapCameraContainer/MapViewport/MapCamera")
+@onready var _map_viewport: SubViewport = get_node_or_null("MapCameraContainer/MapViewport")
 @onready var _raycast: RayCast3D = $Pivot/Camera3D/RayCast3D
+@onready var _floor_raycast: RayCast3D = get_node_or_null("Pivot/Camera3D/FloorRayCast")
 @onready var _multiplayer_sync: MultiplayerSynchronizer = get_node_or_null("MultiplayerSynchronizer")
 @onready var _name_label: Label3D = get_node_or_null("NameLabel")
 var _pronoun_label: Label3D = null
@@ -131,6 +133,10 @@ func _ready() -> void:
 	add_child(_footprint_system)
 	_footstep_player.footstep_played.connect(_on_footstep_played)
 
+	_powerup_system = PlayerPowerupSystem.new()
+	_powerup_system.init(self)
+	add_child(_powerup_system)
+
 
 # =============================================================================
 # PUBLIC API - Facade methods that delegate to subsystems
@@ -168,6 +174,16 @@ var starting_height: float:
 var crouching_height: float:
 	get: return _crouch_system.get_crouching_height() if _crouch_system else 0.45
 
+# Powerup API (delegates to PlayerPowerupSystem)
+var has_gun: bool:
+	get: return _powerup_system.has_gun() if _powerup_system else false
+var has_trap: bool:
+	get: return _powerup_system.has_trap() if _powerup_system else false
+var has_perfect_knowledge: bool:
+	get: return _powerup_system.has_perfect_knowledge() if _powerup_system else false
+var has_magnet: bool:
+	get: return _powerup_system.has_magnet() if _powerup_system else false
+
 
 func pause() -> void:
 	_enabled = false
@@ -190,19 +206,24 @@ func _set_joy_deadzone(value: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Mount/dismount handling - always process E key for dismount even when _enabled is false
+	if event.is_action_pressed("mount") and is_local:
+		if _mount_system.is_mounted():
+			# Always allow dismount regardless of _enabled or mouse mode
+			request_dismount()
+			return
+	# Block other input when disabled
 	if not _enabled or not is_local:
 		return
 
-	# Mount/dismount/steal/place handling (E key)
+	# Mount/dismount/steal/place handling (E key) - only reaches here if not mounted
 	if event.is_action_pressed("mount") and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
 		if _painting_system and _painting_system.is_carrying():
 			_painting_system.try_place_painting()
-		elif _mount_system.is_mounted():
-			request_dismount()
 		elif _painting_system and _painting_system.try_steal_target():
 			pass  # Steal initiated
 		else:
-			var collider: Node = _raycast.get_collider()
+			var collider: Node = _get_interactable_collider()
 			if collider:
 				if collider.has_method("interact"):
 					collider.interact()
@@ -218,12 +239,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _painting_system and _painting_system.is_carrying():
 			pass  # Eat is handled in _process via process_eat()
 		else:
-			var collider: Node = _raycast.get_collider()
+			var collider: Node = _get_interactable_collider()
 			if collider:
 				if collider.has_method("interact"):
 					collider.interact()
 				elif collider.get_parent() and collider.get_parent().has_method("interact"):
 					collider.get_parent().interact()
+
+	# Powerup handling - Gun fire and Trap placement
+	if event.is_action_pressed("point") and (Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED or Input.get_connected_joypads().size() > 0):
+		if _powerup_system and _powerup_system.has_gun():
+			_powerup_system.fire_gun()
+		elif _powerup_system and _powerup_system.has_trap():
+			_powerup_system.place_trap()
+		elif _powerup_system and _powerup_system.has_magnet():
+			_powerup_system.activate_magnet()
+		elif _powerup_system and _powerup_system.has_grapple():
+			_powerup_system.fire_grapple()
 
 	var is_mouse: bool = event is InputEventMouseMotion
 	if is_mouse and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
@@ -327,8 +359,12 @@ func _physics_process(delta: float) -> void:
 	if _footprint_system:
 		_footprint_system.process_stillness(delta)
 
-	# Update interactable target tracking
-	var current_collider: Node = _raycast.get_collider()
+	# Process powerups
+	if _powerup_system:
+		_powerup_system.process_powerups(delta)
+
+	# Update interactable target tracking - check both forward and floor raycasts
+	var current_collider: Node = _get_interactable_collider()
 	if current_collider != _last_interactable_target:
 		_last_interactable_target = current_collider
 		interactable_target_changed.emit(current_collider)
@@ -338,6 +374,20 @@ func _physics_process(delta: float) -> void:
 
 	if Input.is_action_just_pressed("reset_skin"):
 		MultiplayerEvents.emit_skin_reset()
+
+
+# =============================================================================
+# INTERACTION HELPERS
+# =============================================================================
+
+func _get_interactable_collider() -> Node:
+	# Check forward raycast first (for benches, items at eye level)
+	if _raycast.is_colliding():
+		return _raycast.get_collider()
+	# Fall back to floor raycast (for plaques on floor/wall)
+	if _floor_raycast and _floor_raycast.is_colliding():
+		return _floor_raycast.get_collider()
+	return null
 
 
 # =============================================================================

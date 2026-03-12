@@ -183,6 +183,11 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Enable Ambient Occlusion (SSAO)"
 
+[node name="EnableSDFGI" type="CheckBox" parent="Settings/LCol/LightOptions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Experimental: SDFGI Global Illumination"
+
 [node name="PostProcessingOptions" type="HBoxContainer" parent="Settings/LCol" unique_id=583179679]
 layout_mode = 2
 
@@ -196,11 +201,17 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 selected = 0
-item_count = 2
+item_count = 5
 popup/item_0/text = "None"
 popup/item_0/id = 0
 popup/item_1/text = "CRT Filter"
 popup/item_1/id = 1
+popup/item_2/text = "Soft Vignette"
+popup/item_2/id = 2
+popup/item_3/text = "VHS / Retro"
+popup/item_3/id = 3
+popup/item_4/text = "PS1 Retro 3D"
+popup/item_4/id = 4
 
 [node name="EnableGlow" type="CheckBox" parent="Settings/LCol/PostProcessingOptions"]
 unique_name_in_owner = true

@@ -38,7 +38,8 @@ func _process(delta: float) -> void:
 	_keepalive_timer += delta
 	if _keepalive_timer >= _KEEPALIVE_INTERVAL:
 		_keepalive_timer = 0.0
-		_send_keepalive.rpc()
+		if multiplayer.has_multiplayer_peer() and peer:
+			_send_keepalive.rpc()
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -281,6 +282,7 @@ func _receive_player_info(peer_id: int, player_name: String, color_html: String,
 
 func _on_peer_connected(id: int) -> void:
 	Log.info("Network", "Peer connected: %d" % id)
+	print("NetworkManager: _on_peer_connected - id=%d, player_info before=%s" % [id, str(player_info.keys())])
 
 	# Set timeout immediately on connection — must happen here (not just in Main.gd)
 	# because Main.gd's peer_connected handler skips setup when game hasn't started yet.
@@ -307,6 +309,7 @@ func _send_peer_info_rpcs(id: int) -> void:
 		var my_room := get_player_room(my_id)
 		_broadcast_player_room.rpc_id(id, my_id, my_room)
 	if is_server():
+		# Broadcast all existing players to the new peer (including host if host is player 1)
 		for existing_id in player_info.keys():
 			if existing_id != id:
 				var info = player_info[existing_id]

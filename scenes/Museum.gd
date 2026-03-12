@@ -187,10 +187,11 @@ func _ready() -> void:
 	UIEvents.set_custom_door.connect(_set_custom_door)
 	SettingsEvents.language_changed.connect(_on_change_language)
 	ThemeManager.dark_mode_changed.connect(func(_d): _update_lighting())
-	
-	if TwitchManager:
-		TwitchManager.color_change_requested.connect(_on_twitch_color_requested)
-	
+
+	# Twitch integration disabled
+	# if TwitchManager:
+	# 	TwitchManager.color_change_requested.connect(_on_twitch_color_requested)
+
 	ThemeManager.disco_mode_changed.connect(_on_disco_mode_changed)
 
 

@@ -9,6 +9,20 @@ var _exhibit_hist: Array = []
 var _used_exhibit_heights: Dictionary = {}
 var _loading_exhibits: Dictionary = {}  # Track in-flight fetches to prevent duplicates
 var _logged_slot_cap: bool = false
+var _race_start_article: String = ""  # Exclude from backlink processing
+var _race_target_article: String = ""  # Only true backlinks link to this
+var _backlink_titles: Array = []  # List of articles that link to target
+
+func set_race_start_article(article: String) -> void:
+	_race_start_article = article
+
+func set_race_target_article(target: String) -> void:
+	_race_target_article = target
+
+func set_backlink_titles(titles: Array) -> void:
+	_backlink_titles = titles
+	if OS.is_debug_build():
+		print("ExhibitLoader: Set %d backlink titles: %s" % [titles.size(), str(titles)])
 
 var _starting_height: int = 40
 var _height_increment: int = 20
@@ -46,6 +60,34 @@ func get_backlink_map() -> Dictionary:
 func clear_backlink_map() -> void:
 	_backlink_map.clear()
 
+func update_backlink_exits(backlink_titles: Array, target_article: String) -> void:
+	## Called after backlinks are fetched - updates existing exhibits that are in the backlink list
+	_debug_log("ExhibitLoader: Updating backlink exits for %d rooms, target=%s" % [backlink_titles.size(), target_article])
+	_debug_log("ExhibitLoader: Current exhibits: %s" % str(_exhibits.keys()))
+	
+	for room_title in backlink_titles:
+		if _exhibits.has(room_title):
+			var exhibit_data = _exhibits[room_title]
+			var exhibit = exhibit_data.exhibit
+			if is_instance_valid(exhibit) and exhibit.has_node("Entry"):
+				var entry_hall = exhibit.get_node("Entry")
+				if entry_hall and entry_hall.has_node("ExitDoor"):
+					# Set the exit to lead to target article
+					entry_hall.to_title = target_article
+					_debug_log("ExhibitLoader: Updated %s exit to target %s" % [room_title, target_article])
+				else:
+					_debug_log("ExhibitLoader: %s Entry has no ExitDoor" % room_title)
+			else:
+				_debug_log("ExhibitLoader: %s exhibit invalid or no Entry" % room_title)
+		else:
+			_debug_log("ExhibitLoader: %s not in loaded exhibits" % room_title)
+
+func _debug_log(msg: String) -> void:
+	if OS.is_debug_build():
+		print(msg)
+
+func is_backlink_room(title: String) -> bool:
+	return _backlink_titles.has(title)
 
 func get_free_exhibit_height() -> int:
 	var height: int = _starting_height
@@ -74,10 +116,12 @@ func load_exhibit_from_entry(entry: Hall) -> void:
 			_link_backlink_to_exit(exhibit, entry)
 			return
 
+	# Don't set backlink=true here - that's only for rooms confirmed to link to target on Wikipedia
+	# Normal exhibit loading should NOT have backlink flag
 	ExhibitFetcher.fetch([prev_article], {
 		"title": prev_article,
-		"backlink": true,
 		"entry": entry,
+		"backlink": false,  # Will be set to true later if this room is in backlink list
 	})
 
 
@@ -91,7 +135,14 @@ func load_exhibit_from_exit(exit: Hall) -> void:
 			next_exhibit.entry.hall_type[1] == exit.hall_type[1] and
 			next_exhibit.entry.floor_type == exit.floor_type
 		):
-			link_halls(next_exhibit.entry, exit)
+			# Don't link halls immediately - only link if this is a confirmed backlink room
+			# or if we're in normal gameplay (not race mode)
+			if _race_target_article == "" or _backlink_titles.has(next_article):
+				# Normal mode or confirmed backlink - safe to link
+				link_halls(next_exhibit.entry, exit)
+			else:
+				# Race mode and not a confirmed backlink - don't link yet
+				_debug_log("ExhibitLoader: %s exists but not a backlink, NOT linking halls" % next_article)
 			next_exhibit.entry.from_title = exit.from_title
 			return
 		else:
@@ -268,8 +319,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	elif rider_load:
 		# For rider_load, just connect the entry loader without linking to a source hall
 		new_exhibit.entry.loader.body_entered.connect(_museum._on_loader_body_entered.bind(new_exhibit.entry, true))
-	else:
-		link_halls(new_exhibit.entry, hall)
+	# For normal exhibits, hall linking is done in _on_exit_added
 
 
 func _on_exit_added_no_hall(exit: Hall, doors: Array, new_exhibit: Node3D) -> void:
@@ -283,12 +333,29 @@ func _on_exit_added_no_hall(exit: Hall, doors: Array, new_exhibit: Node3D) -> vo
 
 func _on_exit_added(exit: Hall, doors: Array, backlink: bool, new_exhibit: Node3D, hall: Hall) -> void:
 	var linked_exhibit: String = Util.coalesce(doors.pop_front(), "")
+	if OS.is_debug_build():
+		print("ExhibitLoader: _on_exit_added for %s, backlink=%s, linked_exhibit=%s, doors=%s, backlink_titles=%s" % [new_exhibit.title, backlink, linked_exhibit, str(doors), str(_backlink_titles)])
+	
 	exit.to_title = linked_exhibit
 	if linked_exhibit != "":
 		ExhibitGraph.add_edge(new_exhibit.title, linked_exhibit)
 	exit.loader.body_entered.connect(_museum._on_loader_body_entered.bind(exit))
-	if is_instance_valid(hall) and backlink and exit.to_title == hall.to_title:
-		link_halls(hall, exit)
+	
+	# Check if this room is a true backlink (its Wikipedia article links to target)
+	var is_true_backlink = _backlink_titles.has(new_exhibit.title)
+	
+	if is_true_backlink and _race_target_article != "":
+		# This room's article links to target on Wikipedia - set exit to target
+		exit.to_title = _race_target_article
+		if OS.is_debug_build():
+			print("ExhibitLoader: BACKLINK %s → exit set to target %s" % [new_exhibit.title, _race_target_article])
+		# Create hall connection so player can walk from this backlink room to target
+		if is_instance_valid(hall):
+			link_halls(hall, exit)
+	elif not backlink:
+		# Normal exhibit - just connect entry to source hall
+		if is_instance_valid(hall):
+			link_halls(new_exhibit.entry, hall)
 
 
 func link_halls(entry: Hall, exit: Hall) -> void:
@@ -299,10 +366,14 @@ func link_halls(entry: Hall, exit: Hall) -> void:
 		Util.clear_listeners(hall, "on_player_toward_exit")
 		Util.clear_listeners(hall, "on_player_toward_entry")
 
-	_backlink_map[exit.to_title] = exit.from_title
-	exit.on_player_toward_exit.connect(func(): 
+	# Only add to backlink map if this is a true backlink (room article links to target)
+	# and the exit leads to the race target
+	if exit.to_title == _race_target_article:
+		_backlink_map[exit.from_title] = exit.to_title
+
+	exit.on_player_toward_exit.connect(func():
 		if is_instance_valid(exit) and is_instance_valid(entry): _museum._teleport_manager.teleport(exit, entry))
-	entry.on_player_toward_entry.connect(func(): 
+	entry.on_player_toward_entry.connect(func():
 		if is_instance_valid(entry) and is_instance_valid(exit): _museum._teleport_manager.teleport(entry, exit, true))
 	exit.linked_hall = entry
 	entry.linked_hall = exit

@@ -8,3 +8,6 @@ albedo_texture = ExtResource("1_get38")
 normal_enabled = true
 normal_texture = ExtResource("2_7pdh8")
 uv1_triplanar = true
+metallic = 0.0
+roughness = 0.7
+specular = 0.5

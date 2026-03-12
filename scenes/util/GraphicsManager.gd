@@ -41,6 +41,9 @@ func _exit_tree() -> void:
 ## 0=Low(512) 1=Medium(1024) 2=High(2048) 3=Ultra(4096)
 var shadow_quality: int = 2
 
+## ── Global Illumination (SDFGI) ────────────────────────────────────────────────
+var sdfgi_enabled: bool = false
+
 ## ── Depth of Field ─────────────────────────────────────────────────────────────
 var dof_enabled: bool = false
 var dof_blur_amount: float = 0.1
@@ -70,6 +73,9 @@ func init() -> void:
 	var loaded_settings: Variant = SettingsManager.get_settings(_settings_ns)
 	if loaded_settings:
 		_apply_settings(loaded_settings, _default_settings_obj)
+	else:
+		# Ensure runtime DOF state matches defaults on first run
+		_apply_dof_to_env()
 
 func set_fps_limit(value: float) -> void:
 	fps_limit = int(value)
@@ -181,15 +187,48 @@ func set_shadow_quality(quality: int) -> void:
 ## ── Depth of Field ─────────────────────────────────────────────────────────────
 func set_dof_enabled(enabled: bool) -> void:
 	dof_enabled = enabled
+	# Choose a stronger, clearly visible preset when enabling.
+	if enabled:
+		# Noticeable blur with a relatively shallow in-focus region.
+		dof_blur_amount = 0.3
+		dof_focus_distance = 8.0
+		dof_focus_range = 10.0
+	_apply_dof_to_env()
 
 func set_dof_blur_amount(amount: float) -> void:
 	dof_blur_amount = amount
+	_apply_dof_to_env()
 
 func set_dof_focus_distance(distance: float) -> void:
 	dof_focus_distance = distance
+	_apply_dof_to_env()
 
 func set_dof_focus_range(range_val: float) -> void:
 	dof_focus_range = range_val
+	_apply_dof_to_env()
+
+
+func _apply_dof_to_env() -> void:
+	## Maps our DOF settings onto the active Environment.
+	if not _env:
+		return
+	var e: Environment = _env.environment
+	if not e:
+		return
+
+	# Guard against Godot versions / environments that don't expose DOF fields.
+	if not ("dof_blur_far_enabled" in e):
+		return
+	
+	# We drive only far blur to avoid extreme near blur in gameplay.
+	e.dof_blur_far_enabled = dof_enabled
+	if not dof_enabled:
+		return
+	
+	# Godot 4.x DOF properties: distance from camera, transition (range), and blur amount.
+	e.dof_blur_far_distance = dof_focus_distance
+	e.dof_blur_far_transition = dof_focus_range
+	e.dof_blur_far_amount = dof_blur_amount
 
 func set_ssao_enabled(enabled: bool) -> void:
 	_env.environment.ssao_enabled = enabled
@@ -206,6 +245,24 @@ func set_glow_enabled(enabled: bool) -> void:
 
 func set_volumetric_fog_enabled(enabled: bool) -> void:
 	_env.environment.volumetric_fog_enabled = enabled
+
+func set_sdfgi_enabled(enabled: bool) -> void:
+	# Never enable SDFGI on the compatibility renderer.
+	if Platform.is_compatibility_renderer():
+		sdfgi_enabled = false
+	else:
+		sdfgi_enabled = enabled
+	if not _env:
+		return
+	var e: Environment = _env.environment
+	if not e:
+		return
+	if "sdfgi_enabled" in e:
+		e.sdfgi_enabled = sdfgi_enabled
+		# Nudge SDFGI brightness a bit higher than default when enabled to
+		# avoid overly dark corridors, and reset when disabled.
+		if "sdfgi_energy" in e:
+			e.sdfgi_energy = 1.2 if sdfgi_enabled else 1.0
 
 ## ── Environment accessor ───────────────────────────────────────────────────────
 func _on_node_added(node: Node) -> void:
@@ -241,6 +298,11 @@ func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 		elif default.has("ssr_roughness"):
 			e.ssr_roughness = default["ssr_roughness"]
 
+	# Experimental SDFGI toggle – guarded for versions/envs without this property.
+	var sdfgi_default: bool = default.get("sdfgi_enabled", false)
+	var sdfgi_val: bool = s.get("sdfgi_enabled", sdfgi_default)
+	set_sdfgi_enabled(sdfgi_val)
+
 	set_vsync_enabled(s.get("vsync_enabled", default.get("vsync_enabled", true)))
 	set_fps_limit(s.get("fps_limit", default.get("fps_limit", 60)))
 	enable_fps_limit(s.get("limit_fps", default.get("limit_fps", false)))
@@ -260,6 +322,7 @@ func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 	dof_blur_amount = s.get("dof_blur_amount", default.get("dof_blur_amount", 0.1))
 	dof_focus_distance = s.get("dof_focus_distance", default.get("dof_focus_distance", 10.0))
 	dof_focus_range = s.get("dof_focus_range", default.get("dof_focus_range", 10.0))
+	_apply_dof_to_env()
 
 	var mode: int = s.get("scale_mode", default.get("scale_mode", 0))
 	set_scale_mode(mode)
@@ -291,6 +354,7 @@ func _create_settings_obj() -> Dictionary:
 		"anisotropy_level": anisotropy_level,
 		# Shadows
 		"shadow_quality": shadow_quality,
+		"sdfgi_enabled": sdfgi_enabled,
 		# Lighting
 		"ambient_light_energy": e.ambient_light_energy,
 		"ssil_enabled": e.ssil_enabled,

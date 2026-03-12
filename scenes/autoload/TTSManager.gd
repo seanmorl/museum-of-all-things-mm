@@ -11,6 +11,8 @@ var _current_voice: String = ""
 func _ready() -> void:
 	# Find a suitable English voice if available
 	var voices = DisplayServer.tts_get_voices()
+	if voices == null or voices.size() == 0:
+		return
 	for voice in voices:
 		if voice.language.begins_with("en"):
 			_current_voice = voice.id

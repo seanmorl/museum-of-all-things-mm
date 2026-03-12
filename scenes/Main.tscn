@@ -20,7 +20,11 @@
 [ext_resource type="PackedScene" path="res://scenes/menu/VoteHUD.tscn" id="18_votehud"]
 [ext_resource type="PackedScene" uid="uid://crh1ugdfaifsn" path="res://scenes/items/StartLine.tscn" id="19_nfivy"]
 [ext_resource type="PackedScene" uid="uid://minihud1234" path="res://scenes/ui/MinimapHUD.tscn" id="20_minihud"]
-[ext_resource type="PackedScene" uid="uid://c7mjt8p4k1c6u" path="res://scenes/ui/PromptHUD.tscn" id="21_prompthud"]
+[ext_resource type="PackedScene" uid="uid://connhud1234" path="res://scenes/ui/ConnectionHUD.tscn" id="21_connhud"]
+[ext_resource type="PackedScene" uid="uid://c7mjt8p4k1c6u" path="res://scenes/ui/PromptHUD.tscn" id="22_prompthud"]
+[ext_resource type="PackedScene" path="res://scenes/menu/TriviaOverlay.tscn" id="23_triviaovly"]
+[ext_resource type="PackedScene" uid="uid://powerhud1234" path="res://scenes/ui/PowerupHUD.tscn" id="24_powerhud"]
+[ext_resource type="PackedScene" uid="uid://powernotif1234" path="res://scenes/ui/PowerupNotification.tscn" id="25_powernotif"]
 
 [node name="Main" type="Node" unique_id=557895252]
 script = ExtResource("1_d7g3n")
@@ -121,6 +125,22 @@ visible = false
 unique_name_in_owner = true
 visible = false
 
+[node name="ConnectionHUD" parent="TabMenu" unique_id=904511923 instance=ExtResource("21_connhud")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -270.0
+offset_top = -270.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+
 [node name="JournalOverlay" parent="TabMenu" unique_id=1483033310 instance=ExtResource("16_ft6cd")]
 unique_name_in_owner = true
 visible = false
@@ -129,8 +149,20 @@ visible = false
 unique_name_in_owner = true
 visible = false
 
-[node name="PromptHUD" parent="TabMenu" unique_id=1573667144 instance=ExtResource("21_prompthud")]
+[node name="TriviaOverlay" parent="TabMenu" unique_id=1573667145 instance=ExtResource("23_triviaovly")]
 unique_name_in_owner = true
+visible = false
+
+[node name="PromptHUD" parent="TabMenu" unique_id=1573667144 instance=ExtResource("22_prompthud")]
+unique_name_in_owner = true
+
+[node name="PowerupHUD" parent="TabMenu" unique_id=1573667146 instance=ExtResource("24_powerhud")]
+unique_name_in_owner = true
+visible = false
+
+[node name="PowerupNotification" parent="TabMenu" unique_id=1573667147 instance=ExtResource("25_powernotif")]
+unique_name_in_owner = true
+visible = false
 
 [node name="StartLine" parent="." unique_id=2087091294 instance=ExtResource("19_nfivy")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.051032305, 4.035794, 23.94235)

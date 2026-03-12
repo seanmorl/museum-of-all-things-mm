@@ -188,6 +188,13 @@ func fetch_images(titles: Array, ctx: Variant) -> void:
 func fetch_wikidata(titles: String, ctx: Variant) -> void:
 	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_wikidata", titles, ctx])
 
+func fetch_with_language(titles: Array, ctx: Variant, language: String) -> void:
+	## Fetches article wikitext in a specific language (for Tower of Babel powerup)
+	var old_lang = lang
+	set_language(language)
+	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_wikitext", titles, ctx], null, true)
+	set_language(old_lang)
+
 func fetch_commons_images(titles: String, ctx: Variant) -> void:
 	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_commons_images", titles, ctx])
 
