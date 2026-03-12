@@ -5,8 +5,8 @@
 
 [resource]
 albedo_texture = ExtResource("1")
-metallic = 0.05
-roughness = 0.5
+metallic = 0.02
+roughness = 0.6
 emission = Color(1, 1, 1, 1)
 emission_energy_multiplier = 0.0
 normal_enabled = true

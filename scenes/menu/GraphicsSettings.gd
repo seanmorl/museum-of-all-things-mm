@@ -2,7 +2,7 @@ extends VBoxContainer
 signal resume
 
 enum ScaleMode { BILINEAR, FSR1, FSR2, NEAREST }
-var post_processing_options: Array[String] = ["none", "crt"]
+var post_processing_options: Array[String] = ["none", "crt", "soft", "vhs", "ps1"]
 
 ## Display options
 @onready var scale_mode: OptionButton = %ScaleMode
@@ -21,6 +21,7 @@ var _resolution_option: OptionButton = null
 @onready var ambient_light_value: Label = %AmbientLightValue
 @onready var enable_ssil: CheckBox = %EnableSSIL
 @onready var enable_ssao: CheckBox = %EnableSSAO
+@onready var enable_sdfgi: CheckBox = %EnableSDFGI
 
 ## Reflection options
 @onready var reflection_quality: HSlider = %ReflectionQuality
@@ -183,31 +184,11 @@ func _build_dof_section() -> void:
 	lcol.add_child(HSeparator.new())
 	
 	_dof_enabled_check = CheckBox.new()
-	_dof_enabled_check.text = "Enable Depth of Field"
+	_dof_enabled_check.text = "Cinematic depth of field"
 	_dof_enabled_check.button_pressed = GraphicsManager.dof_enabled
 	_dof_enabled_check.toggled.connect(_on_dof_toggled)
 	lcol.add_child(_dof_enabled_check)
-
-	# Blur amount row
-	_dof_amount_label = Label.new()
-	var row1 = _make_slider_row("Blur amount", 0.01, 0.5, 0.01, GraphicsManager.dof_blur_amount, _dof_amount_label, "%.2f", 
-		func(v): GraphicsManager.set_dof_blur_amount(v))
-	lcol.add_child(row1)
-	
-	# Focus distance row
-	_dof_distance_label = Label.new()
-	var row2 = _make_slider_row("Focus distance", 1.0, 50.0, 0.5, GraphicsManager.dof_focus_distance, _dof_distance_label, "%.1fm", 
-		func(v): GraphicsManager.set_dof_focus_distance(v))
-	lcol.add_child(row2)
-
-	# Focus range row (if needed)
-	_dof_range_label = Label.new()
-	var row3 = _make_slider_row("Focus range", 1.0, 30.0, 0.5, GraphicsManager.dof_focus_range, _dof_range_label, "%.1fm", 
-		func(v): GraphicsManager.set_dof_focus_range(v))
-	lcol.add_child(row3)
-
-	# Hide sliders if DOF is disabled initially
-	_on_dof_toggled(GraphicsManager.dof_enabled)
+	# Sliders are managed internally by GraphicsManager now – no extra UI rows needed.
 
 
 func _on_dof_toggled(on: bool) -> void:
@@ -240,6 +221,7 @@ func _connect_new_signals() -> void:
 	enable_ssao.toggled.connect(_on_enable_ssao_toggled)
 	enable_glow.toggled.connect(_on_enable_glow_toggled)
 	enable_volumetric_fog.toggled.connect(_on_enable_volumetric_fog_toggled)
+	enable_sdfgi.toggled.connect(_on_enable_sdfgi_toggled)
 
 
 # =============================================================================
@@ -271,7 +253,13 @@ func _load_settings() -> void:
 	enable_fog.button_pressed = e.fog_enabled
 	enable_volumetric_fog.button_pressed = e.volumetric_fog_enabled
 	enable_reflections.button_pressed = e.ssr_enabled
+	# Initialize reflection quality slider and label from environment.
+	if reflection_quality:
+		reflection_quality.value = e.ssr_max_steps
+	if reflection_quality_value:
+		reflection_quality_value.text = "%d" % int(e.ssr_max_steps)
 	enable_ssao.button_pressed = e.ssao_enabled
+	enable_sdfgi.button_pressed = GraphicsManager.sdfgi_enabled
 	enable_glow.button_pressed = e.glow_enabled
 	
 	if _ssr_roughness_check and "ssr_roughness" in e:
@@ -358,6 +346,13 @@ func _on_post_processing_effect_item_selected(index: int) -> void:
 	GraphicsManager.set_post_processing(post_processing_options[index])
 
 
+func _on_reflection_quality_value_changed(value: float) -> void:
+	var steps := int(value)
+	reflection_quality_value.text = "%d" % steps
+	var e: Environment = GraphicsManager.get_env()
+	e.ssr_max_steps = steps
+
+
 func _on_msaa_option_item_selected(index: int) -> void:
 	GraphicsManager.set_msaa_3d(index)
 
@@ -405,3 +400,7 @@ func _on_enable_glow_toggled(on: bool) -> void:
 
 func _on_enable_volumetric_fog_toggled(on: bool) -> void:
 	GraphicsManager.set_volumetric_fog_enabled(on)
+
+
+func _on_enable_sdfgi_toggled(on: bool) -> void:
+	GraphicsManager.set_sdfgi_enabled(on)

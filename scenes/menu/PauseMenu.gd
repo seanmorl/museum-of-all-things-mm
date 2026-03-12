@@ -61,6 +61,8 @@ func _ready() -> void:
 	RaceManager.race_started.connect(_on_race_state_changed)
 	RaceManager.race_ended.connect(_on_race_state_changed)
 	RaceManager.race_cancelled.connect(_on_race_state_changed)
+	RaceManager.vote_started.connect(_on_vote_started)
+	RaceManager.vote_cancelled.connect(_on_vote_cancelled)
 
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
@@ -437,6 +439,12 @@ func _on_dark_mode_toggled() -> void:
 func _on_race_state_changed(_arg1 = null, _arg2 = null) -> void:
 	hide_loading_overlay()
 	_update_race_button_visibility()
+
+func _on_vote_started(_candidates: Array) -> void:
+	hide_loading_overlay()
+
+func _on_vote_cancelled() -> void:
+	hide_loading_overlay()
 
 func _update_race_button_visibility() -> void:
 	if not race_button:

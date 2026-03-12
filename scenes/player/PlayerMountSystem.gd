@@ -66,6 +66,11 @@ func process_mount(delta: float) -> void:
 		# Calculate target position (where rider should be on mount)
 		var target_position: Vector3 = mounted_on.global_position + Vector3(0, height_offset, 0)
 
+		# Handle jump-to-dismount for seats
+		if is_seat and _player.is_local and Input.is_action_just_pressed("jump"):
+			_player.request_dismount()
+			return
+
 		# During initial mount, smoothly reduce offset to zero while tracking mount
 		if _mount_lerp_time < _mount_lerp_duration:
 			_mount_lerp_time += delta
@@ -178,15 +183,22 @@ func execute_dismount() -> void:
 	var is_seat: bool = mounted_on.is_in_group("Seat")
 	var dismount_pos: Vector3 = mounted_on.global_position
 	if is_seat:
-		dismount_pos += -mounted_on.global_transform.basis.z * 1.5
+		dismount_pos += -mounted_on.global_transform.basis.z * 2.0
 	else:
-		dismount_pos += mounted_on.global_transform.basis.x * 1.0
-	
-	dismount_pos.y = mounted_on.global_position.y
+		dismount_pos += mounted_on.global_transform.basis.x * 1.5
+
+	dismount_pos.y = mounted_on.global_position.y + 0.5
 
 	# Tell mount we're leaving
 	if mounted_on.has_method("_remove_rider"):
 		mounted_on._remove_rider(_player)
+
+	# Temporarily disable bench collision to prevent getting stuck
+	if is_seat and mounted_on.has_node("CollisionShape3D"):
+		var bench_collision: CollisionShape3D = mounted_on.get_node("CollisionShape3D")
+		bench_collision.disabled = true
+		# Re-enable after a short delay
+		bench_collision.get_tree().create_timer(0.5).timeout.connect(_re_enable_bench_collision.bind(bench_collision))
 
 	_restore_collision()
 
@@ -199,6 +211,15 @@ func execute_dismount() -> void:
 	mount_peer_id = -1
 	_mount_lerp_time = _mount_lerp_duration  # Reset to prevent stale state
 	_mount_initial_offset = Vector3.ZERO
+
+	# Recapture mouse for gameplay
+	if _player.is_local:
+		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+
+func _re_enable_bench_collision(collision: CollisionShape3D) -> void:
+	if is_instance_valid(collision):
+		collision.disabled = false
 
 
 func _restore_collision() -> void:

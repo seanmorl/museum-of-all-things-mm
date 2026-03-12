@@ -79,7 +79,11 @@ func _teleport_player(from_hall: Hall, to_hall: Hall, entry_to_exit: bool = fals
 				continue
 			# Skip mounted players - they follow their mount
 			if "is_mounted" in player and player.is_mounted:
-				continue
+				# Exception: If mounted on a seat (bench), dismount first so we can teleport
+				if is_instance_valid(player.mounted_on) and player.mounted_on.is_in_group("Seat"):
+					player.request_dismount()
+				else:
+					continue
 			var distance: float = (from_hall.position - player.global_position).length()
 			if distance <= _max_teleport_distance:
 				_teleport_single_player(player, from_hall, to_hall, rot_diff)

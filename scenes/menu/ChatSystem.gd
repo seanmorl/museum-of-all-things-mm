@@ -85,3 +85,5 @@ func _rpc_broadcast_chat(sender_name: String, pronouns: String, color_html: Stri
 	## Received on all peers including host. Fire the signal.
 	var color := Color.html(color_html)
 	MultiplayerEvents.emit_chat_message(sender_name, pronouns, text, color)
+
+

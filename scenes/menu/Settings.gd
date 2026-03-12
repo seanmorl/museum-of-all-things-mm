@@ -709,53 +709,52 @@ func _build_twitch_settings() -> Control:
 	btn_row.alignment = BoxContainer.ALIGNMENT_END
 	var connect_btn := Button.new()
 	connect_btn.text = "Connect"
-	
-	var update_ui = func():
-		if TwitchManager.is_connected:
-			connect_btn.text = "Disconnect"
-			status_lbl.text = "Status: Connected to #%s" % TwitchManager.channel_name
-			status_lbl.modulate = Color(0.4, 1.0, 0.4)
-		else:
-			connect_btn.text = "Connect"
-			status_lbl.text = "Status: Disconnected"
-			status_lbl.modulate = Color(1.0, 0.4, 0.4)
 
-	connect_btn.pressed.connect(func():
-		if TwitchManager.is_connected:
-			TwitchManager.disconnect_from_twitch()
-		else:
-			if edit.text.is_empty(): return
-			SettingsManager.save_settings("twitch", {"channel": edit.text})
-			TwitchManager.connect_to_twitch(edit.text)
-		update_ui.call()
-	)
-	
-	btn_row.add_child(connect_btn)
-	container.add_child(btn_row)
-	
+	# Twitch integration disabled
+	# var update_ui = func():
+	# 	if TwitchManager.is_connected:
+	# 		connect_btn.text = "Disconnect"
+	# 		status_lbl.text = "Status: Connected to #%s" % TwitchManager.channel_name
+	# 		status_lbl.modulate = Color(0.4, 1.0, 0.4)
+	# 	else:
+	# 		connect_btn.text = "Connect"
+	# 		status_lbl.text = "Status: Disconnected"
+	# 		status_lbl.modulate = Color(1.0, 0.4, 0.4)
+
+	# connect_btn.pressed.connect(func():
+	# 	if TwitchManager.is_connected:
+	# 		TwitchManager.disconnect_from_twitch()
+	# 	else:
+	# 		if edit.text.is_empty(): return
+	# 		SettingsManager.save_settings("twitch", {"channel": edit.text})
+	# 		TwitchManager.connect_to_twitch(edit.text)
+	# 	update_ui.call()
+	# )
+
+	# btn_row.add_child(connect_btn)
+	# container.add_child(btn_row)
+
 	container.add_child(HSeparator.new())
-	
+
 	var guide_h := Label.new()
-	guide_h.text = "How to integrate:"
+	guide_h.text = "Twitch Integration (Disabled)"
 	guide_h.add_theme_font_size_override("font_size", 16)
 	container.add_child(guide_h)
-	
+
 	var guide := Label.new()
-	guide.text = "• Enter your Twitch channel name above and hit [Connect].\n" + \
-				 "• Connection is anonymous — no login or authorization required!\n" + \
-				 "• Once connected, your chat can interact with the game using these commands:\n\n" + \
-				 "    1, 2, 3, 4, 5 — Vote for candidates during a race start.\n" + \
-				 "    !color <name/hex> — Change the museum's ambient lighting.\n" + \
-				 "    !start <article> — Suggest a starting exhibit when in the lobby."
+	guide.text = "Twitch integration has been disabled.\nTo re-enable:\n" + \
+				 "1. Add TwitchManager back to project.godot autoloads\n" + \
+				 "2. Uncomment TwitchManager code in Museum.gd and Settings.gd\n" + \
+				 "3. Restore TwitchManager.gd functionality"
 	guide.set_meta("settings_role", "hint")
 	guide.autowrap_mode = TextServer.AUTOWRAP_WORD
 	container.add_child(guide)
 
-	# Listen for external disconnects
-	TwitchManager.connected.connect(update_ui)
-	TwitchManager.disconnected.connect(update_ui)
-	
-	update_ui.call()
+	# Twitch integration disabled
+	# TwitchManager.connected.connect(update_ui)
+	# TwitchManager.disconnected.connect(update_ui)
+
+	# update_ui.call()
 
 	# _tab_bar.add_tab("Twitch") # Hidden from user as it's still WIP
 	return container

@@ -34,6 +34,9 @@ var _category_search_pending: String = ""
 var _hint_buttons: Dictionary = {}
 var _hint_reveal_btn: Button = null
 var _hint_custom_edit: LineEdit = null
+# Powerups
+var _powerup_toggle: CheckButton = null
+var _powerup_status_label: Label = null
 
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
@@ -210,6 +213,8 @@ func show_loading() -> void:
 	visible = true
 	_loading_overlay.visible = true
 	_loading_overlay.modulate.a = 0.0
+	# Show cursor during loading so players know UI is coming
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	var tw := create_tween()
 	tw.tween_property(_loading_overlay, "modulate:a", 1.0, 0.2)
 
@@ -271,6 +276,8 @@ func _bounce_out() -> void:
 
 func _on_vote_started(candidates: Array) -> void:
 	_my_vote = -1
+	# Ensure mouse is visible for voting
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	hide_loading()
 	_candidates_container.visible = true
 
@@ -281,10 +288,10 @@ func _on_vote_started(candidates: Array) -> void:
 	# Close any menu that may be covering the VoteHUD (e.g. PauseMenu on clients).
 	# The host's path already closes menus via _show_vote_loading → Main.
 	# For clients, we close menus here so the VoteHUD is unobstructed.
-	if not NetworkManager.is_server():
-		var main := get_tree().get_first_node_in_group("main")
-		if main and main.has_method("_start_game"):
-			main._start_game()
+	var main := get_tree().get_first_node_in_group("main")
+	if main:
+		if main.has_method("hide_pause_menu"):
+			main.hide_pause_menu()
 
 	if NetworkManager.is_server():
 		_status_label.text = "Pick a starting room — vote will begin"
@@ -334,6 +341,8 @@ func _on_candidate_pressed(index: int) -> void:
 	for i in _candidate_buttons.size():
 		_candidate_buttons[i].disabled = (i != index)
 	_status_label.text = "Voted for: " + RaceManager.get_vote_candidates()[index]
+	# Keep mouse visible while voting is active
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 ## Builds one compact host panel inserted above the reroll button.
@@ -420,6 +429,65 @@ func _build_host_panel() -> void:
 
 	_refresh_hint_buttons(RaceManager.get_hint_interval(), RaceManager.get_hint_manual())
 
+	## — Row 3: Powerups —
+	var powerup_row := HBoxContainer.new()
+	powerup_row.add_theme_constant_override("separation", 3)
+	_host_panel.add_child(powerup_row)
+
+	var powerup_lbl := Label.new()
+	powerup_lbl.text = "Powerups:"
+	powerup_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	powerup_lbl.custom_minimum_size.x = 32
+	powerup_row.add_child(powerup_lbl)
+
+	_powerup_toggle = CheckButton.new()
+	_powerup_toggle.button_pressed = true  # Enabled by default
+	_powerup_toggle.focus_mode = Control.FOCUS_NONE
+	_powerup_toggle.toggled.connect(_on_powerup_toggled)
+	powerup_row.add_child(_powerup_toggle)
+
+	var powerup_status = Label.new()
+	powerup_status.text = "Enabled"
+	powerup_status.add_theme_color_override("font_color", ThemeManager.text_color)
+	powerup_row.add_child(powerup_status)
+	_powerup_status_label = powerup_status
+
+	## — Row 4: Powerup spawn speed —
+	var spawn_row := HBoxContainer.new()
+	spawn_row.add_theme_constant_override("separation", 3)
+	_host_panel.add_child(spawn_row)
+
+	var spawn_lbl := Label.new()
+	spawn_lbl.text = "Spawn rate:"
+	spawn_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	spawn_lbl.custom_minimum_size.x = 32
+	spawn_row.add_child(spawn_lbl)
+
+	var _spawn_buttons: Dictionary = {}
+	var spawn_opts := [
+		{"label": "Slow (3m)",   "secs": 180.0},
+		{"label": "Normal (2m)", "secs": 120.0},
+		{"label": "Fast (45s)",  "secs": 45.0},
+		{"label": "Frenzy (15s)", "secs": 15.0},
+	]
+	for opt in spawn_opts:
+		var btn := Button.new()
+		btn.text = opt.label
+		btn.toggle_mode = true
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.pressed.connect(func():
+			PowerupManager.set_spawn_interval(opt.secs)
+			for b in spawn_row.get_children():
+				if b is Button:
+					b.button_pressed = (b == btn)
+			Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+		)
+		spawn_row.add_child(btn)
+		_spawn_buttons[opt.label] = btn
+		if opt.secs == 120.0:
+			btn.button_pressed = true  # default
+
 	## — Category filter (collapsible) —
 	_category_toggle_btn = Button.new()
 	_category_toggle_btn.text = "▶ Category filter"
@@ -488,6 +556,8 @@ func _refresh_difficulty_buttons(difficulty: String) -> void:
 
 func _on_difficulty_btn_pressed(difficulty: String) -> void:
 	RaceManager.set_difficulty(difficulty)
+	# Keep mouse visible while voting is active
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 func _on_difficulty_changed(difficulty: String) -> void:
@@ -526,6 +596,8 @@ func _on_category_selected(cat_name: String) -> void:
 	for child in _category_results.get_children():
 		child.queue_free()
 	RaceManager.set_vote_timer_paused(false)
+	# Keep mouse visible while voting is active
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 func _on_category_clear_pressed() -> void:
@@ -534,6 +606,8 @@ func _on_category_clear_pressed() -> void:
 	for child in _category_results.get_children():
 		child.queue_free()
 	RaceManager.set_vote_timer_paused(false)
+	# Keep mouse visible while voting is active
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 func _on_category_override_changed(category_name: String) -> void:
@@ -582,6 +656,8 @@ func _on_hint_btn_pressed(interval: float, manual: bool, is_custom: bool) -> voi
 		if _hint_custom_edit:
 			_hint_custom_edit.visible = false
 		RaceManager.set_hint_settings(interval, manual)
+	# Keep mouse visible while voting is active
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 func _on_hint_custom_submitted(text: String) -> void:
@@ -597,6 +673,17 @@ func _on_hint_settings_changed(interval: float, manual: bool) -> void:
 
 func _on_hint_reveal_pressed() -> void:
 	RaceManager.reveal_hint_now()
+	# Keep mouse visible while voting is active
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+
+func _on_powerup_toggled(toggled_on: bool) -> void:
+	if _powerup_status_label:
+		_powerup_status_label.text = "Enabled" if toggled_on else "Disabled"
+	# Tell PowerupManager to enable/disable powerup spawning
+	PowerupManager.set_powerups_enabled(toggled_on)
+	# Keep mouse visible while voting is active
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 func _on_cancel_vote_pressed() -> void:
@@ -604,10 +691,14 @@ func _on_cancel_vote_pressed() -> void:
 		return
 	_cancel_vote_button.disabled = true
 	RaceManager.cancel_vote()
+	# Keep mouse visible - vote cancelled but player still in lobby
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 func _on_vote_cancelled() -> void:
-	_bounce_out()
+	# Hide VoteHUD but keep mouse visible
+	visible = false
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 func _on_reroll_pressed() -> void:
@@ -629,7 +720,9 @@ func on_reroll_ready() -> void:
 
 
 func _on_close_pressed() -> void:
-	_bounce_out()
+	# Hide VoteHUD but keep mouse visible (player is still in lobby voting phase)
+	visible = false
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 func _on_vote_ended(winner: String) -> void:
@@ -641,8 +734,15 @@ func _on_vote_ended(winner: String) -> void:
 	_reroll_button.visible = false
 	if _host_panel:
 		_host_panel.visible = false
+	# Mouse will be recaptured when race starts and gameplay resumes
 
 
 func _on_race_started(_target: String, _start: String) -> void:
-	await get_tree().create_timer(1.5).timeout
-	_bounce_out()
+	# Ensure loading overlay is hidden when race starts
+	hide_loading()
+	var pause_menu := get_node_or_null("../PauseMenu")
+	if pause_menu and pause_menu.has_method("hide_loading_overlay"):
+		pause_menu.hide_loading_overlay()
+	# Hide VoteHUD and recapture mouse for gameplay
+	visible = false
+	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)

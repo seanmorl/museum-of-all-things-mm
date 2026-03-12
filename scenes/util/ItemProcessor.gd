@@ -293,9 +293,17 @@ func create_items(title: String, result: Dictionary, prev_title: String = "") ->
 	# Capture race target HERE on the main thread — _create_items runs on a worker
 	# thread and cannot safely call RaceManager (a main-thread Node).
 	var race_target: String = RaceManager.get_target_article() if RaceManager.is_race_active() else ""
-	WorkQueue.add_item(PROCESSOR_QUEUE, [title, result, prev_title, race_target])
+	# Only inject race target if this room is a confirmed backlink (its article links to target on Wikipedia)
+	var is_backlink: bool = false
+	if race_target != "":
+		var museum = Engine.get_main_loop().get_first_node_in_group("museum")
+		if museum and museum.has_node("ExhibitLoader"):
+			var exhibit_loader = museum.get_node("ExhibitLoader")
+			if exhibit_loader.has_method("is_backlink_room"):
+				is_backlink = exhibit_loader.is_backlink_room(title)
+	WorkQueue.add_item(PROCESSOR_QUEUE, [title, result, prev_title, race_target, is_backlink])
 
-func _create_items(title: String, result: Dictionary, prev_title: String, race_target: String = "") -> void:
+func _create_items(title: String, result: Dictionary, prev_title: String, race_target: String = "", is_backlink: bool = false) -> void:
 	var text_items: Array = []
 	var image_items: Array = []
 	var doors: Array = []
@@ -381,11 +389,10 @@ func _create_items(title: String, result: Dictionary, prev_title: String, race_t
 	text_items.push_front(front_text)
 	doors.push_front(front_door)
 
-	# Ensure the race target appears as a door in this room. The backlinks API says
-	# this article links to the target, but the link may only exist inside a
-	# {{template}} (navbox/infobox) which the wikitext parser strips. Inject the
-	# target explicitly so the hint system's promise is always honoured.
-	if race_target != "" and race_target != title and race_target != prev_title:
+	# Ensure the race target appears as a door in this room ONLY if this room's article
+	# genuinely links to the target on Wikipedia (confirmed backlink).
+	# This ensures the hint system's promise is honoured without polluting every room.
+	if is_backlink and race_target != "" and race_target != title and race_target != prev_title:
 		if not doors.has(race_target):
 			# Inject near the front so it isn't culled if the room runs out of wall space
 			var rng_target: RandomNumberGenerator = RandomNumberGenerator.new()

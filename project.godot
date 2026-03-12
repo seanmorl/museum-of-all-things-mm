@@ -46,8 +46,9 @@ GameplayEvents="*uid://dudque40053y0"
 JournalManager="*res://scenes/util/JournalManager.gd"
 TraceManager="*res://scenes/util/TraceManager.gd"
 ThemeManager="*res://scenes/util/ThemeManager.gd"
-TwitchManager="*res://scenes/util/TwitchManager.gd"
 TTSManager="*res://scenes/autoload/TTSManager.gd"
+PowerupManager="*res://scenes/util/PowerupManager.gd"
+VoiceChatManager="*res://scenes/util/VoiceChatManager.gd"
 
 [display]
 

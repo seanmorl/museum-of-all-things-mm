@@ -9,6 +9,7 @@ signal set_custom_door(title: String)
 signal reset_custom_door
 signal quit_requested
 signal fullscreen_toggled(fullscreen_state: bool)
+signal open_trivia(exhibit_title: String)
 
 func emit_ui_cancel_pressed() -> void:
 	ui_cancel_pressed.emit()
@@ -33,3 +34,6 @@ func emit_reset_custom_door() -> void:
 
 func emit_quit_requested() -> void:
 	quit_requested.emit()
+
+func emit_open_trivia(exhibit_title: String) -> void:
+	open_trivia.emit(exhibit_title)

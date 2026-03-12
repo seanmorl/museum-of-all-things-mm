@@ -24,7 +24,8 @@ func init(text: String) -> void:
 
 func interact() -> void:
 	if TTSManager:
-		TTSManager.toggle_narration(_text)
+		var plain_text: String = TextUtils.strip_markup(_text)
+		TTSManager.toggle_narration(plain_text)
 
 func _apply_accessibility(text_content: String, label: RichTextLabel) -> String:
 	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
