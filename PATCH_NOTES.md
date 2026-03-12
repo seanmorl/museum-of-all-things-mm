@@ -25,6 +25,12 @@
 - **Terminal disabled**: Search terminal is blocked during daily challenge runs
 - **System message**: "⚠ Terminal disabled during Daily Challenge" when attempting to use terminal
 
+### 🎲 Random Powerup Drops (Host Option)
+- **Vote HUD setting**: Host can enable random powerup drops during races
+- **30-second intervals**: Random powerups spawn near random players every 30 seconds
+- **Race only**: Only active during active races
+- **Disabled by default**: Host must explicitly enable in Vote HUD
+
 ## Power-ups
 
 ### All Power-ups (Verified Working)

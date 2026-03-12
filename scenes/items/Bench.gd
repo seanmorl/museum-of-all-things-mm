@@ -7,6 +7,8 @@ class_name Bench
 const BENCH_SIZE := Vector3(0.5, 0.3, 0.4)
 const BENCH_POSITION := Vector3(0, 0.5, 0)
 
+var has_rider: bool = false
+
 func _ready() -> void:
 	add_to_group("Seat")
 	# Defer collision refresh to ensure mesh is fully loaded
@@ -33,3 +35,15 @@ func interact() -> void:
 
 func get_interaction_text() -> String:
 	return "Sit"
+
+func _accept_rider(rider: Node) -> void:
+	has_rider = true
+	# Disable collision while rider is seated to prevent getting stuck
+	if _col:
+		_col.disabled = true
+
+func _remove_rider(rider: Node) -> void:
+	has_rider = false
+	# Re-enable collision after rider leaves (with short delay)
+	if _col:
+		_col.get_tree().create_timer(0.3).timeout.connect(func(): _col.disabled = false)

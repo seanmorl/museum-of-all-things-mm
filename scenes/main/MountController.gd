@@ -24,12 +24,13 @@ func request_mount(target: Node, local_player: Node) -> void:
 			local_player.execute_mount(target)
 		return
 
-	# Handle static seats (benches, chairs)
+	# Handle static seats (benches, chairs) - these don't need peer ID tracking
 	if is_instance_valid(target) and target.is_in_group("Seat"):
-		local_player.execute_mount(target)
+		if not "has_rider" in target or not target.has_rider:
+			local_player.execute_mount(target)
 		return
 
-	# Multiplayer - find peer_id of target
+	# Multiplayer - find peer_id of target (for player mounts only)
 	var mount_peer_id: int = -1
 	var network_players: Dictionary = _multiplayer_controller.get_network_players()
 	for peer_id: int in network_players:

@@ -161,6 +161,13 @@ func execute_mount(target: Node, target_peer_id: int = -1) -> void:
 	if _player.has_node("Feet"):
 		_player.get_node("Feet").disabled = true
 
+	# Temporarily disable bench collision to prevent getting stuck when mounting
+	if is_seat and mounted_on.has_node("CollisionShape3D"):
+		var bench_collision: CollisionShape3D = mounted_on.get_node("CollisionShape3D")
+		bench_collision.disabled = true
+		# Re-enable after a short delay (in case mount fails)
+		bench_collision.get_tree().create_timer(0.5).timeout.connect(_re_enable_bench_collision.bind(bench_collision))
+
 	# Force rider to crouched position immediately
 	if _crouch_system:
 		_crouch_system.force_crouched_position()

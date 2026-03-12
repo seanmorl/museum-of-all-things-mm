@@ -24,6 +24,7 @@ var local_player_skin: String = ""
 var local_player_pronouns: String = ""
 var is_hosting: bool = false
 var is_dedicated_server: bool = false
+var show_nameplates: bool = true  # Toggle for showing player nameplates/pronouns
 
 # Keepalive to prevent playit.gg from dropping the UDP session during its
 # ~19 second re-auth cycle. We ping every 5 seconds so ENet never goes silent
