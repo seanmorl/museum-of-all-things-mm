@@ -37,6 +37,8 @@ var _hint_custom_edit: LineEdit = null
 # Powerups
 var _powerup_toggle: CheckButton = null
 var _powerup_status_label: Label = null
+var _random_drop_toggle: CheckButton = null
+var _random_drop_status_label: Label = null
 
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
@@ -488,6 +490,29 @@ func _build_host_panel() -> void:
 		if opt.secs == 120.0:
 			btn.button_pressed = true  # default
 
+	## — Row 4b: Random powerup drop —
+	var random_row := HBoxContainer.new()
+	random_row.add_theme_constant_override("separation", 3)
+	_host_panel.add_child(random_row)
+
+	var random_lbl := Label.new()
+	random_lbl.text = "Random drop:"
+	random_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	random_lbl.custom_minimum_size.x = 32
+	random_row.add_child(random_lbl)
+
+	_random_drop_toggle = CheckButton.new()
+	_random_drop_toggle.button_pressed = false  # Disabled by default
+	_random_drop_toggle.focus_mode = Control.FOCUS_NONE
+	_random_drop_toggle.toggled.connect(_on_random_drop_toggled)
+	random_row.add_child(_random_drop_toggle)
+
+	var random_status = Label.new()
+	random_status.text = "Disabled"
+	random_status.add_theme_color_override("font_color", ThemeManager.text_color)
+	random_row.add_child(random_status)
+	_random_drop_status_label = random_status
+
 	## — Category filter (collapsible) —
 	_category_toggle_btn = Button.new()
 	_category_toggle_btn.text = "▶ Category filter"
@@ -682,6 +707,14 @@ func _on_powerup_toggled(toggled_on: bool) -> void:
 		_powerup_status_label.text = "Enabled" if toggled_on else "Disabled"
 	# Tell PowerupManager to enable/disable powerup spawning
 	PowerupManager.set_powerups_enabled(toggled_on)
+	# Keep mouse visible while voting is active
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+func _on_random_drop_toggled(toggled_on: bool) -> void:
+	if _random_drop_status_label:
+		_random_drop_status_label.text = "Enabled" if toggled_on else "Disabled"
+	# Tell PowerupManager to enable/disable random powerup drops
+	PowerupManager.set_random_drops_enabled(toggled_on)
 	# Keep mouse visible while voting is active
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 

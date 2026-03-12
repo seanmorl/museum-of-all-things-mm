@@ -81,6 +81,9 @@ var _spawn_timer: float = 0.0
 var _spawn_interval: float = 120.0
 var _max_powerups: int = 4
 var _powerups_enabled: bool = true  # Can be toggled by host in VoteHUD
+var _random_drops_enabled: bool = false  # Random powerup drops during race (host option)
+var _random_drop_timer: float = 0.0
+var _random_drop_interval: float = 30.0  # Random drop every 30 seconds by default
 
 func set_spawn_interval(seconds: float) -> void:
 	if not multiplayer.is_server():
@@ -128,6 +131,28 @@ func _request_set_powerups_enabled(enabled: bool) -> void:
 func _broadcast_powerup_state(enabled: bool) -> void:
 	_powerups_enabled = enabled
 
+func set_random_drops_enabled(enabled: bool) -> void:
+	if not multiplayer.is_server():
+		# Client requests change - send to server
+		_request_set_random_drops.rpc_id(1, enabled)
+		return
+
+	_random_drops_enabled = enabled
+	_broadcast_random_drop_state.rpc(enabled)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_set_random_drops(enabled: bool) -> void:
+	if multiplayer.get_remote_sender_id() != 1:
+		return  # Only server can set
+	set_random_drops_enabled(enabled)
+
+@rpc("authority", "call_local", "reliable")
+func _broadcast_random_drop_state(enabled: bool) -> void:
+	_random_drops_enabled = enabled
+
+func is_random_drops_enabled() -> bool:
+	return _random_drops_enabled
+
 func _ready() -> void:
 	_initialize_powerup_data()
 
@@ -141,6 +166,13 @@ func _process(delta: float) -> void:
 	if _spawn_timer >= _spawn_interval:
 		_spawn_timer = 0.0
 		_try_spawn_powerup()
+
+	# Random powerup drops during race
+	if _random_drops_enabled and RaceManager.is_race_active():
+		_random_drop_timer += delta
+		if _random_drop_timer >= _random_drop_interval:
+			_random_drop_timer = 0.0
+			_spawn_random_powerup_drop()
 
 func _initialize_powerup_data() -> void:
 	_active_powerups.clear()
@@ -345,6 +377,44 @@ func _try_spawn_powerup() -> void:
 
 	var powerup_type := _get_random_powerup_type()
 	print("PowerupManager: Spawning %s at %s" % [get_powerup_name(powerup_type), str(spawn_pos)])
+	_spawn_powerup_pickup(spawn_pos, powerup_type)
+
+func _spawn_random_powerup_drop() -> void:
+	## Spawn a random powerup at a random player's location during race
+	if not NetworkManager.is_multiplayer_active():
+		return
+	if not _random_drops_enabled:
+		return
+	if not RaceManager.is_race_active():
+		return
+	if not multiplayer.is_server():
+		return
+	if _spawned_pickups.size() >= _max_powerups:
+		return
+
+	# Pick a random player (excluding Lobby) as the anchor
+	var players := get_tree().get_nodes_in_group("Player")
+	if players.is_empty():
+		return
+	
+	var valid_players: Array = []
+	for p in players:
+		var room: String = p.current_room if "current_room" in p else "Lobby"
+		if room != "Lobby":
+			valid_players.append(p)
+	
+	if valid_players.is_empty():
+		return
+	
+	var anchor_player: Node3D = valid_players[randi() % valid_players.size()]
+	var spawn_pos := _raycast_floor_spawn(anchor_player.global_position)
+	if spawn_pos == Vector3.ZERO:
+		return
+
+	var powerup_type := _get_random_powerup_type()
+	print("PowerupManager [Random Drop]: Spawning %s at %s (near %s)" % [
+		get_powerup_name(powerup_type), str(spawn_pos), anchor_player.name
+	])
 	_spawn_powerup_pickup(spawn_pos, powerup_type)
 
 ## Fire raycasts downward at several XZ offsets around [anchor] to find the floor.
