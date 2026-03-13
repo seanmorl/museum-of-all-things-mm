@@ -210,7 +210,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("mount") and is_local:
 		if _mount_system.is_mounted():
 			# Always allow dismount regardless of _enabled or mouse mode
+			print("Player: Dismount requested (E key pressed while seated)")
 			request_dismount()
+			get_viewport().set_input_as_handled()
 			return
 	# Block other input when disabled
 	if not _enabled or not is_local:
@@ -322,6 +324,10 @@ func _physics_process(delta: float) -> void:
 	var delta_vec: Vector2 = Vector2(-Input.get_joy_axis(0, _joy_right_x), -Input.get_joy_axis(0, _joy_right_y))
 	if delta_vec.length() > _joy_deadzone:
 		rotate_y(delta_vec.x * _joy_sensitivity)
+	
+	# Sync position to network (every frame for smooth movement)
+	if Services.network_service and Services.network_service.is_multiplayer_active():
+		Services.network_service.sync_player_position(global_position, Vector3(0, rotation.y, 0), current_room)
 		_pivot.rotate_x(delta_vec.y * _joy_sensitivity)
 		_pivot.rotation.x = clamp(_pivot.rotation.x, -PITCH_CLAMP, PITCH_CLAMP)
 
@@ -410,7 +416,9 @@ func request_mount(target: Node) -> void:
 
 func request_dismount() -> void:
 	var main_node: Node = get_tree().current_scene
+	print("Player.request_dismount() called, main_node=", main_node)
 	if main_node and main_node.has_method("_request_dismount"):
+		print("Player: Calling main._request_dismount()")
 		main_node._request_dismount()
 
 
@@ -425,6 +433,7 @@ func execute_mount(target: Node, target_peer_id: int = -1) -> void:
 
 
 func execute_dismount() -> void:
+	print("Player.execute_dismount() called, _mount_system=", _mount_system)
 	_mount_system.execute_dismount()
 	if is_local:
 		_enabled = true
@@ -535,7 +544,7 @@ func _get_or_create_pronoun_label() -> Label3D:
 	_pronoun_label = Label3D.new()
 	_pronoun_label.name = "PronounLabel"
 	# Copy billboard/render settings from NameLabel if available
-	if _name_label:
+	if _name_label and is_instance_valid(_name_label):
 		_pronoun_label.billboard = _name_label.billboard
 		_pronoun_label.no_depth_test = _name_label.no_depth_test
 		_pronoun_label.render_priority = _name_label.render_priority

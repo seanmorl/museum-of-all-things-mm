@@ -26,6 +26,9 @@ var is_hosting: bool = false
 var is_dedicated_server: bool = false
 var show_nameplates: bool = true  # Toggle for showing player nameplates/pronouns
 
+# Persistent player identity (saved between sessions)
+var _saved_player_names: Dictionary = {}  # peer_id -> last known name
+
 # Keepalive to prevent playit.gg from dropping the UDP session during its
 # ~19 second re-auth cycle. We ping every 5 seconds so ENet never goes silent
 # long enough for playit to consider the channel dead.
@@ -159,6 +162,44 @@ func disconnect_from_game() -> void:
 
 	Log.debug("Network", "Disconnected from game")
 
+func get_server_address() -> String:
+	## Returns the local server address for the host to share with players.
+	## Format: "hostname:port" or "IP:port"
+	if not is_hosting and not is_dedicated_server:
+		return ""
+	
+	var port := _get_host_port()
+	# Use local IP directly - hostname resolution is unreliable across networks
+	var ip := _get_local_ip()
+	return "%s:%d" % [ip, port]
+
+func _get_host_port() -> int:
+	## Get the port we're hosting on
+	if peer and peer is ENetMultiplayerPeer:
+		return peer.get_peer_port()
+	return DEFAULT_PORT
+
+func _get_local_ip() -> String:
+	## Get the local IP address of this machine (LAN IP, not public IP)
+	var interfaces := IP.get_local_interfaces()
+	if interfaces.is_empty():
+		return "localhost"
+
+	# Prefer IPv4 addresses
+	for interface in interfaces:
+		var addresses: Dictionary = interface.get("addresses", {})
+		if addresses.has("IPv4"):
+			return addresses["IPv4"]["address"]
+
+	# Fallback to first available address
+	for interface in interfaces:
+		var addresses: Dictionary = interface.get("addresses", {})
+		for addr_type in addresses:
+			if addr_type != "IPv6":
+				return addresses[addr_type]["address"]
+
+	return "localhost"
+
 
 func is_multiplayer_active() -> bool:
 	return peer != null and multiplayer.multiplayer_peer != null
@@ -177,6 +218,9 @@ func get_player_list() -> Array:
 func get_player_name(peer_id: int) -> String:
 	if player_info.has(peer_id):
 		return player_info[peer_id].name
+	# Fallback to saved name if player disconnected
+	if _saved_player_names.has(peer_id):
+		return _saved_player_names[peer_id]
 	return "Unknown"
 
 func get_player_color(peer_id: int) -> Color:
@@ -193,6 +237,18 @@ func get_player_pronouns(peer_id: int) -> String:
 	if player_info.has(peer_id) and player_info[peer_id].has("pronouns"):
 		return player_info[peer_id].pronouns
 	return ""
+
+func remember_player_name(peer_id: int, name: String) -> void:
+	## Remember a player's name for future sessions
+	_saved_player_names[peer_id] = name
+
+func get_remembered_name(peer_id: int) -> String:
+	## Get a previously saved player name
+	return _saved_player_names.get(peer_id, "")
+
+func clear_remembered_name(peer_id: int) -> void:
+	## Clear a saved name when player fully disconnects
+	_saved_player_names.erase(peer_id)
 
 
 func set_local_player_pronouns(pronouns: String) -> void:
@@ -323,6 +379,9 @@ func _send_peer_info_rpcs(id: int) -> void:
 
 func _on_peer_disconnected(id: int) -> void:
 	Log.info("Network", "Peer disconnected: %d" % id)
+	# Remember the player's name before clearing
+	if player_info.has(id):
+		remember_player_name(id, player_info[id].name)
 	player_info.erase(id)
 	peer_disconnected.emit(id)
 

@@ -28,6 +28,7 @@
 [ext_resource type="PackedScene" uid="uid://c5wpeqr3s3lw4" path="res://scenes/items/Sign.tscn" id="28_v471r"]
 [ext_resource type="PackedScene" uid="uid://brfwcf0et4c42" path="res://scenes/items/LobbyInfo.tscn" id="29_fj722"]
 [ext_resource type="Texture2D" uid="uid://crmsq8a4sjtb8" path="res://assets/logo/moat_logo_large.png" id="29_kkkm5"]
+[ext_resource type="PackedScene" uid="uid://crh1ugdfaifsn" path="res://scenes/items/StartLine.tscn" id="31_l2uyn"]
 [ext_resource type="PackedScene" uid="uid://rmj6s264abk4" path="res://scenes/items/SimpleLeaderboard.tscn" id="40_slb"]
 [ext_resource type="Environment" path="res://assets/textures/lobby_sky_environment.tres" id="42_skyenv"]
 
@@ -363,4 +364,8 @@ transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 13, 41)
 environment = ExtResource("42_skyenv")
 
 [node name="Lobby#LobbyVoxelGI" type="VoxelGI" parent="." unique_id=1442421993]
+visible = false
+
+[node name="StartLine" parent="." unique_id=2087091294 instance=ExtResource("31_l2uyn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.04863262, 4.0601463, 23.289772)
 visible = false

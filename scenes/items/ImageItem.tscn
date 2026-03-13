@@ -52,7 +52,8 @@ surface_material_override/0 = ExtResource("3_bk5br")
 [node name="InteractionBody" type="StaticBody3D" parent="." unique_id=1188518219]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
 collision_layer = 1048576
-collision_mask = 0
+collision_mask = 1
+monitorable = true
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="InteractionBody" unique_id=1683818008]
 shape = SubResource("BoxShape3D_interaction")

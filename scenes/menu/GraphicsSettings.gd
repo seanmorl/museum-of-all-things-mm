@@ -21,7 +21,6 @@ var _resolution_option: OptionButton = null
 @onready var ambient_light_value: Label = %AmbientLightValue
 @onready var enable_ssil: CheckBox = %EnableSSIL
 @onready var enable_ssao: CheckBox = %EnableSSAO
-@onready var enable_sdfgi: CheckBox = %EnableSDFGI
 
 ## Reflection options
 @onready var reflection_quality: HSlider = %ReflectionQuality
@@ -221,7 +220,6 @@ func _connect_new_signals() -> void:
 	enable_ssao.toggled.connect(_on_enable_ssao_toggled)
 	enable_glow.toggled.connect(_on_enable_glow_toggled)
 	enable_volumetric_fog.toggled.connect(_on_enable_volumetric_fog_toggled)
-	enable_sdfgi.toggled.connect(_on_enable_sdfgi_toggled)
 
 
 # =============================================================================
@@ -259,7 +257,6 @@ func _load_settings() -> void:
 	if reflection_quality_value:
 		reflection_quality_value.text = "%d" % int(e.ssr_max_steps)
 	enable_ssao.button_pressed = e.ssao_enabled
-	enable_sdfgi.button_pressed = GraphicsManager.sdfgi_enabled
 	enable_glow.button_pressed = e.glow_enabled
 	
 	if _ssr_roughness_check and "ssr_roughness" in e:
@@ -400,7 +397,3 @@ func _on_enable_glow_toggled(on: bool) -> void:
 
 func _on_enable_volumetric_fog_toggled(on: bool) -> void:
 	GraphicsManager.set_volumetric_fog_enabled(on)
-
-
-func _on_enable_sdfgi_toggled(on: bool) -> void:
-	GraphicsManager.set_sdfgi_enabled(on)

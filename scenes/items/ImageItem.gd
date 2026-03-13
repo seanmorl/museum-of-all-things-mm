@@ -78,6 +78,16 @@ func _update_collision_shape(width: float, height: float) -> void:
 		var box_shape: BoxShape3D = collision_shape.shape as BoxShape3D
 		if box_shape:
 			box_shape.size = Vector3(width, height, 0.1)
+			collision_shape.disabled = false
+			$InteractionBody.collision_layer = 1048576
+	else:
+		if has_node("InteractionBody"):
+			var new_shape = CollisionShape3D.new()
+			new_shape.name = "CollisionShape3D"
+			new_shape.shape = BoxShape3D.new()
+			new_shape.shape.size = Vector3(width, height, 0.1)
+			$InteractionBody.add_child(new_shape)
+			$InteractionBody.collision_layer = 1048576
 
 func interact() -> void:
 	pass

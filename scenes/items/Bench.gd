@@ -44,6 +44,6 @@ func _accept_rider(rider: Node) -> void:
 
 func _remove_rider(rider: Node) -> void:
 	has_rider = false
-	# Re-enable collision after rider leaves (with short delay)
+	# Re-enable collision immediately (not via timer) to prevent input issues
 	if _col:
-		_col.get_tree().create_timer(0.3).timeout.connect(func(): _col.disabled = false)
+		_col.disabled = false

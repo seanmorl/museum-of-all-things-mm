@@ -1,5 +1,11 @@
 extends Node
 ## Centralized logging with file output and network relay for dedicated servers.
+## 
+## Usage:
+##   Log.debug("Source", "Message")  # Stripped in release builds
+##   Log.info("Source", "Message")   # Always included
+##   Log.warn("Source", "Message")   # Always included
+##   Log.error("Source", "Message")  # Always included
 
 signal log_received(timestamp: String, level: String, source: String, message: String)
 
@@ -19,9 +25,14 @@ var _subscribers: Array[int] = []
 var _initialized: bool = false
 
 static var _level_names: PackedStringArray = PackedStringArray(["DEBUG", "INFO", "WARN", "ERROR"])
+## When true, DEBUG logs are completely stripped (release builds)
+static var strip_debug_logs: bool = true
 
 
 func debug(source: String, message: String) -> void:
+	# DEBUG logs are stripped in release builds for performance
+	if strip_debug_logs and not OS.is_debug_build():
+		return
 	_log(Level.DEBUG, source, message)
 
 

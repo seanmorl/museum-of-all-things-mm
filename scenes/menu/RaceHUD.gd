@@ -14,6 +14,9 @@ var _win_label: Label
 var _time_label: Label
 var _win_timeline: VBoxContainer
 var _sub_label: Label
+var _countdown_overlay: ColorRect = null
+var _countdown_label: Label = null
+var _countdown_finished: bool = false
 
 var _race_style: StyleBoxFlat
 var _win_style: StyleBoxFlat
@@ -87,6 +90,7 @@ func _ready() -> void:
 		_timeline_scroll.custom_minimum_size = Vector2(0, 0)
 
 	RaceManager.race_started.connect(_on_race_started)
+	RaceManager.race_countdown.connect(_on_race_countdown)
 	RaceManager.race_ended.connect(_on_race_ended)
 	RaceManager.race_cancelled.connect(_on_race_cancelled)
 	RaceManager.race_timer_updated.connect(_on_race_timer_updated)
@@ -97,6 +101,8 @@ func _ready() -> void:
 	SettingsEvents.accessibility_changed.connect(_on_accessibility_changed)
 	_apply_initial_accessibility_settings()
 	_apply_theme(ThemeManager.is_dark_mode)
+
+	_build_countdown_overlay()
 
 func _apply_initial_accessibility_settings() -> void:
 	## Apply saved accessibility settings on load (in case broadcast from Main was missed).
@@ -351,12 +357,18 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_room_changed(room: String) -> void:
 	if not RaceManager.is_race_active() or room == "Lobby": return
+	# Don't add the start article room to visited pages - it's already shown as the target
+	var start_article := RaceManager.get_start_article()
+	if room == start_article: return
+	# Don't add duplicates
+	if _visited_pages.has(room): return
 	_visited_pages.append(room)
 	_refresh_timeline_display()
 
 
-func _on_race_started(target_article: String, _start_article: String) -> void:
-	_visited_pages.clear()
+func _on_race_started(target_article: String, start_article: String) -> void:
+	# Initialize visited pages with the start article
+	_visited_pages = [start_article]
 	_revealed_hints.clear()
 	if _hint_overlay:
 		for child in _hint_overlay.get_children():
@@ -374,6 +386,69 @@ func _on_race_started(target_article: String, _start_article: String) -> void:
 		_win_timeline.custom_minimum_size = Vector2(0, 0)
 	visible = true
 	_slide_in(_race_panel, true)
+
+func _on_race_countdown(number: int) -> void:
+	## Display countdown overlay (3, 2, 1, GO!)
+	if not _countdown_overlay or not _countdown_label:
+		return
+	
+	# Make RaceHUD visible so countdown can be seen
+	visible = true
+	
+	if number > 0:
+		_countdown_label.text = str(number)
+		_countdown_label.add_theme_color_override("font_color", Color.WHITE)
+	else:
+		_countdown_label.text = "GO!"
+		_countdown_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.2))
+	
+	# Show overlay with dark background
+	_countdown_overlay.visible = true
+	_countdown_overlay.z_index = 4000  # High but within Godot's limit (max 4096)
+	_countdown_overlay.color = Color(0, 0, 0, 0.8)
+	_countdown_overlay.scale = Vector2.ONE
+	_countdown_overlay.modulate.a = 1.0
+	
+	# Fade out only after GO!
+	if number == 0:
+		var tw = create_tween()
+		tw.tween_property(_countdown_overlay, "modulate:a", 0.0, 0.5).set_delay(0.5)
+		tw.tween_callback(func(): 
+			_countdown_overlay.visible = false
+			# Capture mouse for gameplay
+			Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+		)
+
+func _build_countdown_overlay() -> void:
+	## Create fullscreen countdown overlay
+	print("RaceHUD: Building countdown overlay...")
+	_countdown_overlay = ColorRect.new()
+	_countdown_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_countdown_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_countdown_overlay.color = Color(0, 0, 0, 0.0)  # Invisible background
+	_countdown_overlay.visible = false
+	# Don't set z_index here - set it when showing countdown
+	add_child(_countdown_overlay)
+
+	_countdown_label = Label.new()
+	_countdown_label.name = "CountdownLabel"
+	_countdown_label.text = ""
+	_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_countdown_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_countdown_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if _serif_font:
+		_countdown_label.add_theme_font_override("font", _serif_font)
+	_countdown_label.add_theme_font_size_override("font_size", 120)
+	# Set color explicitly - don't use ThemeManager which might be dark
+	_countdown_label.add_theme_color_override("font_color", Color.WHITE)
+	_countdown_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_countdown_label.add_theme_constant_override("outline_size", 4)
+	# Explicitly center the label
+	_countdown_label.position = Vector2.ZERO
+	_countdown_label.size = Vector2.ZERO
+	_countdown_overlay.add_child(_countdown_label)
+	print("RaceHUD: Countdown overlay built successfully, label font_size=120, color=WHITE")
 
 
 func _on_race_timer_updated(elapsed_seconds: float) -> void:
@@ -405,18 +480,27 @@ func _populate_win_timeline() -> void:
 	var path_to_show: Array[String] = winner_path if winner_path.size() > 0 else _visited_pages
 
 	var target := RaceManager.get_target_article()
-	for i in path_to_show.size():
+	var max_display := 15  # Limit displayed items to prevent overflow
+	
+	for i in min(path_to_show.size(), max_display):
 		var page     := path_to_show[i]
 		var is_tgt:  bool = page == target
 		var is_first: bool = i == 0
-		var arrow: String = " ↓" if i < path_to_show.size() - 1 else ""
-		var prefix: String = "★ " if is_tgt else ("▶ " if is_first else "")
+		var is_last: bool = i == path_to_show.size() - 1
+		var arrow: String = "" if is_last else " ↓"
+		var prefix: String = "★ " if is_tgt else ("▶ " if is_first else "  ")
 		var role: String   = "target" if is_tgt else ("start" if is_first else "mid")
 		_win_timeline.add_child(_make_label(prefix + page + arrow, role, 11))
-	# Cap height — compact row height to match smaller font
+	
+	# Show ellipsis if path was truncated
+	if path_to_show.size() > max_display:
+		_win_timeline.add_child(_make_label("  ... (%d more rooms)" % (path_to_show.size() - max_display), "mid", 10))
+	
+	# Set reasonable size limits
 	var row_h: float = 16.0
-	var max_rows: int = 12
+	var max_rows: int = 10
 	_win_timeline.custom_minimum_size.y = 0
+	_win_timeline.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	if path_to_show.size() > max_rows:
 		_win_timeline.custom_minimum_size.y = row_h * max_rows
 

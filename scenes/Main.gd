@@ -2,6 +2,8 @@ extends Node
 ## Main game controller handling initialization and delegating to subsystems.
 
 const _SKIN_EQUIP_SOUND: AudioStream = preload("res://assets/sound/UI/UI Crystal 1.ogg")
+const _VICTORY_SOUND: AudioStream = preload("res://assets/sound/UI/UI Crystal 1.ogg")
+const _COUNTDOWN_SOUND: AudioStream = preload("res://assets/sound/UI/UI Crystal 1.ogg")
 
 @export var Player: PackedScene = preload("res://scenes/Player.tscn")
 @export var NetworkPlayer: PackedScene = preload("res://scenes/NetworkPlayer.tscn")
@@ -90,16 +92,43 @@ func _parse_command_line() -> void:
 					MultiplayerMenu.default_server_address = args[i + 1]
 
 func _ready() -> void:
+	# Initialize core services FIRST (before any other initialization)
+	# Note: Services and EventBus are autoloads, accessed globally
+	Services.initialize()
+	
 	# Restore UI scale from settings before anything else renders
 	var ui_saved = SettingsManager.get_settings("ui")
 	if ui_saved and ui_saved.has("scale"):
 		get_tree().root.content_scale_factor = float(ui_saved.scale)
-	
+
+	# Initialize RoomService with museum references (after @onready vars are set)
+	call_deferred("_initialize_room_service")
+
 	# WIP Label font management
 	if _wip_label:
 		_wip_label.add_theme_font_override("font", ThemeManager.get_reading_font())
 		ThemeManager.reading_font_changed.connect(func(f): _wip_label.add_theme_font_override("font", f))
+
+func _initialize_room_service() -> void:
+	"""Initialize RoomService with museum references (called after @onready vars are set)."""
+	if Services.room_service and _museum:
+		var exhibit_loader = _museum.get_node_or_null("ExhibitLoader")
+		if exhibit_loader:
+			Services.room_service.initialize(_museum, exhibit_loader)
+			print("Main: RoomService initialized with museum and exhibit loader")
 	
+	# Initialize exhibit service
+	if Services.exhibit_service and _museum:
+		var exhibit_loader = _museum.get_node_or_null("ExhibitLoader")
+		if exhibit_loader:
+			Services.exhibit_service.initialize(_museum, exhibit_loader)
+			print("Main: ExhibitService initialized")
+	
+	# Also initialize network service
+	if Services.network_service:
+		Services.network_service.initialize()
+		print("Main: NetworkService initialized")
+
 	# Initialize subsystems first
 	_menu_controller = MainMenuController.new()
 	_menu_controller.init(self, _menu_layer)
@@ -305,6 +334,8 @@ func _ready() -> void:
 	# Race signals
 	add_to_group("main")
 	RaceManager.race_started.connect(_on_race_started)
+	RaceManager.race_countdown.connect(_on_race_countdown)
+	RaceManager.race_won.connect(_on_race_won)
 	RaceManager.vote_cancelled.connect(_on_vote_cancelled)
 	if RaceManager.has_signal("race_won"):
 		RaceManager.race_won.connect(_on_race_won_for_daily_challenge)
@@ -519,25 +550,36 @@ func _start_ui_dedicated_host() -> void:
 	# Update main menu to show hosting status + stop button
 	var main_menu_node := _menu_layer.get_node_or_null("MainMenu")
 	if main_menu_node:
+		var container := main_menu_node.get_node("%Quit").get_parent()
+		
+		# Show server address for host to share
+		var server_addr := NetworkManager.get_server_address()
+		var addr_lbl := Label.new()
+		addr_lbl.name = "ServerAddressLabel"
+		addr_lbl.text = "Server Address: %s" % server_addr
+		addr_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		addr_lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+		addr_lbl.add_theme_font_size_override("font_size", 14)
+		container.add_child(addr_lbl)
+		
 		var lbl := Label.new()
 		lbl.name = "HostStatusLabel"
 		lbl.text = "Hosting on port %d — waiting for players..." % _multiplayer_controller.get_server_port()
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.add_theme_color_override("font_color", Color(0.4, 0.7, 0.4))
-		var container := main_menu_node.get_node("%Quit").get_parent()
 		container.add_child(lbl)
-		
+
 		var stop_btn := Button.new()
 		stop_btn.name = "StopHostingButton"
 		stop_btn.text = "Stop Hosting"
 		stop_btn.pressed.connect(_on_stop_hosting_pressed)
 		container.add_child(stop_btn)
-		
+
 		# Hide the Host Server button while hosting
 		var host_btn := main_menu_node.get_node_or_null("DedicatedHost")
 		if host_btn:
 			host_btn.visible = false
-	
+
 	Log.info("Main", "UI dedicated host started on port %d" % _multiplayer_controller.get_server_port())
 
 func _on_stop_hosting_pressed() -> void:
@@ -556,6 +598,9 @@ func _on_stop_hosting_pressed() -> void:
 		var lbl := container.get_node_or_null("HostStatusLabel")
 		if lbl:
 			lbl.queue_free()
+		var addr_lbl := container.get_node_or_null("ServerAddressLabel")
+		if addr_lbl:
+			addr_lbl.queue_free()
 		var stop_btn := container.get_node_or_null("StopHostingButton")
 		if stop_btn:
 			stop_btn.queue_free()
@@ -587,7 +632,7 @@ func _input(event: InputEvent) -> void:
 		UIEvents.fullscreen_toggled.emit(not GraphicsManager.fullscreen)
 
 	# Host keybind: H = reveal next hint to all players during a race
-	if event.is_action_pressed("reveal_hint") and not event.is_echo():
+	if InputMap.has_action("reveal_hint") and event.is_action_pressed("reveal_hint") and not event.is_echo():
 		var chat_open: bool = _chat_hud != null and _chat_hud.is_input_open()
 		if not chat_open and NetworkManager.is_server() and RaceManager.is_race_active():
 			var ok := RaceManager.reveal_hint_now()
@@ -682,10 +727,13 @@ func _input(event: InputEvent) -> void:
 		
 		if event.is_action_pressed("free_pointer"):
 			Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-		
+
 		if event.is_action_pressed("click") and not _menu_layer.visible:
 			if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
-				var overlay_open: bool = (_journal_overlay and _journal_overlay.is_open()) or (_guestbook_overlay and _guestbook_overlay.is_open()) or (_trivia_overlay and _trivia_overlay.is_open())
+				# Check if any UI overlay is open (including VoteHUD)
+				var vote_hud := get_node_or_null("TabMenu/VoteHUD")
+				var vote_open: bool = vote_hud != null and vote_hud.visible
+				var overlay_open: bool = (_journal_overlay and _journal_overlay.is_open()) or (_guestbook_overlay and _guestbook_overlay.is_open()) or (_trivia_overlay and _trivia_overlay.is_open()) or vote_open
 				if not overlay_open:
 					Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 		
@@ -964,42 +1012,108 @@ func _launch_vote() -> void:
 		vote_hud.on_reroll_ready()
 
 func _on_race_started(target_article: String, start_article: String) -> void:
+	Log.debug("Main", "_on_race_started CALLED! target=%s start=%s" % [target_article, start_article])
 	_debug_log("Main: Race started, sending all players to '%s'" % start_article)
 	_debug_log("Main: Target article is '%s'" % target_article)
 	# Clear backlink map from previous race and set start article to exclude from backlinks
 	_museum._exhibit_loader.clear_backlink_map()
 	_museum._exhibit_loader.set_race_start_article(start_article)
 	_museum._exhibit_loader.set_race_target_article(target_article)
+
+	# Server fetches Wikipedia data for start article and broadcasts to all clients
+	if NetworkManager.is_server():
+		_debug_log("Main: Fetching Wikipedia data for start article '%s'..." % start_article)
+		# Fetch and wait for data before proceeding
+		_fetch_and_broadcast_start_article(start_article)
+
 	# Server fetches backlinks to populate the hint pool
 	if NetworkManager.is_server() and target_article != "":
 		_debug_log("Main: Fetching backlinks for target '%s'..." % target_article)
 		ExhibitFetcher.backlinks_complete.connect(_on_backlinks_for_hints, CONNECT_ONE_SHOT)
 		ExhibitFetcher.fetch_backlinks(target_article, {"hints": true})
-	
+
 	# In dedicated host mode there is no local player — just sync to clients and return
 	if _is_ui_dedicated_host:
 		if start_article != "" and NetworkManager.is_server():
+			print("Main: Dedicated host - calling _sync_race_start_article.rpc and local")
 			_sync_race_start_article.rpc(start_article)
+			_sync_race_start_article(start_article)  # Also run locally
 		GameplayEvents.emit_race_started(target_article)
 		return
-	
+
 	if _player == null:
+		print("Main: _player is null, returning early")
 		return
 	_menu_controller.close_menus()
-	
+
 	# Reset to lobby first
 	_museum.reset_to_lobby()
-	
+
 	# Open the search door to the starting exhibit for all players
 	if start_article != "":
+		print("Main: Calling _sync_race_start_article.rpc and local for start_article=", start_article)
 		UIEvents.emit_set_custom_door(start_article)
 		if NetworkManager.is_server():
 			_sync_race_start_article.rpc(start_article)
-	
+			_sync_race_start_article(start_article)  # Also run locally on server
+
 	# Start game (close menus, capture mouse)
 	_start_game()
-	
+
 	GameplayEvents.emit_race_started(target_article)
+
+func _fetch_and_broadcast_start_article(article: String) -> void:
+	## Fetch Wikipedia data on server and broadcast to all clients
+	Log.info("Main", "Starting Wikipedia fetch for '%s'" % article)
+	ExhibitFetcher.fetch([article], {
+		"title": article,
+		"race_start": true  # Mark this as race start data
+	})
+
+	# Wait for fetch to complete (poll until data arrives) - max 1 second
+	var max_wait := 1.0
+	var wait_step := 0.1
+	var waited := 0.0
+	while not ExhibitFetcher.has_result(article) and waited < max_wait:
+		await get_tree().create_timer(wait_step).timeout
+		waited += wait_step
+
+	# Get the fetched data
+	var result = ExhibitFetcher.get_result(article)
+	if result:
+		Log.debug("Main", "Broadcasting Wikipedia data for '%s' to all clients" % article)
+		_sync_wikipedia_data.rpc(article, result)
+	else:
+		print("Main: ERROR: Wikipedia fetch failed for '", article, "'")
+
+func _on_race_countdown(number: int) -> void:
+	## Play countdown sound effect
+	Log.debug("Main", "Received countdown: %d" % number)
+	if number > 0 and number <= 3:
+		_play_countdown_sound()
+
+func _play_countdown_sound() -> void:
+	## Play a short beep for countdown
+	var player = AudioStreamPlayer.new()
+	player.stream = _COUNTDOWN_SOUND
+	player.volume_db = -5.0
+	add_child(player)
+	player.play()
+	player.finished.connect(func(): player.queue_free())
+
+func _on_race_won(winner_name: String, final_time: float) -> void:
+	## Play victory sound when someone wins the race
+	_debug_log("Main: Race won by %s in %.1fs - playing victory sound" % [winner_name, final_time])
+	_play_victory_sound()
+
+func _play_victory_sound() -> void:
+	## Play victory fanfare
+	var player = AudioStreamPlayer.new()
+	player.stream = _VICTORY_SOUND
+	player.volume_db = -3.0
+	add_child(player)
+	player.play()
+	player.finished.connect(func(): player.queue_free())
 
 func _on_backlinks_for_hints(titles: Array, context: Dictionary) -> void:
 	if not context.get("hints", false):
@@ -1060,8 +1174,8 @@ func _on_network_peer_connected(peer_id: int) -> void:
 		if enet_peer:
 			enet_peer.set_timeout(32, 20000, 60000)
 	
-	print("Main: _on_network_peer_connected - peer_id=%d, game_started=%s, is_multiplayer_game=%s" % [
-		peer_id, game_started, _multiplayer_controller.is_multiplayer_game()
+	Log.debug("Main", "_on_network_peer_connected - peer_id=%d, game_started=%s, is_multiplayer_game=%s" % [
+		peer_id, str(game_started), str(_multiplayer_controller.is_multiplayer_game())
 	])
 	
 	if _multiplayer_controller.is_multiplayer_game() and game_started:
@@ -1145,6 +1259,7 @@ func _request_mount(target: Node) -> void:
 	_mount_controller.request_mount(target, _player)
 
 func _request_dismount() -> void:
+	Log.debug("Main", "_request_dismount() called, _player=%s, _mount_controller=%s" % [_player, _mount_controller])
 	_mount_controller.request_dismount(_player)
 
 # =============================================================================
@@ -1332,6 +1447,13 @@ func _sync_placed_paintings_to_peer(state: Array) -> void:
 	if _painting_controller:
 		_painting_controller.apply_placed_paintings_state(state, _player)
 
+@rpc("authority", "call_local", "reliable")
+func _sync_wikipedia_data(article: String, data: Dictionary) -> void:
+	## Received by clients - caches Wikipedia data from server
+	Log.debug("Main", "Received Wikipedia data for '%s' from server" % article)
+	# Directly cache the result in ExhibitFetcher
+	ExhibitFetcher._cache_result(article, data)
+
 @rpc("authority", "call_remote", "reliable")
 func _sync_stolen_paintings_to_peer(state: Dictionary) -> void:
 	## Received by a newly-joined client. Populates the stolen painting map.
@@ -1342,9 +1464,178 @@ func _sync_stolen_paintings_to_peer(state: Dictionary) -> void:
 ## open the search door and load the starting article.
 @rpc("authority", "call_remote", "reliable")
 func _sync_race_start_article(start_article: String) -> void:
+	Log.debug("Main", "_sync_race_start_article: Loading exhibit '%s'" % start_article)
+
+	# Wait for Wikipedia data to arrive from server (if we're a client) - max 1 second
+	var max_wait := 1.0
+	var wait_step := 0.1
+	var waited := 0.0
+	while not ExhibitFetcher.has_result(start_article) and waited < max_wait:
+		await get_tree().create_timer(wait_step).timeout
+		waited += wait_step
+
+	if not ExhibitFetcher.has_result(start_article):
+		print("Main: WARNING: Wikipedia data never arrived for '", start_article, "'")
+	else:
+		print("Main: Wikipedia data received for '", start_article, "'")
+
+	# SERVER: Generate room and broadcast to all clients
+	if NetworkManager.is_server() and Services.room_service:
+		print("Main: Server generating room for '", start_article, "'")
+		var room_data = Services.room_service.generate_room(start_article)
+		Services.room_service.populate_room_data(room_data, ExhibitFetcher.get_result(start_article), [])
+		Services.room_service.broadcast_room(room_data)
+	else:
+		# CLIENT: Wait for room data from server
+		print("Main: Client waiting for room data from server...")
+
+	# Load the exhibit (will use cached RoomData if available)
+	if _museum.has_method("load_exhibit_for_rider"):
+		print("Main: Loading exhibit '", start_article, "' before opening door...")
+		_museum.load_exhibit_for_rider("Lobby", start_article)
+
+	# Wait for exhibit to generate (up to 0.5 seconds)
+	Log.debug("Main", "Waiting for exhibit to generate (max 0.5s)...")
+	for i in range(10):  # 10 x 0.05s = 0.5 seconds
+		await get_tree().create_timer(0.05).timeout
+		if _museum.has_exhibit(start_article):
+			Log.debug("Main", "Exhibit generated after %.2fs" % ((i + 1) * 0.05))
+			break
+
+	# NOW open the door (exhibit is ready to walk into)
 	_museum.reset_to_lobby()
 	UIEvents.emit_set_custom_door(start_article)
+	Log.debug("Main", "Door opened for '%s' - exhibit ready to walk into!" % start_article)
+
+	# Teleport all players to the start line
+	teleport_all_players_to_start_line(start_article)
+
+	# Start the game (player can now walk through door)
 	_start_game()
+
+func _teleport_all_players_to_article(article: String) -> void:
+	## Teleport all connected players to the specified article
+	Log.debug("Main", "[_teleport_all_players_to_article] Called with article=%s" % article)
+	if not _museum:
+		print("Main: ERROR - _museum is null!")
+		return
+
+	# Check if exhibit exists
+	if not _museum.has_exhibit(article):
+		var exhibits_dict = _museum.get("exhibits") if "exhibits" in _museum else _museum.get("_exhibits")
+		var exhibit_keys = exhibits_dict.keys() if exhibits_dict else []
+		print("Main: ERROR - Exhibit '", article, "' NOT loaded! Available: ", exhibit_keys)
+		return
+
+	Log.debug("Main", "Exhibit '%s' found" % article)
+
+	# Get all players
+	var all_players = get_tree().get_nodes_in_group("Player")
+	Log.debug("Main", "Found %d players to teleport" % all_players.size())
+
+	for player in all_players:
+		if not is_instance_valid(player):
+			print("Main: Skipping invalid player")
+			continue
+
+		# Find the entry marker - it's inside the Hall node
+		var new_exhibit = _get_exhibit_for_article(article)
+		if not new_exhibit:
+			print("Main: ERROR - Could not get exhibit node for ", article)
+			continue
+		
+		# Try multiple possible locations for EntryMarker
+		var entry_marker: Node = null
+		if new_exhibit.has_node("Entry/EntryMarker"):
+			entry_marker = new_exhibit.get_node("Entry/EntryMarker")
+		elif new_exhibit.has_node("Hall/EntryMarker"):
+			entry_marker = new_exhibit.get_node("Hall/EntryMarker")
+		else:
+			# Search recursively
+			entry_marker = new_exhibit.find_child("EntryMarker", true, false)
+		
+		if not entry_marker:
+			print("Main: ERROR - EntryMarker not found in exhibit! Children: ", new_exhibit.get_children())
+			continue
+		
+		var entry_pos = entry_marker.global_transform.origin
+		print("Main: Teleporting ", player.name, " to ", entry_pos)
+		player.global_transform.origin = entry_pos + Vector3(0, 1, 0)
+		if "current_room" in player:
+			player.current_room = article
+			print("Main: Set ", player.name, " current_room to ", article)
+
+		# Also teleport mounted riders
+		if "mounted_by" in player and player.mounted_by:
+			var rider = player.mounted_by
+			if is_instance_valid(rider):
+				rider.global_transform.origin = entry_pos + Vector3(0, 2.5, 0)
+				if "current_room" in rider:
+					rider.current_room = article
+	
+	Log.debug("Main", "<<< Teleport complete for %d players" % all_players.size())
+
+func teleport_all_players_to_start_line(start_article: String) -> void:
+	"""Teleport all players to the race start line in the lobby."""
+	Log.debug("Main", ">>> Teleporting all players to race start line")
+
+	# The start line is at the bottom of the stairs, before the search corridor
+	# Spawn HIGH above the floor so players fall down onto it safely
+	var base_z: float = 23.0  # Z position of the start line
+	var base_y: float = 5.0  # Height above the floor
+
+	# Get all players
+	var all_players = get_tree().get_nodes_in_group("Player")
+	Log.debug("Main", "Found %d players to teleport" % all_players.size())
+
+	# Spread players across the start line to avoid stacking
+	var player_index: int = 0
+	for player in all_players:
+		if not is_instance_valid(player):
+			print("Main: Skipping invalid player")
+			continue
+
+		# Offset players horizontally along the start line (X axis)
+		# Each player is 1.5 units apart, centered around X=0
+		var offset_x: float = (player_index - (all_players.size() - 1) / 2.0) * 1.5
+		var lobby_start_pos = Vector3(offset_x, base_y, base_z)
+
+		Log.debug("Main", "Teleporting %s to start line at %s" % [player.name, lobby_start_pos])
+		player.global_transform.origin = lobby_start_pos
+		player.rotation = Vector3(0, deg_to_rad(180), 0)  # Face toward search corridor
+		player.velocity = Vector3.ZERO  # Reset velocity
+		player_index += 1
+		if "current_room" in player:
+			player.current_room = "Lobby"
+			print("Main: Set ", player.name, " current_room to Lobby")
+
+		# Also teleport mounted riders
+		if "mounted_by" in player and player.mounted_by:
+			var rider = player.mounted_by
+			if is_instance_valid(rider):
+				rider.global_transform.origin = lobby_start_pos + Vector3(0, 2.5, 0)
+				if "current_room" in rider:
+					rider.current_room = "Lobby"
+	
+	Log.debug("Main", "<<< All %d players teleported to race start line!" % all_players.size())
+
+func _get_exhibit_for_article(article: String) -> Node:
+	## Get the exhibit node for an article title
+	if not _museum or not _museum.has_method("has_exhibit"):
+		return null
+	
+	if not _museum.has_exhibit(article):
+		return null
+	
+	# Access exhibits dictionary through Museum
+	if "exhibits" in _museum or "_exhibits" in _museum:
+		var exhibits = _museum.get("exhibits") if "exhibits" in _museum else _museum.get("_exhibits")
+		if exhibits and exhibits.has(article):
+			var exhibit_data = exhibits[article]
+			if exhibit_data is Dictionary and exhibit_data.has("exhibit"):
+				return exhibit_data.exhibit
+	
+	return null
 
 func sync_custom_door(page: String) -> void:
 	## Synchronises the search corridor door to a specific page for all players.
@@ -1398,7 +1689,7 @@ func _on_daily_challenge_closed() -> void:
 	if _player:
 		_player.start()
 
-func _on_race_won_for_daily_challenge() -> void:
+func _on_race_won_for_daily_challenge(winner_name: String, final_time: float) -> void:
 	## Fires when any race_won signal is received. If a daily challenge
 	## is active, complete it and pop the results screen.
 	if _daily_challenge_manager and _daily_challenge_manager.is_active():

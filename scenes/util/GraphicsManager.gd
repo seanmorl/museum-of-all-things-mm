@@ -41,8 +41,8 @@ func _exit_tree() -> void:
 ## 0=Low(512) 1=Medium(1024) 2=High(2048) 3=Ultra(4096)
 var shadow_quality: int = 2
 
-## ── Global Illumination (SDFGI) ────────────────────────────────────────────────
-var sdfgi_enabled: bool = false
+## ── Global Illumination ────────────────────────────────────────────────────────
+## SDFGI removed - was causing crashes on some hardware
 
 ## ── Depth of Field ─────────────────────────────────────────────────────────────
 var dof_enabled: bool = false
@@ -246,24 +246,6 @@ func set_glow_enabled(enabled: bool) -> void:
 func set_volumetric_fog_enabled(enabled: bool) -> void:
 	_env.environment.volumetric_fog_enabled = enabled
 
-func set_sdfgi_enabled(enabled: bool) -> void:
-	# Never enable SDFGI on the compatibility renderer.
-	if Platform.is_compatibility_renderer():
-		sdfgi_enabled = false
-	else:
-		sdfgi_enabled = enabled
-	if not _env:
-		return
-	var e: Environment = _env.environment
-	if not e:
-		return
-	if "sdfgi_enabled" in e:
-		e.sdfgi_enabled = sdfgi_enabled
-		# Nudge SDFGI brightness a bit higher than default when enabled to
-		# avoid overly dark corridors, and reset when disabled.
-		if "sdfgi_energy" in e:
-			e.sdfgi_energy = 1.2 if sdfgi_enabled else 1.0
-
 ## ── Environment accessor ───────────────────────────────────────────────────────
 func _on_node_added(node: Node) -> void:
 	if not is_equal_approx(render_distance_multiplier, 1.0):
@@ -297,11 +279,6 @@ func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 			e.ssr_roughness = s["ssr_roughness"]
 		elif default.has("ssr_roughness"):
 			e.ssr_roughness = default["ssr_roughness"]
-
-	# Experimental SDFGI toggle – guarded for versions/envs without this property.
-	var sdfgi_default: bool = default.get("sdfgi_enabled", false)
-	var sdfgi_val: bool = s.get("sdfgi_enabled", sdfgi_default)
-	set_sdfgi_enabled(sdfgi_val)
 
 	set_vsync_enabled(s.get("vsync_enabled", default.get("vsync_enabled", true)))
 	set_fps_limit(s.get("fps_limit", default.get("fps_limit", 60)))
@@ -354,7 +331,6 @@ func _create_settings_obj() -> Dictionary:
 		"anisotropy_level": anisotropy_level,
 		# Shadows
 		"shadow_quality": shadow_quality,
-		"sdfgi_enabled": sdfgi_enabled,
 		# Lighting
 		"ambient_light_energy": e.ambient_light_energy,
 		"ssil_enabled": e.ssil_enabled,

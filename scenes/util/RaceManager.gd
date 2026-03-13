@@ -1,6 +1,9 @@
 extends Node
 
 signal race_started(target_article: String, start_article: String)
+signal race_countdown_started()  # Emitted when countdown begins
+signal race_countdown(number: int)  # 3, 2, 1, 0 (GO!)
+signal race_won(winner_name: String, final_time: float)
 signal race_ended(winner_peer_id: int, winner_name: String)
 signal race_cancelled
 ## Emitted every second while a race is active. Connect to update a HUD timer.
@@ -382,21 +385,60 @@ func start_race(target_article: String, start_article: String) -> void:
 
 	_target_article = target_article
 	_start_article = start_article
-	_state = State.ACTIVE
 	_winner_peer_id = -1
 	_winner_name = ""
 	_winner_path.clear()
 	_local_visited_pages.clear()
-	_race_start_time = Time.get_unix_time_from_system()
 	_elapsed_time = 0.0
 	_timer_signal_accumulator = 0.0
 	_hint_timer = 0.0  # reset hint timer for new race
 
 	if OS.is_debug_build():
-		print("RaceManager: Starting race to find '", target_article, "'")
+		print("RaceManager: Starting countdown to race...")
+
+	# Start countdown on server
+	_start_countdown(target_article, start_article)
+
+func _start_countdown(target_article: String, start_article: String) -> void:
+	## Run a 3-2-1-GO countdown before the race starts
+	## Sync countdown to all clients so everyone sees it
+	var countdown = 3
+	const interval = 0.7  # 0.7 seconds between each number (faster)
+
+	# Signal that countdown is starting (VoteHUD should hide)
+	race_countdown_started.emit()
+	EventBus.publish_countdown_started()
+	print("RaceManager: Starting countdown: 3...")
+
+	while countdown >= 0:
+		# Emit locally
+		race_countdown.emit(countdown)
+		EventBus.publish_countdown_tick(countdown)
+		print("RaceManager: Countdown emit: ", countdown)
+		# Sync to all clients
+		if NetworkManager.is_multiplayer_active():
+			_sync_countdown.rpc(countdown)
+			print("RaceManager: Sent countdown RPC: ", countdown)
+
+		await get_tree().create_timer(interval).timeout
+		if countdown == 0:
+			break
+		countdown -= 1
+
+	# Now start the actual race
+	_state = State.ACTIVE
+	_race_start_time = Time.get_unix_time_from_system()
+
+	print("RaceManager: GO! Race started to '", target_article, "'")
 
 	_sync_race_start.rpc(target_article, start_article, _race_start_time)
 	race_started.emit(target_article, start_article)
+	EventBus.publish_race_started(target_article, start_article)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_countdown(number: int) -> void:
+	## Broadcast countdown to all clients
+	race_countdown.emit(number)
 
 func notify_article_reached(peer_id: int, article_title: String, visited_path: Array = []) -> void:
 	if _state != State.ACTIVE:
@@ -434,6 +476,9 @@ func _handle_win(peer_id: int) -> void:
 
 	if OS.is_debug_build():
 		print("RaceManager: Winner is ", _winner_name, " (peer ", peer_id, ") in ", "%.1f" % final_time, "s")
+
+	# Emit race_won signal for victory sound
+	race_won.emit(_winner_name, final_time)
 
 	_sync_race_end.rpc(peer_id, _winner_name, final_time, _winner_path)
 	race_ended.emit(peer_id, _winner_name)

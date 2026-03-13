@@ -499,24 +499,32 @@ func _refresh_theme() -> void:
 		_strip_style.border_width_bottom = 2
 		_strip_style.border_color        = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.6)
 
-	_slbl(_title_lbl,         ThemeManager.text_color,    26)
-	_slbl(_date_lbl,          ThemeManager.subtext_color, 13)
-	_slbl(_streak_lbl,        ThemeManager.subtext_color, 13)
+	# Use darker colors in light mode for better readability
 	var accent_color := ACCENT_LIGHT if not ThemeManager.is_dark_mode else ACCENT
+	var text_clr := ThemeManager.text_color
+	var subtext_clr := ThemeManager.subtext_color
+	
+	# In light mode, make subtext darker
+	if not ThemeManager.is_dark_mode:
+		subtext_clr = Color(0.3, 0.3, 0.3, 1.0)
+
+	_slbl(_title_lbl,         text_clr,    26)
+	_slbl(_date_lbl,          subtext_clr, 13)
+	_slbl(_streak_lbl,        subtext_clr, 13)
 	_slbl(_target_header_lbl, Color(accent_color.r, accent_color.g, accent_color.b, 0.9), 10)
-	_slbl(_target_lbl,        ThemeManager.text_color,    22)
-	_slbl(_best_lbl,          ThemeManager.subtext_color, 13)
-	_slbl(_status_lbl,        ThemeManager.subtext_color, 14)
+	_slbl(_target_lbl,        text_clr,    22)
+	_slbl(_best_lbl,          subtext_clr, 13)
+	_slbl(_status_lbl,        subtext_clr, 14)
 
 	_slbl(_res_grade_lbl,  accent_color,                52)
-	_slbl(_res_time_lbl,   ThemeManager.text_color,    42)
+	_slbl(_res_time_lbl,   text_clr,    42)
 	_slbl(_res_best_lbl,   GREEN,                      14)
 	_slbl(_res_lb_header,  Color(accent_color.r, accent_color.g, accent_color.b, 0.9), 10)
-	_slbl(_res_lb_loading, ThemeManager.subtext_color, 13)
+	_slbl(_res_lb_loading, subtext_clr, 13)
 
-	_slbl(_strip_target_lbl, ThemeManager.subtext_color, 13)
-	_slbl(_strip_timer_lbl,  accent_color,                16)
-	_slbl(_strip_best_lbl,   ThemeManager.subtext_color, 12)
+	_slbl(_strip_target_lbl, subtext_clr, 13)
+	_slbl(_strip_timer_lbl,  accent_color, 16)
+	_slbl(_strip_best_lbl,   subtext_clr, 12)
 
 	_style_btn(_close_btn,          false)
 	_style_btn(_info_btn,           false)

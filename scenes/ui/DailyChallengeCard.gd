@@ -407,14 +407,25 @@ func _apply_theme() -> void:
 	if _sep1: _sep1.modulate = sep_color
 	if _sep2: _sep2.modulate = sep_color
 
-	_style_lbl(_header_lbl,     ACCENT_COLOR,                                                              14)
-	_style_lbl(_date_lbl,       ThemeManager.subtext_color,                                               11)
-	_style_lbl(_streak_lbl,     ThemeManager.subtext_color,                                               11)
-	_style_lbl(_target_caption, Color(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.75),               9)
-	_style_lbl(_target_lbl,     ThemeManager.text_color,                                                  15)
-	_style_lbl(_meta_lbl,       ThemeManager.subtext_color,                                               11)
-	_style_lbl(_done_lbl,       Color(0.3, 0.85, 0.45, 1.0),                                             12)
-	_style_lbl(_lb_caption,     Color(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.75),               9)
+	# Use darker colors in light mode for better readability
+	var header_color := ACCENT_COLOR
+	var text_clr := ThemeManager.text_color
+	var subtext_clr := ThemeManager.subtext_color
+	var target_caption_clr := Color(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.75)
+	
+	# In light mode, make text darker and more visible
+	if not ThemeManager.is_dark_mode:
+		subtext_clr = Color(0.3, 0.3, 0.3, 1.0)  # Darker gray
+		target_caption_clr = Color(0.7, 0.5, 0.0, 1.0)  # Darker gold
+
+	_style_lbl(_header_lbl,     header_color,    14)
+	_style_lbl(_date_lbl,       subtext_clr,     11)
+	_style_lbl(_streak_lbl,     subtext_clr,     11)
+	_style_lbl(_target_caption, target_caption_clr, 9)
+	_style_lbl(_target_lbl,     text_clr,        15)
+	_style_lbl(_meta_lbl,       subtext_clr,     11)
+	_style_lbl(_done_lbl,       Color(0.3, 0.85, 0.45, 1.0), 12)
+	_style_lbl(_lb_caption,     target_caption_clr, 9)
 
 	_style_btn(_info_btn, false)
 	_style_play_btn()

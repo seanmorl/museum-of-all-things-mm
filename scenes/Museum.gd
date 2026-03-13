@@ -31,6 +31,7 @@ var _current_room_title: String = "Lobby"
 var _grid: GridMap = null
 var _player: Node = null
 var _custom_door: Hall = null
+var _pending_custom_door_title: String = ""
 
 var _queue_running: bool = false
 var _global_item_queue_map: Dictionary = {}
@@ -93,6 +94,8 @@ func sync_rider_to_room(room_title: String) -> void:
 func load_exhibit_for_rider(from_room: String, to_room: String) -> void:
 	if has_exhibit(to_room):
 		_rider_loading_exhibits.erase(to_room)  # Clean up tracking
+		# Update room immediately if exhibit already loaded
+		_set_current_room_title(to_room)
 		return  # Already loaded
 
 	# Prevent duplicate fetches while loading is in progress
@@ -113,6 +116,9 @@ func load_exhibit_for_rider(from_room: String, to_room: String) -> void:
 		# Last resort: load without hall context (uses default hall styling)
 		_rider_loading_exhibits[to_room] = true
 		_exhibit_loader.load_exhibit_for_rider_without_hall(to_room, from_room)
+	
+	# Update room title immediately for network sync (even before load completes)
+	_set_current_room_title(to_room)
 
 
 func _find_hall_for_room_transition(from_room: String, to_room: String) -> Hall:
@@ -240,6 +246,12 @@ func _set_up_lobby(lobby: Node) -> void:
 			_custom_door = exit
 			_custom_door.entry_door.set_open(false, true)
 			_custom_door.to_sign.visible = false
+			# Apply pending custom door title if set
+			if _pending_custom_door_title != "":
+				_custom_door.to_title = _pending_custom_door_title
+				_custom_door.entry_door.set_open(true)
+				print("Museum: Applied pending custom door title '", _pending_custom_door_title, "'")
+				_pending_custom_door_title = ""
 
 		if not exit.loader.body_entered.is_connected(_on_loader_body_entered.bind(exit)):
 			exit.loader.body_entered.connect(_on_loader_body_entered.bind(exit))
@@ -249,7 +261,11 @@ func _set_custom_door(title: String) -> void:
 	if _custom_door and is_instance_valid(_custom_door):
 		_custom_door.to_title = title
 		_custom_door.entry_door.set_open(true)
-
+		print("Museum: Custom door set to '", title, "', door opened")
+	else:
+		print("Museum: WARNING - _custom_door is null! Can't set door to '", title, "'")
+		# Store the title for when door becomes available
+		_pending_custom_door_title = title
 
 func _reset_custom_door() -> void:
 	if _custom_door and is_instance_valid(_custom_door):

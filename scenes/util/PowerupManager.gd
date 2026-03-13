@@ -418,7 +418,7 @@ func _spawn_random_powerup_drop() -> void:
 	_spawn_powerup_pickup(spawn_pos, powerup_type)
 
 ## Fire raycasts downward at several XZ offsets around [anchor] to find the floor.
-## Returns the hit position raised 0.8 m above the surface, or Vector3.ZERO on failure.
+## Returns the hit position raised 0.3 m above the surface, or Vector3.ZERO on failure.
 func _raycast_floor_spawn(anchor: Vector3) -> Vector3:
 	## Tight offsets keep spawns inside small rooms.
 	var space := get_tree().root.get_world_3d().direct_space_state
@@ -449,7 +449,7 @@ func _raycast_floor_spawn(anchor: Vector3) -> Vector3:
 		# Must be within 2 m horizontally of the anchor so we stay in the same room.
 		if Vector2(hit.x - anchor.x, hit.z - anchor.z).length() > 2.5:
 			continue
-		return hit + Vector3(0.0, 0.8, 0.0)
+		return hit + Vector3(0.0, 0.3, 0.0)  # Lower spawn height
 
 	return Vector3.ZERO
 

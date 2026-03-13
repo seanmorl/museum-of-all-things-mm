@@ -70,11 +70,16 @@ var wikimedia_commons_gallery_images_endpoint: String = "https://commons.wikimed
 var _fs_lock := Mutex.new()
 var _results_lock := Mutex.new()
 var _results: Dictionary = {}
+## LRU cache for results - prevents memory growth in long sessions
+const MAX_CACHE_SIZE: int = 500  # Max cached articles
+var _cache_order: Array[String] = []  # Track access order for LRU eviction
 
 var _network_request_thread: Thread
 const NETWORK_QUEUE: String = "Network"
 
 func _ready() -> void:
+	# Set up network queue with fast pacing (1 frame) for quick article fetching
+	WorkQueue.setup_queue(NETWORK_QUEUE, 1)
 	if Platform.is_using_threads():
 		_network_request_thread = Thread.new()
 		_network_request_thread.start(_network_request_thread_loop)
@@ -230,9 +235,7 @@ func _read_from_cache(title: String, prefix: String = "") -> Variant:
 	var json: Variant = DataManager.load_json_data(prefix + title)
 	_fs_lock.unlock()
 	if json:
-		_results_lock.lock()
-		_results[title] = json
-		_results_lock.unlock()
+		_cache_result(title, json)
 	return json
 
 func _get_uncached_titles(titles: Array, prefix: String = "") -> Array:
@@ -413,6 +416,9 @@ func get_result(title: String) -> Variant:
 	var res: Variant = null
 	_results_lock.lock()
 	if _results.has(title):
+		# Move to end of cache order (most recently used)
+		_cache_order.erase(title)
+		_cache_order.append(title)
 		var result: Dictionary = _results[title]
 		if result.has("normalized"):
 			if _results.has(result.normalized):
@@ -423,6 +429,32 @@ func get_result(title: String) -> Variant:
 			res = result
 	_results_lock.unlock()
 	return res
+
+func has_result(title: String) -> bool:
+	_results_lock.lock()
+	var has_it: bool = _results.has(title)
+	_results_lock.unlock()
+	return has_it
+
+## Cache a result with LRU eviction to prevent memory growth
+func _cache_result(title: String, data: Dictionary) -> void:
+	_results_lock.lock()
+	
+	# If already cached, update access order
+	if _results.has(title):
+		_cache_order.erase(title)
+	else:
+		# New entry - evict oldest if at capacity
+		while _cache_order.size() >= MAX_CACHE_SIZE:
+			var oldest: String = _cache_order.pop_front()
+			_results.erase(oldest)
+			Log.debug("ExhibitFetcher", "LRU cache evicted: %s" % oldest)
+	
+	# Add new entry
+	_results[title] = data
+	_cache_order.append(title)
+	
+	_results_lock.unlock()
 
 func _dispatch_request(url: String, ctx: Dictionary, caller_ctx: Variant) -> void:
 	ctx.url = url
@@ -443,6 +475,8 @@ func _set_page_field(title: String, field: String, value: Variant) -> void:
 	_results_lock.lock()
 	if not _results.has(title):
 		_results[title] = {}
+		# Track in cache order for new entries
+		_cache_order.append(title)
 	_results[title][field] = value
 	_results_lock.unlock()
 
@@ -450,6 +484,7 @@ func _append_page_field(title: String, field: String, values: Array) -> void:
 	_results_lock.lock()
 	if not _results.has(title):
 		_results[title] = {}
+		_cache_order.append(title)
 	if not _results[title].has(field):
 		_results[title][field] = []
 	_results[title][field].append_array(values)
@@ -558,6 +593,23 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	elif ctx.get("random_batch", false):
 		return _on_random_batch_complete(res, ctx)
 	return false
+
+func _on_random_batch_complete(res: Dictionary, ctx: Dictionary) -> bool:
+	var contexts: Array = ctx.get("contexts", [])
+	if res.has("query") and res.query.has("random"):
+		var results: Array = res.query.random
+		for i in range(min(results.size(), contexts.size())):
+			var title: String = results[i].get("title", "")
+			if title != "":
+				random_complete.emit.call_deferred(title, contexts[i])
+			else:
+				random_complete.emit.call_deferred(null, contexts[i])
+		for i in range(results.size(), contexts.size()):
+			random_complete.emit.call_deferred(null, contexts[i])
+	else:
+		for c in contexts:
+			random_complete.emit.call_deferred(null, c)
+	return true
 
 func _dispatch_continue(continue_fields: Dictionary, base_url: String, titles: Variant, ctx: Dictionary, caller_ctx: Variant) -> bool:
 	var continue_url := base_url
@@ -799,24 +851,4 @@ func _on_random_request_complete(res: Dictionary, ctx: Dictionary, caller_ctx: V
 			random_complete.emit.call_deferred(result_title, caller_ctx)
 			return true
 	random_complete.emit.call_deferred(null, caller_ctx)
-	return true
-
-## Handles the batch random response. Wikipedia returns an Array under query.random.
-## We pair each result title with its matching context from ctx.contexts.
-func _on_random_batch_complete(res: Dictionary, ctx: Dictionary) -> bool:
-	var contexts: Array = ctx.get("contexts", [])
-	if res.has("query") and res.query.has("random"):
-		var results: Array = res.query.random
-		for i in range(min(results.size(), contexts.size())):
-			var title: String = results[i].get("title", "")
-			if title != "":
-				random_complete.emit.call_deferred(title, contexts[i])
-			else:
-				random_complete.emit.call_deferred(null, contexts[i])
-		# Fire null for any contexts that didn't get a result
-		for i in range(results.size(), contexts.size()):
-			random_complete.emit.call_deferred(null, contexts[i])
-	else:
-		for c in contexts:
-			random_complete.emit.call_deferred(null, c)
 	return true

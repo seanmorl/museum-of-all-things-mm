@@ -1,5 +1,8 @@
 extends Node
 class_name ExhibitLoader
+## Manages exhibit loading, caching, and lifecycle.
+
+signal exhibit_loaded(title: String)
 ## Handles fetching exhibit data, creating halls, and linking exits.
 
 var _museum: Node3D = null
@@ -167,6 +170,13 @@ func load_exhibit_for_rider_without_hall(to_room: String, from_room: String) -> 
 
 	if _loading_exhibits.has(to_room):
 		return
+	
+	# Check if we already have cached data (from server sync)
+	if ExhibitFetcher.has_result(to_room):
+		print("ExhibitLoader: Using cached data for '", to_room, "'")
+		on_fetch_complete([to_room], {"title": to_room, "from_room": from_room})
+		return
+	
 	_loading_exhibits[to_room] = true
 
 	ExhibitFetcher.fetch([to_room], {
@@ -254,6 +264,13 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 			npc_manager.call_deferred("init", new_exhibit, _museum.npcs_per_exhibit)
 		if _exhibit_hist.size() > _max_exhibits_loaded:
 			call_deferred("_cleanup_old_exhibits", new_exhibit.title)
+	else:
+		# Exhibit already exists - still emit signal so waiters don't hang
+		print("ExhibitLoader: Exhibit '", context.title, "' already exists, emitting signal anyway")
+
+	# ALWAYS emit signal (whether new or existing exhibit)
+	print("ExhibitLoader: Emitting exhibit_loaded signal for '", context.title, "'")
+	exhibit_loaded.emit(context.title)
 
 	# Clear loading flag after exhibit exists (handles both new and duplicate fetch cases)
 	_loading_exhibits.erase(context.title)

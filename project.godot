@@ -49,6 +49,8 @@ ThemeManager="*res://scenes/util/ThemeManager.gd"
 TTSManager="*res://scenes/autoload/TTSManager.gd"
 PowerupManager="*res://scenes/util/PowerupManager.gd"
 VoiceChatManager="*res://scenes/util/VoiceChatManager.gd"
+EventBus="*res://scenes/core/EventBus.gd"
+Services="*res://scenes/core/Services.gd"
 
 [display]
 

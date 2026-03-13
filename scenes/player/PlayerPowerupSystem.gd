@@ -38,7 +38,8 @@ var _lights_out_original_energy: float = 1.0
 
 const GRAPPLE_RANGE: float = 30.0
 const GRAPPLE_SPEED: float = 80.0
-const SWING_FORCE: float = 15.0
+const SWING_FORCE: float = 20.0
+const GRAPPLE_DAMPING: float = 0.95  # Velocity damping for smoother swing
 
 func init(player: CharacterBody3D) -> void:
 	_player = player
@@ -141,22 +142,25 @@ func _restore_normal_speed() -> void:
 func _update_perfect_knowledge() -> void:
 	var all_halls = _player.get_tree().get_nodes_in_group("hall")
 	for hall in all_halls:
-		if hall.has_node("EntryLabel"):
-			var label: Label3D = hall.get_node("EntryLabel")
-			if label:
-				label.visible = _has_perfect_knowledge
-		if hall.has_node("ExitLabel"):
-			var label: Label3D = hall.get_node("ExitLabel")
-			if label:
-				label.visible = _has_perfect_knowledge
-		if hall.has_node("FromSign"):
-			var sign = hall.get_node("FromSign")
-			if sign and sign.has_node("Label3D"):
-				sign.get_node("Label3D").visible = _has_perfect_knowledge
-		if hall.has_node("ToSign"):
-			var sign = hall.get_node("ToSign")
-			if sign and sign.has_node("Label3D"):
-				sign.get_node("Label3D").visible = _has_perfect_knowledge
+		_apply_perfect_knowledge_to_hall(hall)
+
+func _apply_perfect_knowledge_to_hall(hall: Node) -> void:
+	if hall.has_node("EntryLabel"):
+		var label: Label3D = hall.get_node("EntryLabel")
+		if label:
+			label.visible = _has_perfect_knowledge
+	if hall.has_node("ExitLabel"):
+		var label: Label3D = hall.get_node("ExitLabel")
+		if label:
+			label.visible = _has_perfect_knowledge
+	if hall.has_node("FromSign"):
+		var sign = hall.get_node("FromSign")
+		if sign and sign.has_node("Label3D"):
+			sign.get_node("Label3D").visible = _has_perfect_knowledge
+	if hall.has_node("ToSign"):
+		var sign = hall.get_node("ToSign")
+		if sign and sign.has_node("Label3D"):
+			sign.get_node("Label3D").visible = _has_perfect_knowledge
 
 func _update_lights_out() -> void:
 	if not _is_local:
@@ -363,25 +367,32 @@ func fire_grapple() -> bool:
 func _process_grapple() -> void:
 	if not _grapple_active:
 		return
-	
+
 	var player_pos := _player.global_position + Vector3(0, 0.5, 0)
-	
+
 	# Update visual rope
 	if _grapple_rope and is_instance_valid(_grapple_rope):
 		_update_grapple_rope(_grapple_point, player_pos)
-	
+
 	var to_anchor := _grapple_point - player_pos
 	var distance := to_anchor.length()
-	
+
 	if distance > 1.5:
-		# Pull toward anchor — scale force by distance so it eases near the top
-		var pull: Vector3 = to_anchor.normalized() * SWING_FORCE * clamp(distance / 5.0, 0.5, 2.0)
-		# delta is unavailable here; _apply_powerup_effects is called from process_powerups(_delta)
-		# but we don't receive delta. Use get_physics_process_delta_time() instead.
+		# Pull toward anchor with spring-like force
+		var pull: Vector3 = to_anchor.normalized() * SWING_FORCE * clamp(distance / 8.0, 0.5, 3.0)
 		var dt := _player.get_physics_process_delta_time()
 		_player.velocity += pull * dt
+		
+		# Apply damping for smoother swing (reduces oscillation)
+		_player.velocity *= GRAPPLE_DAMPING
+		
+		# Add slight upward bias to help player reach the anchor
+		if _player.velocity.y < 0:
+			_player.velocity.y += 5.0 * dt
 	else:
+		# Player reached the anchor - give small forward boost
 		_release_grapple()
+		_player.velocity += Vector3(0, 3, 0)
 
 func _create_grapple_rope(from: Vector3, to: Vector3) -> void:
 	_grapple_rope = CSGBox3D.new()

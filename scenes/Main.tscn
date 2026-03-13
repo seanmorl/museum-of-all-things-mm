@@ -24,7 +24,7 @@
 [ext_resource type="PackedScene" uid="uid://c7mjt8p4k1c6u" path="res://scenes/ui/PromptHUD.tscn" id="22_prompthud"]
 [ext_resource type="PackedScene" path="res://scenes/menu/TriviaOverlay.tscn" id="23_triviaovly"]
 [ext_resource type="PackedScene" uid="uid://powerhud1234" path="res://scenes/ui/PowerupHUD.tscn" id="24_powerhud"]
-[ext_resource type="PackedScene" uid="uid://powernotif1234" path="res://scenes/ui/PowerupNotification.tscn" id="25_powernotif"]
+[ext_resource type="PackedScene" uid="uid://c5ca02qh6qwsv" path="res://scenes/ui/PowerupNotification.tscn" id="25_powernotif"]
 
 [node name="Main" type="Node" unique_id=557895252]
 script = ExtResource("1_d7g3n")
@@ -124,22 +124,19 @@ visible = false
 [node name="MinimapHUD" parent="TabMenu" unique_id=904511922 instance=ExtResource("20_minihud")]
 unique_name_in_owner = true
 visible = false
+anchors_preset = 3
+offset_left = -250.0
+offset_top = -250.0
+offset_right = 0.0
+offset_bottom = 0.0
 
 [node name="ConnectionHUD" parent="TabMenu" unique_id=904511923 instance=ExtResource("21_connhud")]
-unique_name_in_owner = true
 visible = false
-layout_mode = 3
-anchors_preset = 8
-anchor_left = 1.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -270.0
-offset_top = -270.0
-offset_right = -20.0
-offset_bottom = -20.0
-grow_horizontal = 0
-grow_vertical = 0
+anchors_preset = 3
+offset_left = -250.0
+offset_top = -250.0
+offset_right = 0.0
+offset_bottom = 0.0
 
 [node name="JournalOverlay" parent="TabMenu" unique_id=1483033310 instance=ExtResource("16_ft6cd")]
 unique_name_in_owner = true
@@ -159,6 +156,8 @@ unique_name_in_owner = true
 [node name="PowerupHUD" parent="TabMenu" unique_id=1573667146 instance=ExtResource("24_powerhud")]
 unique_name_in_owner = true
 visible = false
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="PowerupNotification" parent="TabMenu" unique_id=1573667147 instance=ExtResource("25_powernotif")]
 unique_name_in_owner = true

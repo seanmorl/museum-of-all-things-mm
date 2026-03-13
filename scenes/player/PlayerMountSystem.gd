@@ -178,6 +178,7 @@ func execute_mount(target: Node, target_peer_id: int = -1) -> void:
 
 
 func execute_dismount() -> void:
+	print("PlayerMountSystem.execute_dismount() called, _is_mounted=", _is_mounted, ", mounted_on=", mounted_on)
 	if not _is_mounted or not is_instance_valid(mounted_on):
 		_is_mounted = false
 		mounted_on = null

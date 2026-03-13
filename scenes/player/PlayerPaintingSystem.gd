@@ -88,10 +88,27 @@ func is_carrying() -> bool:
 
 
 func try_steal_target() -> bool:
-	if not _raycast or not _raycast.is_colliding():
+	if not _raycast:
+		return false
+	
+	# Use manual raycast in camera forward direction (RayCast3D node is unreliable)
+	var space_state = _player.get_world_3d().direct_space_state
+	if not space_state:
+		return false
+	
+	var cam = _raycast.get_parent()  # Camera3D
+	var from = cam.global_position
+	var forward = -cam.global_transform.basis.z  # Camera's actual forward direction
+	var to = from + forward * 15.0  # 15 units forward
+	
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = 1572866  # Layer 1 + 20 + 21 (Static + PlayerBody + ImageItem)
+	var result = space_state.intersect_ray(query)
+	
+	if not result:
 		return false
 
-	var collider: Node = _raycast.get_collider()
+	var collider: Node = result.collider
 	if not collider:
 		return false
 

@@ -38,6 +38,10 @@ func _ready() -> void:
 	ThemeManager.reading_font_changed.connect(_on_font_changed)
 	_on_dark_mode_changed(ThemeManager.is_dark_mode)
 	_on_font_changed(ThemeManager.get_reading_font())
+	# Apply perfect knowledge visibility if powerup is active
+	_apply_perfect_knowledge()
+	# Ensure markers are invisible (they're for minimap only)
+	_hide_markers()
 
 func _process(delta: float) -> void:
 	if ThemeManager.disco_mode and light:
@@ -63,6 +67,36 @@ func _on_font_changed(font: Font) -> void:
 	if exit_label:
 		exit_label.font = font
 		exit_label.hide()
+
+func _apply_perfect_knowledge() -> void:
+	# Check if any player has perfect knowledge powerup
+	var powerup_manager = get_node_or_null("/root/Main/PowerupManager")
+	if not powerup_manager:
+		return
+	var local_player_id = NetworkManager.get_unique_id()
+	var has_pk = powerup_manager.has_powerup(local_player_id, PowerupManager.PowerupType.PERFECT_KNOWLEDGE)
+	if entry_label:
+		entry_label.visible = has_pk
+	if exit_label:
+		exit_label.visible = has_pk
+	if from_sign:
+		var label = from_sign.get_node_or_null("Label3D")
+		if label:
+			label.visible = has_pk
+	if to_sign:
+		var label = to_sign.get_node_or_null("Label3D")
+		if label:
+			label.visible = has_pk
+
+func _hide_markers() -> void:
+	# Entry/Exit markers are for minimap rendering only - keep them invisible in 3D world
+	if entry_marker:
+		entry_marker.visible = false
+	if exit_marker:
+		exit_marker.visible = false
+	# Hall light should also stay invisible (only provides illumination)
+	if light:
+		light.visible = false
 
 var _grid: Node = null
 var hall_type: Array = [true, FLAT]

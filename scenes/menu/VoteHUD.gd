@@ -52,6 +52,12 @@ func _ready() -> void:
 	RaceManager.vote_started.connect(_on_vote_started)
 	RaceManager.vote_ended.connect(_on_vote_ended)
 	RaceManager.race_started.connect(_on_race_started)
+	RaceManager.race_countdown_started.connect(_on_race_countdown_started)
+	
+	# Subscribe to EventBus (new architecture)
+	EventBus.subscribe(EventBus.VoteStartedEvent, _on_event_vote_started)
+	EventBus.subscribe(EventBus.CountdownStartedEvent, _on_event_countdown_started)
+	
 	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme(ThemeManager.is_dark_mode))
 	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme(ThemeManager.is_dark_mode))
 	_apply_theme(ThemeManager.is_dark_mode)
@@ -776,6 +782,17 @@ func _on_race_started(_target: String, _start: String) -> void:
 	var pause_menu := get_node_or_null("../PauseMenu")
 	if pause_menu and pause_menu.has_method("hide_loading_overlay"):
 		pause_menu.hide_loading_overlay()
-	# Hide VoteHUD and recapture mouse for gameplay
+
+func _on_race_countdown_started() -> void:
+	# Hide VoteHUD when countdown starts (before numbers appear)
 	visible = false
-	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+# --- EventBus Handlers ---
+
+func _on_event_vote_started(event: EventBus.VoteStartedEvent) -> void:
+	# Could use this instead of direct signal connection
+	pass
+
+func _on_event_countdown_started(event: EventBus.CountdownStartedEvent) -> void:
+	# Already handled by _on_race_countdown_started, but this shows the pattern
+	visible = false
