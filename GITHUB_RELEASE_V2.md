@@ -8,7 +8,7 @@ A **complete visual transformation** with 4 new overlay systems, 4 rewritten com
 - **🎯 RaceCountdown** — Full-screen 3→2→1→GO countdown with elastic animations and target preview
 - **📦 LoadingScreen** — Animated spinner with progress bar support
 - **🏆 VictoryScreen** — Winner celebration with rotating starburst and room path
-- **📊 LeaderboardHUD** — Press Tab to toggle session leaderboard
+- **📊 LeaderboardHUD** — Press L to toggle session leaderboard
 - **🏠 MainMenuBackground** — Animated backgrounds with floating cards and dust motes
 
 ### 🔄 Rewritten Components
