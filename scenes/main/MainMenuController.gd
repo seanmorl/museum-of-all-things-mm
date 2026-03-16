@@ -49,6 +49,12 @@ func open_settings_menu() -> void:
 func open_terminal_menu() -> void:
 	open_menu(Menu.TERMINAL)
 
+func is_terminal_open() -> bool:
+	"""Check if terminal menu is currently open."""
+	if _menu_layer == null or not _menu_layer.visible:
+		return false
+	var terminal_node = _menu_layer.get_node_or_null("PopupTerminalMenu")
+	return terminal_node != null and terminal_node.visible
 
 func open_multiplayer_menu() -> void:
 	open_menu(Menu.MULTIPLAYER)

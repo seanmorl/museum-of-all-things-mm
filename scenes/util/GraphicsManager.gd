@@ -42,7 +42,14 @@ func _exit_tree() -> void:
 var shadow_quality: int = 2
 
 ## ── Global Illumination ────────────────────────────────────────────────────────
-## SDFGI removed - was causing crashes on some hardware
+## SDFGI (Signed Distance Field Global Illumination) — forward+ renderer only.
+## Disabled by default; the user can opt-in via Graphics Settings.
+var sdfgi_enabled:          bool  = false
+var sdfgi_use_occlusion:    bool  = false
+var sdfgi_read_sky_light:   bool  = true
+var sdfgi_bounces:          int   = 1   # 0..4
+var sdfgi_cascade_count:    int   = 6   # Environment.SDFGI_CASCADES_6 / _8
+var sdfgi_min_cell_size:    float = 0.2
 
 ## ── Depth of Field ─────────────────────────────────────────────────────────────
 var dof_enabled: bool = false
@@ -52,6 +59,31 @@ var dof_focus_range: float = 10.0
 
 ## ── Resolution ────────────────────────────────────────────────────────────────
 var resolution: Vector2i = Vector2i(-1, -1)
+
+## ── Field of View ─────────────────────────────────────────────────────────────
+var camera_fov: float = 75.0
+
+## ── LOD Bias ──────────────────────────────────────────────────────────────────
+
+## ── LOD Bias ──────────────────────────────────────────────────────────────────
+var lod_bias: float = 1.0  # mesh_lod_threshold; lower = more detail
+
+## ── Tone Mapping ──────────────────────────────────────────────────────────────
+## tonemap_mode / tonemap_exposure / tonemap_white already saved via env fields.
+## Exposed here as convenience aliases so the UI can read them directly.
+
+## ── Brightness / Contrast ─────────────────────────────────────────────────────
+var brightness: float = 0.0   # -1.0 … +1.0 offset
+var contrast:   float = 1.0   # 0.5 … 2.0 multiplier
+
+## ── Accessibility: reduce motion ─────────────────────────────────────────────
+## Caps disco hue speed and suppresses rapid ambient cycling.
+var reduce_motion: bool = false
+
+## ── Per-room glow tweening ────────────────────────────────────────────────────
+## Target glow intensity driven by Museum when the room changes.
+var _room_glow_tween: Tween = null
+
 const RESOLUTION_PRESETS: Array[Vector2i] = [
 	Vector2i(-1, -1),
 	Vector2i(3840, 2160),
@@ -68,6 +100,9 @@ func init() -> void:
 	if not _env:
 		Log.error("GraphicsManager", "could not load environment node")
 		return
+
+	# Capture the environment's default exposure/white before any settings are applied
+	_init_bc_baseline()
 
 	_default_settings_obj = _create_settings_obj()
 	var loaded_settings: Variant = SettingsManager.get_settings(_settings_ns)
@@ -246,6 +281,126 @@ func set_glow_enabled(enabled: bool) -> void:
 func set_volumetric_fog_enabled(enabled: bool) -> void:
 	_env.environment.volumetric_fog_enabled = enabled
 
+## ── Field of View ─────────────────────────────────────────────────────────────
+func set_camera_fov(fov: float) -> void:
+	camera_fov = clampf(fov, 50.0, 120.0)
+	## Apply to every Camera3D currently in the scene tree.
+	## New cameras will need to call this themselves via a group or signal.
+	for cam in get_tree().get_nodes_in_group("player_camera"):
+		if cam is Camera3D:
+			cam.fov = camera_fov
+	## Fallback: apply to the active camera if it's not in the group.
+	var active := get_viewport().get_camera_3d()
+	if active and not active.is_in_group("player_camera"):
+		active.fov = camera_fov
+
+## ── LOD Bias ──────────────────────────────────────────────────────────────────
+func set_lod_bias(value: float) -> void:
+	lod_bias = clampf(value, 0.1, 4.0)
+	get_viewport().mesh_lod_threshold = lod_bias
+
+## ── Tonemapping (convenience wrappers around the Environment) ─────────────────
+func set_tonemap_mode(mode: int) -> void:
+	if _env:
+		_env.environment.tonemap_mode = mode as Environment.ToneMapper
+
+func set_tonemap_exposure(value: float) -> void:
+	if _env:
+		_env.environment.tonemap_exposure = value
+
+func set_tonemap_white(value: float) -> void:
+	if _env:
+		_env.environment.tonemap_white = value
+
+## ── Brightness / Contrast ─────────────────────────────────────────────────────
+## Implemented via the Environment's tonemap_exposure (brightness) and a
+## dedicated contrast multiplier stored locally and folded into ambient energy.
+## This is correct, GPU-efficient, and cannot leak onto the UI layer.
+##
+## brightness:  0.0 = default, positive = brighter, negative = darker.
+##              Maps to tonemap_exposure offset from the saved baseline.
+## contrast:    1.0 = default, >1.0 = more contrast, <1.0 = flatter.
+##              Applied as a gamma-like curve via tonemap_white.
+
+var _base_exposure: float = 1.0   # saved at init from the environment
+var _base_white:    float = 1.0   # saved at init from the environment
+
+func _init_bc_baseline() -> void:
+	if not _env:
+		return
+	_base_exposure = _env.environment.tonemap_exposure
+	_base_white    = _env.environment.tonemap_white
+
+func _apply_bc() -> void:
+	if not _env:
+		return
+	var e: Environment = _env.environment
+	# brightness shifts exposure relative to the original value
+	e.tonemap_exposure = clampf(_base_exposure + brightness * 2.0, 0.05, 8.0)
+	# contrast shifts white point: lower white = more contrast, higher = flatter
+	e.tonemap_white    = clampf(_base_white / maxf(contrast, 0.01), 0.1, 20.0)
+
+func set_brightness(value: float) -> void:
+	brightness = clampf(value, -1.0, 1.0)
+	_apply_bc()
+
+func set_contrast(value: float) -> void:
+	contrast = clampf(value, 0.5, 2.0)
+	_apply_bc()
+
+## ── Accessibility: reduce motion ─────────────────────────────────────────────
+func set_reduce_motion(enabled: bool) -> void:
+	reduce_motion = enabled
+
+## ── Per-room glow tweening ────────────────────────────────────────────────────
+func tween_room_glow(target_intensity: float, duration: float = 1.0) -> void:
+	## Called by Museum when the player enters a new room.
+	if not _env:
+		return
+	if _room_glow_tween and _room_glow_tween.is_valid():
+		_room_glow_tween.kill()
+	_room_glow_tween = create_tween()
+	_room_glow_tween.tween_property(_env.environment, "glow_intensity", target_intensity, duration) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+func set_sdfgi_enabled(enabled: bool) -> void:
+	## Only available in the Forward+ renderer; silently ignored on Compatibility.
+	if Platform.is_compatibility_renderer():
+		return
+	sdfgi_enabled = enabled
+	var e: Environment = _env.environment
+	e.sdfgi_enabled = enabled
+
+func set_sdfgi_use_occlusion(enabled: bool) -> void:
+	if Platform.is_compatibility_renderer():
+		return
+	sdfgi_use_occlusion = enabled
+	_env.environment.sdfgi_use_occlusion = enabled
+
+func set_sdfgi_read_sky_light(enabled: bool) -> void:
+	if Platform.is_compatibility_renderer():
+		return
+	sdfgi_read_sky_light = enabled
+	_env.environment.sdfgi_read_sky_light = enabled
+
+func set_sdfgi_bounces(value: int) -> void:
+	if Platform.is_compatibility_renderer():
+		return
+	sdfgi_bounces = value
+	_env.environment.sdfgi_bounce_feedback = float(value) / 4.0
+
+func set_sdfgi_cascade_count(value: int) -> void:
+	## value: 0 = 6 cascades, 1 = 8 cascades (Environment.SDFGI_CASCADES_*)
+	if Platform.is_compatibility_renderer():
+		return
+	sdfgi_cascade_count = value
+	_env.environment.sdfgi_cascades = value
+
+func set_sdfgi_min_cell_size(value: float) -> void:
+	if Platform.is_compatibility_renderer():
+		return
+	sdfgi_min_cell_size = value
+	_env.environment.sdfgi_min_cell_size = value
+
 ## ── Environment accessor ───────────────────────────────────────────────────────
 func _on_node_added(node: Node) -> void:
 	if not is_equal_approx(render_distance_multiplier, 1.0):
@@ -300,6 +455,27 @@ func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 	dof_focus_distance = s.get("dof_focus_distance", default.get("dof_focus_distance", 10.0))
 	dof_focus_range = s.get("dof_focus_range", default.get("dof_focus_range", 10.0))
 	_apply_dof_to_env()
+
+	# SDFGI — only meaningful on Forward+ renderer
+	if not Platform.is_compatibility_renderer():
+		set_sdfgi_enabled(s.get("sdfgi_enabled", default.get("sdfgi_enabled", false)))
+		set_sdfgi_use_occlusion(s.get("sdfgi_use_occlusion", default.get("sdfgi_use_occlusion", false)))
+		set_sdfgi_read_sky_light(s.get("sdfgi_read_sky_light", default.get("sdfgi_read_sky_light", true)))
+		set_sdfgi_bounces(s.get("sdfgi_bounces", default.get("sdfgi_bounces", 1)))
+		set_sdfgi_cascade_count(s.get("sdfgi_cascade_count", default.get("sdfgi_cascade_count", 6)))
+		set_sdfgi_min_cell_size(s.get("sdfgi_min_cell_size", default.get("sdfgi_min_cell_size", 0.2)))
+
+	# FOV, LOD bias
+	set_camera_fov(s.get("camera_fov", default.get("camera_fov", 75.0)))
+	set_lod_bias(s.get("lod_bias", default.get("lod_bias", 1.0)))
+
+	# Brightness / contrast
+	brightness = s.get("brightness", default.get("brightness", 0.0))
+	contrast   = s.get("contrast",   default.get("contrast",   1.0))
+	_apply_bc()
+
+	# Accessibility
+	set_reduce_motion(s.get("reduce_motion", default.get("reduce_motion", false)))
 
 	var mode: int = s.get("scale_mode", default.get("scale_mode", 0))
 	set_scale_mode(mode)
@@ -362,6 +538,21 @@ func _create_settings_obj() -> Dictionary:
 		"dof_blur_amount": dof_blur_amount,
 		"dof_focus_distance": dof_focus_distance,
 		"dof_focus_range": dof_focus_range,
+		# SDFGI
+		"sdfgi_enabled":        sdfgi_enabled,
+		"sdfgi_use_occlusion":  sdfgi_use_occlusion,
+		"sdfgi_read_sky_light": sdfgi_read_sky_light,
+		"sdfgi_bounces":        sdfgi_bounces,
+		"sdfgi_cascade_count":  sdfgi_cascade_count,
+		"sdfgi_min_cell_size":  sdfgi_min_cell_size,
+		# FOV / LOD
+		"camera_fov":           camera_fov,
+		"lod_bias":             lod_bias,
+		# Brightness / contrast
+		"brightness":           brightness,
+		"contrast":             contrast,
+		# Accessibility
+		"reduce_motion":        reduce_motion,
 	}
 
 func restore_default_settings() -> void:

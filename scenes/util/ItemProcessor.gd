@@ -39,6 +39,7 @@ var processor_thread: Thread
 var PROCESSOR_QUEUE: String = "ItemProcessor"
 
 func _ready() -> void:
+	# Compile regexes
 	IMAGE_REGEX.compile("\\.(png|jpg|jpeg|webp|svg)$")
 	AUDIO_REGEX.compile("\\.(ogg)$")
 	s2_re.compile("^==[^=]")
@@ -75,9 +76,12 @@ func _process(_delta: float) -> void:
 			_processor_thread_item()
 
 func _processor_thread_item() -> void:
-		var item: Variant = WorkQueue.process_queue(PROCESSOR_QUEUE)
-		if item:
-			_create_items(item[0], item[1], item[2], item[3] if item.size() > 3 else "")
+	var item: Variant = WorkQueue.process_queue(PROCESSOR_QUEUE)
+	if item:
+		_create_items(item[0], item[1], item[2])
+
+func create_items(title: String, result: Dictionary, prev_title: String = "") -> void:
+	WorkQueue.add_item(PROCESSOR_QUEUE, [title, result, prev_title])
 
 func _seeded_shuffle(new_seed: String, arr: Array, bias: bool = false) -> void:
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
@@ -214,8 +218,6 @@ func _parse_wikitext(wikitext: String) -> Array:
 				html.append(t)
 		elif t == depth[dl - 1]:
 			depth.pop_back()
-			# recalc whether we're in a link/tag/etc
-			# not the nicest looking but it works
 			dc = depth_chars.get(t)
 			dl = len(depth)
 			in_link = dl > 1 and depth[0] == "]" and depth[1] == "]"
@@ -237,7 +239,6 @@ func _parse_wikitext(wikitext: String) -> Array:
 			template.clear()
 
 		if not in_tag and len(tag) > 0:
-			# we don't handle nested tags for now
 			if tag[0] == "!" or tag[len(tag) - 1] == "/":
 				pass
 			elif not tag[0] == "/":
@@ -271,14 +272,14 @@ func commons_images_to_items(title: String, images: Array, extra_text: Array) ->
 
 		var is_image = image and IMAGE_REGEX.search(image) and not exclude_image_re.search(image.to_lower())
 		var is_audio = image and AUDIO_REGEX.search(image) and not exclude_image_re.search(image.to_lower())
-		
+
 		if is_image or is_audio:
 			var item_type := "image"
 			var text_clean := _clean_filename_img(image)
 			if is_audio:
 				item_type = "audio"
 				text_clean = _clean_filename_aud(image)
-				
+
 			items.append({
 				"type": item_type,
 				"material": material,
@@ -289,21 +290,7 @@ func commons_images_to_items(title: String, images: Array, extra_text: Array) ->
 
 	return items
 
-func create_items(title: String, result: Dictionary, prev_title: String = "") -> void:
-	# Capture race target HERE on the main thread — _create_items runs on a worker
-	# thread and cannot safely call RaceManager (a main-thread Node).
-	var race_target: String = RaceManager.get_target_article() if RaceManager.is_race_active() else ""
-	# Only inject race target if this room is a confirmed backlink (its article links to target on Wikipedia)
-	var is_backlink: bool = false
-	if race_target != "":
-		var museum = Engine.get_main_loop().get_first_node_in_group("museum")
-		if museum and museum.has_node("ExhibitLoader"):
-			var exhibit_loader = museum.get_node("ExhibitLoader")
-			if exhibit_loader.has_method("is_backlink_room"):
-				is_backlink = exhibit_loader.is_backlink_room(title)
-	WorkQueue.add_item(PROCESSOR_QUEUE, [title, result, prev_title, race_target, is_backlink])
-
-func _create_items(title: String, result: Dictionary, prev_title: String, race_target: String = "", is_backlink: bool = false) -> void:
+func _create_items(title: String, result: Dictionary, prev_title: String) -> void:
 	var text_items: Array = []
 	var image_items: Array = []
 	var doors: Array = []
@@ -318,7 +305,6 @@ func _create_items(title: String, result: Dictionary, prev_title: String, race_t
 		var links: Array = _parse_wikitext(wikitext)
 		Util.t_end("_parse_wikitext")
 
-		# we are using the extract returned from API until my parser works better
 		text_items.append_array(_create_text_items(title, result.extract))
 
 		for link_entry: Array in links:
@@ -330,14 +316,14 @@ func _create_items(title: String, result: Dictionary, prev_title: String, race_t
 
 			var is_image_target = target.begins_with("File:") and IMAGE_REGEX.search(target)
 			var is_audio_target = target.begins_with("File:") and AUDIO_REGEX.search(target)
-			
+
 			if is_image_target or is_audio_target:
 				var item_type := "image"
 				var text_clean := _clean_filename_img(target)
 				if is_audio_target:
 					item_type = "audio"
 					text_clean = _clean_filename_aud(target)
-					
+
 				image_items.append({
 					"type": item_type,
 					"material": material,
@@ -359,13 +345,13 @@ func _create_items(title: String, result: Dictionary, prev_title: String, race_t
 							continue
 						if not image_title.begins_with("File:"):
 							image_title = "File:" + image_title
-							
+
 						var item_type := "image"
 						var text_clean := _clean_filename_img(image_title)
 						if is_aud_tm:
 							item_type = "audio"
 							text_clean = _clean_filename_aud(image_title)
-							
+
 						image_items.append({
 							"type": item_type,
 							"material": material,
@@ -376,43 +362,23 @@ func _create_items(title: String, result: Dictionary, prev_title: String, race_t
 
 			elif type == "link" and target and target.find(":") < 0:
 				var door: String = _to_link_case(target.get_slice("#", 0))
-				# Allow the target article to generate naturally so the player can actually win.
+
+				if door.begins_with("http://") or door.begins_with("https://"):
+					continue
+
 				if not doors_used.has(door) and door != title and door != prev_title and len(door) > 0:
 					doors.append(door)
 					doors_used[door] = true
 
 	var front_text: Variant = text_items.pop_front()
 	var front_door: Variant = doors.pop_front()
-	_seeded_shuffle(title + ":text_items", text_items)
-	_seeded_shuffle(title + ":image_items", image_items)
 	_seeded_shuffle(title + ":doors", doors, true)
 	text_items.push_front(front_text)
 	doors.push_front(front_door)
 
-	# Ensure the race target appears as a door in this room ONLY if this room's article
-	# genuinely links to the target on Wikipedia (confirmed backlink).
-	# This ensures the hint system's promise is honoured without polluting every room.
-	if is_backlink and race_target != "" and race_target != title and race_target != prev_title:
-		if not doors.has(race_target):
-			# Inject near the front so it isn't culled if the room runs out of wall space
-			var rng_target: RandomNumberGenerator = RandomNumberGenerator.new()
-			rng_target.seed = hash(title + ":shuffler_target")
-			var insert_idx: int = rng_target.randi_range(1, mini(doors.size(), 3))
-			doors.insert(insert_idx, race_target)
-		else:
-			# Already present — promote to an early position
-			var target_idx: int = doors.find(race_target)
-			if target_idx > 1:
-				doors.remove_at(target_idx)
-				var rng_target: RandomNumberGenerator = RandomNumberGenerator.new()
-				rng_target.seed = hash(title + ":shuffler_target")
-				var insert_idx: int = rng_target.randi_range(1, mini(doors.size(), 3))
-				doors.insert(insert_idx, race_target)
-
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = hash(title + ":shuffler")
 
-	# ensure that there aren't too many text items in a row
 	var items: Array = []
 
 	if len(text_items) > 0:

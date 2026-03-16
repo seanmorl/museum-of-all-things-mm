@@ -50,7 +50,7 @@ func get_top_entries(count: int = 10) -> Array[Dictionary]:
 
 func get_win_counts() -> Dictionary:
 	var counts: Dictionary = {}
-	for entry: Dictionary in _entries:
+	for entry in _entries:
 		var name: String = entry["winner_name"]
 		counts[name] = counts.get(name, 0) + 1
 	return counts

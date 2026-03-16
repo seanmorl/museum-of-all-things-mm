@@ -4,7 +4,7 @@ class_name DailyChallengeCard
 ## Auto-shows ONLY when: game has started, no menu is open, and player is in Lobby.
 ## Lives on its own low-layer CanvasLayer so it never overlaps menus or settings.
 
-const ACCENT_COLOR  := Color(1.0, 0.72, 0.18)
+const ACCENT_COLOR  := Color(0.35, 0.75, 1.00)
 const CARD_BG_ALPHA := 0.95
 const CARD_WIDTH    := 230.0
 
@@ -262,6 +262,8 @@ func _build_card() -> void:
 
 var _help_panel: PanelContainer = null
 var _help_closing: bool = false
+var _help_title_lbl: Label = null
+var _help_rules_lbls: Array[Label] = []
 
 func _build_help_popup() -> void:
 	_help_popup = Control.new()
@@ -304,6 +306,7 @@ func _build_help_popup() -> void:
 	var title := Label.new()
 	title.text = "📅 Daily Challenge"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_help_title_lbl = title
 	if _font: title.add_theme_font_override("font", _font)
 	title.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(title)
@@ -325,6 +328,7 @@ func _build_help_popup() -> void:
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
 		if _font: lbl.add_theme_font_override("font", _font)
 		lbl.add_theme_font_size_override("font_size", 13)
+		_help_rules_lbls.append(lbl)
 		vbox.add_child(lbl)
 
 	var spacer := Control.new()
@@ -416,7 +420,7 @@ func _apply_theme() -> void:
 	# In light mode, make text darker and more visible
 	if not ThemeManager.is_dark_mode:
 		subtext_clr = Color(0.3, 0.3, 0.3, 1.0)  # Darker gray
-		target_caption_clr = Color(0.7, 0.5, 0.0, 1.0)  # Darker gold
+		target_caption_clr = Color(0.08, 0.45, 0.75, 1.0)  # Darker gold
 
 	_style_lbl(_header_lbl,     header_color,    14)
 	_style_lbl(_date_lbl,       subtext_clr,     11)
@@ -437,6 +441,16 @@ func _apply_theme() -> void:
 		if style:
 			style.bg_color = ThemeManager.bg_color
 			style.shadow_color = Color(0, 0, 0, 0.3 if ThemeManager.is_dark_mode else 0.15)
+	
+	# Theme help popup labels
+	var help_text_clr := ThemeManager.text_color
+	var help_subtext_clr := ThemeManager.subtext_color
+	if not ThemeManager.is_dark_mode:
+		help_subtext_clr = Color(0.3, 0.3, 0.3, 1.0)
+	if _help_title_lbl:
+		_style_lbl(_help_title_lbl, help_text_clr, 16)
+	for lbl in _help_rules_lbls:
+		_style_lbl(lbl, help_subtext_clr, 13)
 
 func _style_lbl(lbl: Label, color: Color, size: int) -> void:
 	if not lbl:

@@ -58,6 +58,14 @@ var _journal_system: PlayerJournalSystem = null
 var _footprint_system: PlayerFootprintSystem = null
 var _powerup_system: PlayerPowerupSystem = null
 
+## Void detection - teleport player back to safety if they fall too far
+var _void_check_timer: float = 0.0
+var _last_valid_position: Vector3 = Vector3.ZERO  # Track last safe position
+const VOID_Y_THRESHOLD: float = -50.0  # Below this = fallen into void
+const VOID_CHECK_INTERVAL: float = 0.5  # Check every 0.5 seconds
+const VOID_SPAWN_Y: float = 5.0  # Safe spawn height
+const VOID_SPAWN_XZ: Vector2 = Vector2(0, 23)  # Start line XZ position
+
 @onready var camera: Camera3D = $Pivot/Camera3D
 @onready var _pivot: Node3D = $Pivot
 @onready var _footstep_player: Node = $FootstepPlayer
@@ -192,6 +200,14 @@ func pause() -> void:
 func start() -> void:
 	_enabled = true
 
+func set_gravity(gravity: float) -> void:
+	"""Set player gravity (positive value, will be negated internally)"""
+	_gravity = -abs(gravity)
+
+func get_gravity_magnitude() -> float:
+	"""Get current gravity magnitude"""
+	return abs(_gravity)
+
 
 func _set_invert_y(enabled: bool) -> void:
 	_invert_y = enabled
@@ -275,7 +291,28 @@ func _unhandled_input(event: InputEvent) -> void:
 			)
 
 
+func _exit_tree() -> void:
+	"""Clean up signal connections to prevent memory leaks"""
+	if SettingsEvents.set_invert_y.is_connected(_set_invert_y):
+		SettingsEvents.set_invert_y.disconnect(_set_invert_y)
+	if SettingsEvents.set_mouse_sensitivity.is_connected(_set_mouse_sensitivity):
+		SettingsEvents.set_mouse_sensitivity.disconnect(_set_mouse_sensitivity)
+	if SettingsEvents.set_joypad_deadzone.is_connected(_set_joy_deadzone):
+		SettingsEvents.set_joypad_deadzone.disconnect(_set_joy_deadzone)
+
+
 func _physics_process(delta: float) -> void:
+	# Track last valid position (above void threshold)
+	if is_local and global_position.y > VOID_Y_THRESHOLD:
+		_last_valid_position = global_position
+	
+	# Void detection for local player - prevent falling forever
+	if is_local and _void_check_timer >= VOID_CHECK_INTERVAL:
+		_void_check_timer = 0.0
+		if global_position.y < VOID_Y_THRESHOLD:
+			_teleport_to_safety()
+	_void_check_timer += delta
+	
 	# If mounted, let mount system handle position
 	if _mount_system and _mount_system.is_mounted():
 		_mount_system.process_mount(delta)
@@ -733,3 +770,37 @@ func _on_footstep_played() -> void:
 func apply_network_pointing(pointing: bool, target: Vector3) -> void:
 	if _pointing_system:
 		_pointing_system.apply_network_pointing(pointing, target)
+
+
+func _teleport_to_safety() -> void:
+	"""Teleport player back to their last valid position when they fall into void."""
+	print("Player: Fell into void! Teleporting to safety...")
+	
+	# Determine where to teleport player
+	var teleport_pos: Vector3
+	if _last_valid_position.y > VOID_Y_THRESHOLD:
+		# Use last valid position with small Y offset to prevent immediate re-fall
+		teleport_pos = Vector3(_last_valid_position.x, _last_valid_position.y + 2.0, _last_valid_position.z)
+		print("Player: Returning to last valid position: ", teleport_pos)
+	else:
+		# Fallback to start line if no valid position tracked
+		teleport_pos = Vector3(VOID_SPAWN_XZ.x, VOID_SPAWN_Y, VOID_SPAWN_XZ.y)
+		print("Player: No valid position tracked, using start line: ", teleport_pos)
+	
+	# Teleport to safe position
+	global_position = teleport_pos
+	velocity = Vector3.ZERO
+	rotation = Vector3.ZERO
+	
+	# Reset current room to lobby if using fallback
+	if _last_valid_position.y <= VOID_Y_THRESHOLD:
+		if "current_room" in self:
+			current_room = "Lobby"
+	
+	# Show message to player
+	var main = get_tree().get_first_node_in_group("main")
+	if main and main.has_method("_show_error_message"):
+		if _last_valid_position.y > VOID_Y_THRESHOLD:
+			main._show_error_message("You fell through the floor!\n\nTeleported back to where you were.")
+		else:
+			main._show_error_message("You fell into the void!\n\nTeleported back to start line.")

@@ -291,8 +291,12 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 
 
 func _exit_tree() -> void:
-	if ExhibitFetcher.wikitext_failed.is_connected(_on_fetch_failed):
+	# Disconnect signals to prevent lambda capture errors
+	if is_instance_valid(self) and ExhibitFetcher.wikitext_failed.is_connected(_on_fetch_failed):
 		ExhibitFetcher.wikitext_failed.disconnect(_on_fetch_failed)
+	
+	if is_instance_valid(_detector) and _detector.direction_changed.is_connected(_on_direction_changed):
+		_detector.direction_changed.disconnect(_on_direction_changed)
 
 
 func _on_fetch_failed(titles: Array, message: String) -> void:

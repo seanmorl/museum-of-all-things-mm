@@ -108,7 +108,11 @@ func get_item_slot() -> Variant:
 
 
 func generate(params: Dictionary) -> void:
+	var total_start = Time.get_ticks_msec()
+	Log.info("TiledExhibitGenerator", "=== Starting generation for '%s' ===" % title)
+	
 	# set initial fields
+	var step_start = Time.get_ticks_msec()
 	_min_room_dimension = params.min_room_dimension
 	_max_room_dimension = params.max_room_dimension
 
@@ -121,19 +125,25 @@ func generate(params: Dictionary) -> void:
 	_no_props = params.has("no_props") and params.no_props
 	_exit_limit = params.exit_limit if params.has("exit_limit") else 1000000
 	_mood = params.get("mood", ExhibitMood.Mood.DEFAULT)
-
-	# init grid
-	_grid = _GRID_WRAPPER.instantiate()
-	add_child(_grid)
-	_raw_grid = _grid._grid
+	Log.info("TiledExhibitGenerator", "Step 1 - Parse params: %dms" % (Time.get_ticks_msec() - step_start))
 
 	# init rng
+	step_start = Time.get_ticks_msec()
 	_rng = RandomNumberGenerator.new()
 	_rng.seed = hash(title)
 	_prev_title = prev_title
 	_floor = ExhibitStyle.gen_floor(title)
+	Log.info("TiledExhibitGenerator", "Step 2 - Init RNG/style: %dms" % (Time.get_ticks_msec() - step_start))
+
+	# init grid
+	step_start = Time.get_ticks_msec()
+	_grid = _GRID_WRAPPER.instantiate()
+	add_child(_grid)
+	_raw_grid = _grid._grid
+	Log.info("TiledExhibitGenerator", "Step 3 - Create grid: %dms" % (Time.get_ticks_msec() - step_start))
 
 	# init starting hall
+	step_start = Time.get_ticks_msec()
 	var starting_hall: Hall = _HALL_SCENE.instantiate()
 	add_child(starting_hall)
 	starting_hall.init(
@@ -150,8 +160,10 @@ func generate(params: Dictionary) -> void:
 
 	# initialize public fields
 	entry = starting_hall
+	Log.info("TiledExhibitGenerator", "Step 4 - Create starting hall: %dms" % (Time.get_ticks_msec() - step_start))
 
 	# now we create the first room
+	var room_step_start = Time.get_ticks_msec()
 	var room_width: int = _rand_dim()
 	var room_length: int = _rand_dim()
 	var room_center: Vector3 = Vector3(
@@ -166,6 +178,7 @@ func generate(params: Dictionary) -> void:
 	_create_next_room_candidate(room_obj)
 	_decorate_entry(starting_hall, room_obj)
 	_decorate_room(room_obj)
+	Log.info("TiledExhibitGenerator", "Step 5 - Create first room: %dms" % (Time.get_ticks_msec() - room_step_start))
 
 
 func _create_next_room_candidate(last_room: Dictionary) -> void:
@@ -225,6 +238,7 @@ func _add_to_room_list(c: Vector3, w: int, l: int) -> Dictionary:
 
 
 func add_room() -> void:
+	var step_start = Time.get_ticks_msec()
 	if _next_room_candidates.size() == 0:
 		Log.error("ExhibitGenerator", "no room candidate to create")
 		return
@@ -246,6 +260,8 @@ func add_room() -> void:
 		_create_next_room_candidate(room)
 
 	_decorate_room(room)
+	Log.info("TiledExhibitGenerator", "  add_room(): %dms (total rooms: %d)" % [
+		Time.get_ticks_msec() - step_start, _room_list.size()])
 
 
 func _clear_scenery_in_area(h1: Vector3, h2: Vector3) -> void:
@@ -284,6 +300,7 @@ func _decorate_entry(starting_hall: Hall, _room_obj: Dictionary) -> void:
 
 
 func _decorate_room(room: Dictionary) -> void:
+	var step_start = Time.get_ticks_msec()
 	var center: Vector3 = room.center
 	var width: int = room.width
 	var length: int = room.length
@@ -304,6 +321,8 @@ func _decorate_room(room: Dictionary) -> void:
 	if !Engine.is_editor_hint() and not _no_props:
 		_decorate_room_center(center, width, length)
 		_try_place_secret_room(room)
+	
+	Log.info("TiledExhibitGenerator", "  _decorate_room(): %dms" % (Time.get_ticks_msec() - step_start))
 
 
 func _decorate_reserved_walls(last_room: Dictionary, hall_bounds: Array, dir: Vector3) -> void:
@@ -457,6 +476,7 @@ func _room_to_bounds(center: Vector3, width: int, length: int) -> Array:
 
 
 func _carve_room(corner1: Vector3, corner2: Vector3, y: int) -> void:
+	var step_start = Time.get_ticks_msec()
 	var lx: int = int(corner1.x)
 	var gx: int = int(corner2.x)
 	var lz: int = int(corner1.z)
@@ -482,6 +502,8 @@ func _carve_room(corner1: Vector3, corner2: Vector3, y: int) -> void:
 					_grid.set_cell_item(Vector3(x, y + 1, z), -1, 0)
 				_grid.set_cell_item(Vector3(x, y + 2, z), CEILING, 0)
 				_grid.set_cell_item(Vector3(x, y - 1, z), _floor, 0)
+	
+	Log.info("TiledExhibitGenerator", "  _carve_room(): %dms" % (Time.get_ticks_msec() - step_start))
 
 
 func _overlaps_room(corner1: Vector3, corner2: Vector3, y: int) -> bool:

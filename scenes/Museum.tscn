@@ -1,14 +1,12 @@
-[gd_scene load_steps=6 format=3 uid="uid://5javxi3uy0ep"]
+[gd_scene format=3 uid="uid://5javxi3uy0ep"]
 
 [ext_resource type="Script" uid="uid://b3ct4p6pgs3v2" path="res://scenes/Museum.gd" id="1_7pjtd"]
 [ext_resource type="PackedScene" uid="uid://u4b0awts0vdi" path="res://scenes/Lobby.tscn" id="3_exsdv"]
 [ext_resource type="PackedScene" uid="uid://b67kdt23qph25" path="res://scenes/AmbienceController.tscn" id="3_udk7u"]
 [ext_resource type="PackedScene" uid="uid://dcr63oanyv85b" path="res://scenes/MusicController.tscn" id="4_uv22m"]
-[ext_resource type="Environment" uid="uid://lobby_sky_env" path="res://assets/textures/lobby_sky_environment.tres" id="42_skyenv"]
 
 [sub_resource type="Environment" id="Environment_g30yg"]
 background_mode = 2
-sky = ExtResource("42_skyenv")
 ambient_light_source = 2
 ambient_light_color = Color(1, 0.960784, 0.882353, 1)
 ambient_light_energy = 0.4
@@ -17,9 +15,9 @@ ssr_max_steps = 256
 ssr_fade_in = 0.522331
 ssr_depth_tolerance = 128.0
 ssao_enabled = true
-glow_bloom = 1.0
+glow_bloom = 0.02
 glow_blend_mode = 0
-glow_hdr_scale = 0.19
+glow_hdr_scale = 2.0
 fog_enabled = true
 fog_mode = 1
 fog_light_color = Color(1, 1, 1, 1)
@@ -29,19 +27,20 @@ fog_depth_end = 294.3
 volumetric_fog_temporal_reprojection_enabled = false
 volumetric_fog_temporal_reprojection_amount = 0.5
 
-[node name="Museum" type="Node3D" groups=["museum"]]
+[node name="Museum" type="Node3D" unique_id=914258958 groups=["museum"]]
 script = ExtResource("1_7pjtd")
 max_teleport_distance = 20.0
 max_exhibits_loaded = 5
-max_room_dimension = 4
+min_room_dimension = 2
+max_room_dimension = 5
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." groups=["Environment"]]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1272326490 groups=["Environment"]]
 environment = SubResource("Environment_g30yg")
 
-[node name="Lobby" parent="." instance=ExtResource("3_exsdv")]
+[node name="Lobby" parent="." unique_id=1372783451 instance=ExtResource("3_exsdv")]
 
-[node name="TeleportTimer" type="Timer" parent="."]
+[node name="TeleportTimer" type="Timer" parent="." unique_id=225478533]
 
-[node name="AmbienceController" parent="." instance=ExtResource("3_udk7u")]
+[node name="AmbienceController" parent="." unique_id=667114642 instance=ExtResource("3_udk7u")]
 
-[node name="MusicController" parent="." instance=ExtResource("4_uv22m")]
+[node name="MusicController" parent="." unique_id=80987370 instance=ExtResource("4_uv22m")]

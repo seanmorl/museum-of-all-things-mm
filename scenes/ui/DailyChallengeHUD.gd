@@ -8,8 +8,8 @@ class_name DailyChallengeHUD
 signal challenge_started
 signal challenge_closed
 
-const ACCENT := Color(1.0, 0.72, 0.18)   ## gold
-const ACCENT_LIGHT := Color(0.85, 0.55, 0.0)  ## darker gold for light mode readability
+const ACCENT := Color(0.35, 0.75, 1.00)   ## gold
+const ACCENT_LIGHT := Color(0.10, 0.52, 0.85)  ## darker gold for light mode readability
 const GREEN  := Color(0.35, 0.85, 0.45)   ## personal best
 const MEDAL  := ["🥇", "🥈", "🥉"]
 
@@ -39,6 +39,8 @@ var _info_btn:          Button          = null
 var _help_popup:        Control         = null
 var _help_panel:        PanelContainer  = null
 var _help_closing:      bool            = false
+var _help_title_lbl:    Label           = null
+var _help_rules_lbls:   Array[Label]    = []
 
 # ── Strip nodes ───────────────────────────────────────────────────────────────
 var _strip:             PanelContainer  = null
@@ -224,6 +226,7 @@ func _build_help_popup() -> void:
 	var title := Label.new()
 	title.text = "📅 Daily Challenge Rules"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_help_title_lbl = title
 	if _font: title.add_theme_font_override("font", _font)
 	title.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(title)
@@ -246,6 +249,7 @@ func _build_help_popup() -> void:
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		if _font: lbl.add_theme_font_override("font", _font)
 		lbl.add_theme_font_size_override("font_size", 14)
+		_help_rules_lbls.append(lbl)
 		vbox.add_child(lbl)
 
 	var spacer := Control.new()
@@ -493,6 +497,16 @@ func _refresh_theme() -> void:
 			style.bg_color = ThemeManager.bg_color
 			style.border_color = ThemeManager.border_color
 			style.shadow_color = Color(0,0,0, 0.35 if ThemeManager.is_dark_mode else 0.12)
+	
+	# Theme help popup labels
+	var help_text_clr := ThemeManager.text_color
+	var help_subtext_clr := ThemeManager.subtext_color
+	if not ThemeManager.is_dark_mode:
+		help_subtext_clr = Color(0.3, 0.3, 0.3, 1.0)
+	if _help_title_lbl:
+		_slbl(_help_title_lbl, help_text_clr, 18)
+	for lbl in _help_rules_lbls:
+		_slbl(lbl, help_subtext_clr, 14)
 
 	if _strip_style:
 		_strip_style.bg_color            = Color(0.06, 0.06, 0.08, 0.88)

@@ -25,6 +25,12 @@ var _mode: Mode = Mode.HIDDEN
 var _mode_before_pause: Mode = Mode.HIDDEN
 var _time: float = 0.0
 
+# Global setting for minimap door labels (can be toggled by host)
+var show_minimap_labels: bool = false
+
+# Zoom level for minimap (controlled by MinimapHUD)
+var _zoom_level: float = 1.0
+
 # Font for labels in full mode
 var _font: Font = null
 
@@ -33,6 +39,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip_contents = true
 	visible = false
+	add_to_group("exhibit_map_overlay")  # Add to group for easy lookup
 	ExhibitGraph.graph_changed.connect(_on_graph_changed)
 	NetworkManager.player_room_changed.connect(_on_player_room_changed)
 	_font = ThemeDB.fallback_font
@@ -111,7 +118,7 @@ func _draw() -> void:
 			size = MINIMAP_SIZE
 			node_radius = MINIMAP_NODE_RADIUS
 			bg_color = BG_MINIMAP
-			show_labels = false
+			show_labels = show_minimap_labels  # Use instance variable
 		Mode.FULL:
 			position = Vector2(FULL_MARGIN, FULL_MARGIN)
 			size = viewport_size - Vector2(FULL_MARGIN * 2, FULL_MARGIN * 2)
@@ -122,6 +129,9 @@ func _draw() -> void:
 	var is_minimap: bool = _mode == Mode.MINIMAP
 	var map_center: Vector2 = size * 0.5
 	var map_radius: float = minf(size.x, size.y) * 0.5
+	
+	# Calculate zoom-based visible area
+	var zoom_factor: float = 1.0 / _zoom_level if is_minimap else 1.0
 	if is_minimap:
 		draw_circle(map_center, map_radius, bg_color)
 
@@ -136,7 +146,10 @@ func _draw() -> void:
 
 	var padding: float = node_radius * 3
 	var usable_size: Vector2 = size - Vector2(padding * 2, padding * 2)
-	var scale_factor: float = minf(usable_size.x / graph_size.x, usable_size.y / graph_size.y)
+	
+	# Adjust scale factor based on zoom level - show more when zoomed out
+	var base_scale: float = minf(usable_size.x / graph_size.x, usable_size.y / graph_size.y)
+	var scale_factor: float = base_scale * zoom_factor
 	scale_factor = minf(scale_factor, 120.0)
 	var center_offset: Vector2 = size * 0.5
 

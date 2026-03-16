@@ -1,9 +1,12 @@
 extends Node
 ## Main game controller handling initialization and delegating to subsystems.
 
-const _SKIN_EQUIP_SOUND: AudioStream = preload("res://assets/sound/UI/UI Crystal 1.ogg")
-const _VICTORY_SOUND: AudioStream = preload("res://assets/sound/UI/UI Crystal 1.ogg")
-const _COUNTDOWN_SOUND: AudioStream = preload("res://assets/sound/UI/UI Crystal 1.ogg")
+# UI Sound Effects
+const _UI_CRYSTAL_SOUND: AudioStream = preload("res://assets/sound/UI/UI Crystal 1.ogg")
+# Note: Using same sound for skin equip, victory, and countdown events
+const _SKIN_EQUIP_SOUND: AudioStream = _UI_CRYSTAL_SOUND
+const _VICTORY_SOUND: AudioStream = _UI_CRYSTAL_SOUND
+const _COUNTDOWN_SOUND: AudioStream = _UI_CRYSTAL_SOUND
 
 @export var Player: PackedScene = preload("res://scenes/Player.tscn")
 @export var NetworkPlayer: PackedScene = preload("res://scenes/NetworkPlayer.tscn")
@@ -26,6 +29,7 @@ var _pointing_controller: PointingController = null
 var _chat_system: Node = null
 var _chat_hud: Node = null
 var _trivia_manager: TriviaManager = null
+var _host_menu: CanvasLayer = null
 
 @onready var _journal_overlay: JournalOverlay = %JournalOverlay
 @onready var player_list_overlay: Control = %PlayerListOverlay
@@ -184,7 +188,7 @@ func _initialize_room_service() -> void:
 	_chat_hud.name = "ChatHUD"
 	add_child(_chat_hud)
 	_chat_hud.init(_chat_system)
-	
+
 	_trivia_manager = TriviaManager.new()
 	_trivia_manager.name = "TriviaManager"
 	add_child(_trivia_manager)
@@ -241,16 +245,9 @@ func _initialize_room_service() -> void:
 	_spectator_controller.name = "SpectatorController"
 	add_child(_spectator_controller)
 	_spectator_controller.spectator_exited.connect(_on_spectator_exited)
-	
+
 	_parse_command_line()
-	
-	# Register host hint keybind (H) at runtime
-	if not InputMap.has_action("reveal_hint"):
-		InputMap.add_action("reveal_hint")
-		var ev := InputEventKey.new()
-		ev.physical_keycode = KEY_H
-		InputMap.action_add_event("reveal_hint", ev)
-	
+
 	# Register trivia keybind (K) at runtime
 	if not InputMap.has_action("toggle_trivia"):
 		InputMap.add_action("toggle_trivia")
@@ -275,6 +272,24 @@ func _initialize_room_service() -> void:
 		var ev_d := InputEventKey.new()
 		ev_d.physical_keycode = KEY_G
 		InputMap.action_add_event("open_daily_challenge", ev_d)
+
+	# Register host menu keybind (F1 and H)
+	if not InputMap.has_action("toggle_host_menu"):
+		InputMap.add_action("toggle_host_menu")
+		var ev_f1 := InputEventKey.new()
+		ev_f1.physical_keycode = KEY_F1
+		InputMap.action_add_event("toggle_host_menu", ev_f1)
+		
+		# Also bind H for convenience
+		var ev_h := InputEventKey.new()
+		ev_h.physical_keycode = KEY_H
+		InputMap.action_add_event("toggle_host_menu", ev_h)
+
+	# Initialize host menu (multiplayer only)
+	_host_menu = load("res://scenes/menu/HostMenu.gd").new()
+	_host_menu.name = "HostMenu"
+	add_child(_host_menu)
+	_host_menu.init(self)
 
 	# Register spectator keybind (F) — multiplayer only
 	if not InputMap.has_action("toggle_spectator"):
@@ -302,7 +317,26 @@ func _initialize_room_service() -> void:
 	var _ev_reset := InputEventKey.new()
 	_ev_reset.physical_keycode = KEY_0; _ev_reset.ctrl_pressed = true
 	InputMap.action_add_event("ui_scale_reset", _ev_reset)
-	
+
+	# Register screenshot keybind (F12)
+	if not InputMap.has_action("take_screenshot"):
+		InputMap.add_action("take_screenshot")
+		var ev_ss := InputEventKey.new()
+		ev_ss.physical_keycode = KEY_F12
+		InputMap.action_add_event("take_screenshot", ev_ss)
+
+	# Register leaderboard keybind (L)
+	if not InputMap.has_action("toggle_leaderboard"):
+		InputMap.add_action("toggle_leaderboard")
+		var ev_l := InputEventKey.new()
+		ev_l.physical_keycode = KEY_L
+		InputMap.action_add_event("toggle_leaderboard", ev_l)
+
+	# Add LeaderboardHUD programmatically (pure code UI)
+	var leaderboard_hud: Control = load("res://scenes/ui/LeaderboardHUD.gd").new()
+	leaderboard_hud.name = "LeaderboardHUD"
+	add_child(leaderboard_hud)
+
 	if _multiplayer_controller.is_server_mode():
 		_start_dedicated_server()
 		return
@@ -337,6 +371,13 @@ func _initialize_room_service() -> void:
 	RaceManager.race_countdown.connect(_on_race_countdown)
 	RaceManager.race_won.connect(_on_race_won)
 	RaceManager.vote_cancelled.connect(_on_vote_cancelled)
+	## As soon as the vote winner is known, tell RaceCountdown the target so
+	## "Find: [Article]" shows on the first beat of the 3-2-1 countdown.
+	RaceManager.vote_ended.connect(func(winner: String):
+		var countdown := get_node_or_null("/root/RaceCountdown")
+		if countdown and countdown.has_method("set_target"):
+			countdown.set_target(winner)
+	)
 	if RaceManager.has_signal("race_won"):
 		RaceManager.race_won.connect(_on_race_won_for_daily_challenge)
 	ExhibitFetcher.random_complete.connect(_on_random_article_complete)
@@ -376,8 +417,11 @@ func _recreate_player() -> void:
 		_player.queue_free()
 	_player = Player.instantiate()
 	add_child(_player)
-	_player_pivot = _player.get_node("Pivot")
-	_player_pivot.get_node("Camera3D").make_current()
+	_player_pivot = _player.get_node_or_null("Pivot")
+	if _player_pivot:
+		var camera = _player_pivot.get_node_or_null("Camera3D")
+		if camera:
+			camera.make_current()
 	_player.rotation.y = starting_rotation
 	_player.max_speed = player_speed
 	_player.smooth_movement = smooth_movement
@@ -424,6 +468,8 @@ func _update_world_light_intensity() -> void:
 func _start_game() -> void:
 	if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	
+	# Player.start() already enables the player (_enabled = true)
 	_player.start()
 	_menu_controller.close_menus()
 	# Hide daily challenge HUD and card when entering museum normally (not via challenge)
@@ -505,6 +551,7 @@ func _cycle_minimap() -> void:
 			if _connection_hud and _connection_hud.has_method("show_hud"):
 				_connection_hud.show_hud()
 			# NOTE: Do NOT touch _powerup_hud here
+
 
 # =============================================================================
 # MENU CALLBACKS
@@ -631,16 +678,6 @@ func _input(event: InputEvent) -> void:
 	if Input.is_action_pressed("toggle_fullscreen"):
 		UIEvents.fullscreen_toggled.emit(not GraphicsManager.fullscreen)
 
-	# Host keybind: H = reveal next hint to all players during a race
-	if InputMap.has_action("reveal_hint") and event.is_action_pressed("reveal_hint") and not event.is_echo():
-		var chat_open: bool = _chat_hud != null and _chat_hud.is_input_open()
-		if not chat_open and NetworkManager.is_server() and RaceManager.is_race_active():
-			var ok := RaceManager.reveal_hint_now()
-			if not ok and _chat_system:
-				_chat_system._show_system_message("⚠ No hints available.")
-			get_viewport().set_input_as_handled()
-			return
-
 	# DEBUG: F10 = spawn powerup near player (multiplayer only)
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F10:
 		if NetworkManager.is_multiplayer_active():
@@ -705,7 +742,15 @@ func _input(event: InputEvent) -> void:
 						_spectator_controller.exit_spectator_mode()
 					elif _multiplayer_controller.get_network_players().size() > 0:
 						_spectator_controller.enter_spectator_mode(_player)
-		
+
+			if event.is_action_pressed("toggle_host_menu"):
+				# Don't open host menu if journal or other overlays are open
+				var overlay_open: bool = (_journal_overlay and _journal_overlay.is_open()) or \
+					(_guestbook_overlay and _guestbook_overlay.is_open()) or \
+					(_trivia_overlay and _trivia_overlay.is_open())
+				if _host_menu and NetworkManager.is_server() and not overlay_open:
+					_host_menu.toggle()
+
 		# UI scale keyboard shortcuts — work in any state
 		if event.is_action_pressed("ui_scale_in"):
 			_adjust_ui_scale(0.1)
@@ -715,6 +760,11 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		if event.is_action_pressed("ui_scale_reset"):
 			_adjust_ui_scale(0.0)
+			get_viewport().set_input_as_handled()
+
+		# Screenshot — F12, works in any game state
+		if event.is_action_pressed("take_screenshot"):
+			_take_screenshot()
 			get_viewport().set_input_as_handled()
 		
 		if event.is_action_pressed("pause"):
@@ -875,6 +925,11 @@ func _load_saved_skin() -> void:
 func _on_start_race_pressed() -> void:
 	if RaceManager.is_race_active():
 		return
+	
+	# Close pause menu BEFORE starting race vote
+	hide_pause_menu()
+	_menu_controller.close_menus()
+	
 	if not NetworkManager.is_multiplayer_active() or NetworkManager.is_server():
 		_debug_log("Main: Fetching random articles for race vote...")
 		_race_candidates.clear()
@@ -894,6 +949,11 @@ func _request_race_start() -> void:
 		return
 	if RaceManager.is_race_active():
 		return
+	
+	# Close pause menu BEFORE starting race vote
+	hide_pause_menu()
+	_menu_controller.close_menus()
+	
 	_debug_log("Main: Race start requested by peer, fetching random articles for vote...")
 	_race_candidates.clear()
 	_race_start_article = ""
@@ -1015,22 +1075,6 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 	Log.debug("Main", "_on_race_started CALLED! target=%s start=%s" % [target_article, start_article])
 	_debug_log("Main: Race started, sending all players to '%s'" % start_article)
 	_debug_log("Main: Target article is '%s'" % target_article)
-	# Clear backlink map from previous race and set start article to exclude from backlinks
-	_museum._exhibit_loader.clear_backlink_map()
-	_museum._exhibit_loader.set_race_start_article(start_article)
-	_museum._exhibit_loader.set_race_target_article(target_article)
-
-	# Server fetches Wikipedia data for start article and broadcasts to all clients
-	if NetworkManager.is_server():
-		_debug_log("Main: Fetching Wikipedia data for start article '%s'..." % start_article)
-		# Fetch and wait for data before proceeding
-		_fetch_and_broadcast_start_article(start_article)
-
-	# Server fetches backlinks to populate the hint pool
-	if NetworkManager.is_server() and target_article != "":
-		_debug_log("Main: Fetching backlinks for target '%s'..." % target_article)
-		ExhibitFetcher.backlinks_complete.connect(_on_backlinks_for_hints, CONNECT_ONE_SHOT)
-		ExhibitFetcher.fetch_backlinks(target_article, {"hints": true})
 
 	# In dedicated host mode there is no local player — just sync to clients and return
 	if _is_ui_dedicated_host:
@@ -1044,7 +1088,14 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 	if _player == null:
 		print("Main: _player is null, returning early")
 		return
+
+	# Ensure menus are closed and game is unpaused BEFORE any operations
+	hide_pause_menu()
 	_menu_controller.close_menus()
+	if _player:
+		_player.set_process(true)
+		_player.set_physics_process(true)
+		_player.set_process_input(true)
 
 	# Reset to lobby first
 	_museum.reset_to_lobby()
@@ -1057,21 +1108,26 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 			_sync_race_start_article.rpc(start_article)
 			_sync_race_start_article(start_article)  # Also run locally on server
 
-	# Start game (close menus, capture mouse)
+	# Start game (close menus, capture mouse) - DO NOT WAIT for Wikipedia fetch
 	_start_game()
+
+	# Server fetches Wikipedia data for start article AFTER game has started (non-blocking)
+	if NetworkManager.is_server():
+		_debug_log("Main: Fetching Wikipedia data for start article '%s' (non-blocking)..." % start_article)
+		_fetch_and_broadcast_start_article_non_blocking(start_article)
 
 	GameplayEvents.emit_race_started(target_article)
 
 func _fetch_and_broadcast_start_article(article: String) -> void:
-	## Fetch Wikipedia data on server and broadcast to all clients
+	## Fetch Wikipedia data on server and broadcast to all clients (blocking version)
 	Log.info("Main", "Starting Wikipedia fetch for '%s'" % article)
 	ExhibitFetcher.fetch([article], {
 		"title": article,
 		"race_start": true  # Mark this as race start data
 	})
 
-	# Wait for fetch to complete (poll until data arrives) - max 1 second
-	var max_wait := 1.0
+	# Wait for fetch to complete (poll until data arrives) - max 2 seconds
+	var max_wait := 2.0
 	var wait_step := 0.1
 	var waited := 0.0
 	while not ExhibitFetcher.has_result(article) and waited < max_wait:
@@ -1086,11 +1142,48 @@ func _fetch_and_broadcast_start_article(article: String) -> void:
 	else:
 		print("Main: ERROR: Wikipedia fetch failed for '", article, "'")
 
+func _fetch_and_broadcast_start_article_non_blocking(article: String) -> void:
+	## Fetch Wikipedia data on server and broadcast to all clients (non-blocking)
+	## This version returns immediately and broadcasts when data arrives
+	Log.info("Main", "Starting Wikipedia fetch for '%s' (non-blocking)" % article)
+	
+	# Use a flag to ensure we only process once
+	var processed: bool = false
+	
+	# Set up a one-shot connection to fetch the data when it arrives
+	var on_wikitext_complete: Callable
+	on_wikitext_complete = func(titles: Array, context: Variant) -> void:
+		if processed:
+			return
+		processed = true
+		
+		if context and context.has("race_start") and context.has("title") and context.title == article:
+			var result = ExhibitFetcher.get_result(article)
+			if result:
+				Log.debug("Main", "Broadcasting Wikipedia data for '%s' to all clients" % article)
+				_sync_wikipedia_data.rpc(article, result)
+			else:
+				print("Main: ERROR: Wikipedia fetch failed for '", article, "'")
+	
+	ExhibitFetcher.wikitext_complete.connect(on_wikitext_complete, CONNECT_ONE_SHOT)
+	
+	# Start the fetch (returns immediately)
+	ExhibitFetcher.fetch([article], {
+		"title": article,
+		"race_start": true
+	})
+
 func _on_race_countdown(number: int) -> void:
-	## Play countdown sound effect
+	## Play countdown sound and ensure RaceCountdown has the target article.
 	Log.debug("Main", "Received countdown: %d" % number)
 	if number > 0 and number <= 3:
 		_play_countdown_sound()
+		## Safety fallback: push target on the first beat in case vote_ended
+		## fired before RaceCountdown was ready.
+		if number == 3:
+			var countdown := get_node_or_null("/root/RaceCountdown")
+			if countdown and countdown.has_method("set_target"):
+				countdown.set_target(RaceManager.get_target_article())
 
 func _play_countdown_sound() -> void:
 	## Play a short beep for countdown
@@ -1114,29 +1207,6 @@ func _play_victory_sound() -> void:
 	add_child(player)
 	player.play()
 	player.finished.connect(func(): player.queue_free())
-
-func _on_backlinks_for_hints(titles: Array, context: Dictionary) -> void:
-	if not context.get("hints", false):
-		return
-	## The hint pool is the list of articles that LINK TO the target (backlinks).
-	_debug_log("Main: Backlinks received for target '%s', count=%d" % [RaceManager.get_target_article(), titles.size()])
-	
-	# We deduplicate, strip blank entries, and exclude the start article.
-	var seen: Dictionary = {}
-	var filtered: Array = []
-	var start_article = RaceManager.get_start_article()
-	for t: String in titles:
-		if t != "" and t != " " and t != start_article and not seen.has(t):
-			seen[t] = true
-			filtered.append(t)
-	_debug_log("Main: Filtered to %d backlinks (excluded start article '%s')" % [filtered.size(), start_article])
-	_debug_log("Main: Backlink list: %s" % str(filtered))
-	
-	RaceManager.set_hint_pool(filtered)
-	# Store backlink titles in ExhibitLoader for proper exit linking
-	_museum._exhibit_loader.set_backlink_titles(filtered)
-	# Update existing exhibits that are in the backlink list
-	_museum._exhibit_loader.update_backlink_exits(filtered, RaceManager.get_target_article())
 
 # =============================================================================
 # MULTIPLAYER FUNCTIONS
@@ -1483,7 +1553,21 @@ func _sync_race_start_article(start_article: String) -> void:
 	if NetworkManager.is_server() and Services.room_service:
 		print("Main: Server generating room for '", start_article, "'")
 		var room_data = Services.room_service.generate_room(start_article)
-		Services.room_service.populate_room_data(room_data, ExhibitFetcher.get_result(start_article), [])
+		
+		# Get Wikipedia data (or empty dict if failed)
+		var wiki_data: Variant = ExhibitFetcher.get_result(start_article)
+		if wiki_data == null:
+			print("Main: WARNING: No Wikipedia data for '%s', generating room with empty data" % start_article)
+			wiki_data = {}
+
+		# Get backlinks
+		var backlinks: Array = []
+		if ExhibitFetcher.has_result(start_article):
+			var result = ExhibitFetcher.get_result(start_article)
+			if result and result.has("links"):
+				backlinks = result.links
+		
+		Services.room_service.populate_room_data(room_data, wiki_data, backlinks)
 		Services.room_service.broadcast_room(room_data)
 	else:
 		# CLIENT: Wait for room data from server
@@ -1502,9 +1586,12 @@ func _sync_race_start_article(start_article: String) -> void:
 			Log.debug("Main", "Exhibit generated after %.2fs" % ((i + 1) * 0.05))
 			break
 
-	# NOW open the door (exhibit is ready to walk into)
-	_museum.reset_to_lobby()
+	# Set custom door FIRST (before reset_to_lobby)
 	UIEvents.emit_set_custom_door(start_article)
+	Log.debug("Main", "Custom door set to '%s'" % start_article)
+	
+	# THEN reset to lobby (this will show the custom door)
+	_museum.reset_to_lobby()
 	Log.debug("Main", "Door opened for '%s' - exhibit ready to walk into!" % start_article)
 
 	# Teleport all players to the start line
@@ -1694,6 +1781,19 @@ func _on_race_won_for_daily_challenge(winner_name: String, final_time: float) ->
 	## is active, complete it and pop the results screen.
 	if _daily_challenge_manager and _daily_challenge_manager.is_active():
 		_daily_challenge_manager.complete_challenge()
+
+func _show_system_message(message: String) -> void:
+	"""Display a system message to the player via chat system."""
+	if _chat_system and _chat_system.has_method("_show_system_message"):
+		_chat_system._show_system_message(message)
+
+
+func _show_error_message(message: String) -> void:
+	"""Display an error message to the player via chat/prompt system."""
+	if _chat_system and _chat_system.has_method("_show_system_message"):
+		_chat_system._show_system_message("⚠️ " + message)
+	if _prompt_hud and _prompt_hud.has_method("show_message"):
+		_prompt_hud.show_message(message)
 		call_deferred("_show_daily_challenge_results")
 
 func _show_daily_challenge_results() -> void:
@@ -1737,3 +1837,96 @@ func _spawn_daily_challenge_board() -> void:
 	_museum.add_child(_daily_challenge_board)
 	if _daily_challenge_board.has_method("init"):
 		_daily_challenge_board.init(_daily_challenge_manager, _daily_challenge_leaderboard)
+
+# === Host Menu Support Methods ===
+
+func set_custom_start(article: String) -> void:
+	"""Set custom race start article"""
+	if article != "":
+		_race_start_article = article
+		if _museum and _museum.has_method("sync_custom_door"):
+			_museum.sync_custom_door(article)
+
+func _teleport_player_to_lobby() -> void:
+	"""Teleport local player to lobby"""
+	if _player:
+		_player.position = Vector3(0, 4, 0)
+		_player.rotation.y = 0
+		if _museum:
+			_museum._current_room_title = "Lobby"
+
+
+# =============================================================================
+# SCREENSHOT
+# =============================================================================
+
+## Canvas layer that shows the flash + filename toast.
+var _screenshot_layer: CanvasLayer = null
+
+func _take_screenshot() -> void:
+	## Captures the current viewport, saves to user://screenshots/YYYY-MM-DD_HH-MM-SS.png,
+	## and briefly flashes the screen with the saved filename.
+	var img: Image = get_viewport().get_texture().get_image()
+	if not img:
+		return
+
+	# Build save path
+	var dir_path: String = "user://screenshots"
+	if not DirAccess.dir_exists_absolute(dir_path):
+		DirAccess.make_dir_recursive_absolute(dir_path)
+
+	var dt: Dictionary = Time.get_datetime_dict_from_system()
+	var filename: String = "%04d-%02d-%02d_%02d-%02d-%02d.png" % [
+		dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second
+	]
+	var full_path: String = "%s/%s" % [dir_path, filename]
+
+	var err: Error = img.save_png(full_path)
+	if err != OK:
+		push_warning("Screenshot failed: %s" % error_string(err))
+		return
+
+	_show_screenshot_toast(filename, OS.get_user_data_dir() + "/screenshots/" + filename)
+
+
+func _show_screenshot_toast(filename: String, full_os_path: String) -> void:
+	## Creates a brief white-flash overlay + filename label, then fades out.
+	if not _screenshot_layer or not is_instance_valid(_screenshot_layer):
+		_screenshot_layer = CanvasLayer.new()
+		_screenshot_layer.name = "ScreenshotLayer"
+		_screenshot_layer.layer = 127
+		add_child(_screenshot_layer)
+
+	# White flash rect
+	var flash := ColorRect.new()
+	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	flash.color = Color(1, 1, 1, 0.55)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_screenshot_layer.add_child(flash)
+
+	# Toast label at bottom-centre
+	var toast := Label.new()
+	toast.text = "📷 Saved: %s" % filename
+	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	toast.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	toast.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	toast.offset_top    = -60
+	toast.offset_bottom = 0
+	toast.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	toast.add_theme_font_size_override("font_size", 16)
+	toast.add_theme_color_override("font_color", Color.WHITE)
+	toast.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	toast.add_theme_constant_override("shadow_offset_x", 1)
+	toast.add_theme_constant_override("shadow_offset_y", 1)
+	_screenshot_layer.add_child(toast)
+
+	# Fade out flash quickly, keep toast a little longer
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(flash, "color:a", 0.0, 0.25) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(toast, "modulate:a", 0.0, 1.8) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(0.8)
+	tw.chain().tween_callback(func():
+		if is_instance_valid(flash): flash.queue_free()
+		if is_instance_valid(toast): toast.queue_free()
+	)

@@ -49,8 +49,12 @@ ThemeManager="*res://scenes/util/ThemeManager.gd"
 TTSManager="*res://scenes/autoload/TTSManager.gd"
 PowerupManager="*res://scenes/util/PowerupManager.gd"
 VoiceChatManager="*res://scenes/util/VoiceChatManager.gd"
+HintManager="*res://scenes/util/HintManager.gd"
 EventBus="*res://scenes/core/EventBus.gd"
 Services="*res://scenes/core/Services.gd"
+LeaderboardManager="*res://scenes/util/LeaderboardManager.gd"
+LoadingScreen="*res://scenes/ui/LoadingScreen.tscn"
+RaceCountdown="*res://scenes/ui/RaceCountdown.tscn"
 
 [display]
 
@@ -312,6 +316,10 @@ textures/vram_compression/import_etc2_astc=true
 limits/opengl/max_renderable_lights=16
 occlusion_culling/use_occlusion_culling=true
 environment/defaults/default_environment="res://assets/resources/default_env.tres"
+
+[twitcher]
+
+editor/project_preset=&"Overlay"
 
 [xr]
 

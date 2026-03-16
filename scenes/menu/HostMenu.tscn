@@ -1,0 +1,192 @@
+extends CanvasLayer
+class_name HostMenu
+## Dedicated host menu accessible via keybind during gameplay.
+## Provides quick access to host controls without opening VoteHUD.
+
+signal host_menu_closed
+
+@onready var _panel: PanelContainer = $MarginContainer/Panel
+@onready var _title: Label = $MarginContainer/Panel/VBoxContainer/Title
+@onready var _player_list: VBoxContainer = $MarginContainer/Panel/VBoxContainer/PlayerList
+@onready var _race_control: VBoxContainer = $MarginContainer/Panel/VBoxContainer/RaceControl
+
+var _main: Node = null
+var _visible: bool = false
+
+func _ready() -> void:
+	layer = 100  # Above everything
+	_panel.visible = false
+	_apply_theme()
+	ThemeManager.dark_mode_changed.connect(_apply_theme)
+
+func init(main: Node) -> void:
+	_main = main
+
+func _apply_theme() -> void:
+	if not is_instance_valid(_panel):
+		return
+	var style := _panel.get_theme_stylebox("panel") as StyleBoxFlat
+	if not style:
+		style = StyleBoxFlat.new()
+		_panel.add_theme_stylebox_override("panel", style)
+	
+	style.bg_color = ThemeManager.bg_color
+	style.border_color = ThemeManager.border_color
+	style.corner_radius_top_left = 10
+	style.corner_radius_top_right = 10
+	style.corner_radius_bottom_left = 10
+	style.corner_radius_bottom_right = 10
+	style.shadow_color = Color(0, 0, 0, 0.3)
+	style.shadow_size = 16
+	style.shadow_offset = Vector2(0, 8)
+
+func toggle() -> void:
+	if _visible:
+		hide_menu()
+	else:
+		show_menu()
+
+func show_menu() -> void:
+	_visible = true
+	_panel.visible = true
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	_refresh_player_list()
+	_build_race_control()
+
+func hide_menu() -> void:
+	_visible = false
+	_panel.visible = false
+	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	host_menu_closed.emit()
+
+func _refresh_player_list() -> void:
+	# Clear existing
+	for child in _player_list.get_children():
+		child.queue_free()
+	
+	# Title
+	var title := Label.new()
+	title.text = "👥 Players"
+	title.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	title.add_theme_font_size_override("font_size", 14)
+	_player_list.add_child(title)
+	
+	# Get players
+	var player_ids: Array = []
+	if NetworkManager.is_multiplayer_active():
+		player_ids = NetworkManager.get_player_list()
+	
+	# Add each player
+	for peer_id in player_ids:
+		var player_name: String = NetworkManager.get_player_name(peer_id)
+		if peer_id == NetworkManager.get_unique_id():
+			player_name += " (You)"
+		
+		var player_row := HBoxContainer.new()
+		player_row.add_theme_constant_override("separation", 5)
+		
+		var name_lbl := Label.new()
+		name_lbl.text = player_name
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.add_theme_color_override("font_color", ThemeManager.text_color)
+		player_row.add_child(name_lbl)
+		
+		# Kick button (host only, not for self)
+		if peer_id != 1 and NetworkManager.is_server():
+			var kick_btn := Button.new()
+			kick_btn.text = "👢"
+			kick_btn.tooltip_text = "Kick player"
+			kick_btn.focus_mode = Control.FOCUS_NONE
+			kick_btn.custom_minimum_size.x = 40
+			kick_btn.pressed.connect(_on_kick_pressed.bind(peer_id, player_name))
+			player_row.add_child(kick_btn)
+		
+		_player_list.add_child(player_row)
+
+func _build_race_control() -> void:
+	# Clear existing
+	for child in _race_control.get_children():
+		child.queue_free()
+	
+	# Title
+	var title := Label.new()
+	title.text = "🎮 Race Control"
+	title.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	title.add_theme_font_size_override("font_size", 14)
+	_race_control.add_child(title)
+	
+	# Force Start button
+	var force_start_btn := Button.new()
+	force_start_btn.text = "▶ Force Start Race"
+	force_start_btn.focus_mode = Control.FOCUS_NONE
+	force_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	force_start_btn.pressed.connect(_on_force_start_pressed)
+	_race_control.add_child(force_start_btn)
+	
+	# Cancel Race button
+	var cancel_race_btn := Button.new()
+	cancel_race_btn.text = "⏹ Cancel Race"
+	cancel_race_btn.focus_mode = Control.FOCUS_NONE
+	cancel_race_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cancel_race_btn.pressed.connect(_on_cancel_race_pressed)
+	_race_control.add_child(cancel_race_btn)
+	
+	# Reveal Hint button (if hints available)
+	var reveal_hint_btn := Button.new()
+	reveal_hint_btn.text = "💡 Reveal Hint"
+	reveal_hint_btn.focus_mode = Control.FOCUS_NONE
+	reveal_hint_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reveal_hint_btn.pressed.connect(_on_reveal_hint_pressed)
+	_race_control.add_child(reveal_hint_btn)
+	
+	# Close button
+	var close_btn := Button.new()
+	close_btn.text = "✕ Close (ESC)"
+	close_btn.focus_mode = Control.FOCUS_NONE
+	close_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	close_btn.pressed.connect(hide_menu)
+	_race_control.add_child(close_btn)
+
+func _on_kick_pressed(peer_id: int, player_name: String) -> void:
+	if not NetworkManager.is_server():
+		return
+	_kick_player.rpc_id(1, peer_id)
+	_refresh_player_list()
+	if _main and _main.has_method("_show_error_message"):
+		_main._show_error_message("👢 Kicked %s" % player_name)
+
+func _on_force_start_pressed() -> void:
+	if not NetworkManager.is_server():
+		return
+	if RaceManager.has_method("force_start_race"):
+		RaceManager.force_start_race()
+	hide_menu()
+
+func _on_cancel_race_pressed() -> void:
+	if not NetworkManager.is_server():
+		return
+	RaceManager.cancel_race()
+	hide_menu()
+
+func _on_reveal_hint_pressed() -> void:
+	if not NetworkManager.is_server():
+		return
+	var hint = HintManager.get_next_hint()
+	if hint != "":
+		HintManager.reveal_hint_to_all(hint)
+		# Show hint locally too
+		var main := get_tree().get_first_node_in_group("main")
+		if main and main.has_node("ChatSystem"):
+			main.get_node("ChatSystem")._show_system_message("💡 Hint: Go to '%s'" % hint)
+
+@rpc("any_peer", "call_local", "reliable")
+func _kick_player(peer_id: int) -> void:
+	if multiplayer.get_remote_sender_id() != 1:
+		return
+	if NetworkManager.is_server():
+		NetworkManager.kick_peer(peer_id)
+
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel") and _visible:
+		hide_menu()
+		get_viewport().set_input_as_handled()

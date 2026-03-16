@@ -31,7 +31,7 @@ var _lb_caption: Label       = null
 var _lb_list: VBoxContainer  = null
 var _font: Font              = null
 
-const ACCENT := Color(1.0, 0.72, 0.18)
+const ACCENT := Color(0.35, 0.75, 1.00)
 const BG     := Color(0.97, 0.95, 0.90, 1.0)   ## warm paper colour
 const INK    := Color(0.12, 0.10, 0.08, 1.0)
 const INK2   := Color(0.40, 0.36, 0.30, 1.0)

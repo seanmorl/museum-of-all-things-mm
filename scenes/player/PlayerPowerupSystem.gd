@@ -162,6 +162,30 @@ func _apply_perfect_knowledge_to_hall(hall: Node) -> void:
 		if sign and sign.has_node("Label3D"):
 			sign.get_node("Label3D").visible = _has_perfect_knowledge
 
+func reveal_backlink_door(hint_article: String) -> void:
+	"""Reveal door labels when a hint reveals a backlink to target."""
+	if not _is_local:
+		return
+	
+	# Find halls where the backlink matches the hint article
+	var all_halls = _player.get_tree().get_nodes_in_group("hall")
+	for hall in all_halls:
+		if not is_instance_valid(hall):
+			continue
+		
+		# Check if this hall's exit leads to the hint article
+		if hall.has_method("get") and "to_title" in hall:
+			if hall.to_title == hint_article:
+				# Reveal this door
+				if hall.has_node("EntryLabel"):
+					var label: Label3D = hall.get_node("EntryLabel")
+					if label:
+						label.visible = true
+				if hall.has_node("ExitLabel"):
+					var label: Label3D = hall.get_node("ExitLabel")
+					if label:
+						label.visible = true
+
 func _update_lights_out() -> void:
 	if not _is_local:
 		return
@@ -398,9 +422,12 @@ func _create_grapple_rope(from: Vector3, to: Vector3) -> void:
 	_grapple_rope = CSGBox3D.new()
 	_grapple_rope.size = Vector3(0.05, from.distance_to(to), 0.05)
 	_grapple_rope.material = StandardMaterial3D.new()
-	(_grapple_rope.material as StandardMaterial3D).albedo_color = Color(0.9, 0.9, 0.9, 0.8)
-	(_grapple_rope.material as StandardMaterial3D).emission_enabled = true
-	(_grapple_rope.material as StandardMaterial3D).emission = Color(0.9, 0.9, 0.9)
+	# Safe cast - we just created the material, so we know the type
+	var mat: StandardMaterial3D = _grapple_rope.material as StandardMaterial3D
+	if mat:
+		mat.albedo_color = Color(0.9, 0.9, 0.9, 0.8)
+		mat.emission_enabled = true
+		mat.emission = Color(0.9, 0.9, 0.9)
 	_grapple_rope.add_to_group("grapple_rope")
 	_player.get_tree().current_scene.add_child(_grapple_rope)
 	_update_grapple_rope(from, to)

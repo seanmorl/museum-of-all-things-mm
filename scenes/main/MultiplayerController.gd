@@ -17,6 +17,7 @@ var _server_port: int = 7777
 
 var _network_player_scene: PackedScene = null
 var _starting_point: Vector3 = Vector3(0, 4, 0)
+var _spawning_peers: Array[int] = []  # Prevents duplicate spawning
 
 
 func init(main: Node, network_player_scene: PackedScene, starting_point: Vector3) -> void:
@@ -52,9 +53,12 @@ func get_network_players() -> Dictionary:
 
 
 func spawn_network_player(peer_id: int) -> Node:
-	if _network_players.has(peer_id):
-		return _network_players[peer_id]
-
+	# Prevent duplicate spawning from rapid peer_connected signals
+	if _network_players.has(peer_id) or peer_id in _spawning_peers:
+		return _network_players.get(peer_id)
+	
+	_spawning_peers.append(peer_id)
+	
 	var net_player: Node = _network_player_scene.instantiate()
 	net_player.name = "NetworkPlayer_" + str(peer_id)
 	net_player.is_local = false
@@ -71,6 +75,8 @@ func spawn_network_player(peer_id: int) -> Node:
 	net_player.position = _starting_point
 
 	_network_players[peer_id] = net_player
+	_spawning_peers.erase(peer_id)  # Remove from spawning guard
+	
 	MultiplayerEvents.emit_player_joined(peer_id, NetworkManager.get_player_name(peer_id))
 
 	Log.info("Multiplayer", "Spawned network player for peer %d" % peer_id)
@@ -238,6 +244,11 @@ func _on_player_room_changed(peer_id: int, _room: String) -> void:
 		_update_player_visibility(peer_id)
 
 
+func _should_player_be_visible(remote_room: String, local_room: String) -> bool:
+	"""Determine if a player should be visible based on room positions"""
+	var in_corridor: bool = _is_corridor_room(remote_room) or _is_corridor_room(local_room)
+	return remote_room == local_room or in_corridor
+
 func _update_player_visibility(peer_id: int) -> void:
 	if not _network_players.has(peer_id):
 		return
@@ -261,8 +272,7 @@ func _update_player_visibility(peer_id: int) -> void:
 		if local_player and "current_room" in local_player:
 			local_room = local_player.current_room
 
-	var in_corridor: bool = _is_corridor_room(remote_room) or _is_corridor_room(local_room)
-	net_player.set_body_visible(remote_room == local_room or in_corridor)
+	net_player.set_body_visible(_should_player_be_visible(remote_room, local_room))
 
 
 func update_all_player_visibility(local_player: Node) -> void:
@@ -280,8 +290,7 @@ func update_all_player_visibility(local_player: Node) -> void:
 					if mount_room != "":
 						remote_room = mount_room
 
-			var in_corridor: bool = _is_corridor_room(remote_room) or _is_corridor_room(local_room)
-			net_player.set_body_visible(remote_room == local_room or in_corridor)
+			net_player.set_body_visible(_should_player_be_visible(remote_room, local_room))
 
 
 func _is_corridor_room(room: String) -> bool:

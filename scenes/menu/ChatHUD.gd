@@ -126,6 +126,12 @@ func _ready() -> void:
 	_typing_player.volume_db = -8.0
 	if ResourceLoader.exists(TYPING_SOUND_PATH):
 		_typing_player.stream = load(TYPING_SOUND_PATH)
+		if _typing_player.stream == null:
+			print("ChatHUD: FAILED to load typing sound: ", TYPING_SOUND_PATH)
+		else:
+			print("ChatHUD: Loaded typing sound: ", TYPING_SOUND_PATH)
+	else:
+		print("ChatHUD: Typing sound file not found: ", TYPING_SOUND_PATH)
 	add_child(_typing_player)
 
 	MultiplayerEvents.chat_message_received.connect(_on_chat_message_received)

@@ -21,6 +21,12 @@ func init(main: Node) -> void:
 	_main = main
 	if ResourceLoader.exists(CHIME_SOUND):
 		_chime = load(CHIME_SOUND)
+		if _chime == null:
+			print("PointingController: FAILED to load chime sound: ", CHIME_SOUND)
+		else:
+			print("PointingController: Loaded chime sound: ", CHIME_SOUND)
+	else:
+		print("PointingController: Chime sound file not found: ", CHIME_SOUND)
 
 
 func spawn_reaction(reaction_index: int, world_pos: Vector3) -> void:

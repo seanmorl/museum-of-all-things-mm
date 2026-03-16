@@ -2,7 +2,6 @@ extends Node
 
 signal search_complete(title: Variant, context: Variant)
 signal random_complete(title: Variant, context: Variant)
-signal backlinks_complete(titles: Array, context: Variant)  ## Articles that link TO a given article
 signal category_search_complete(categories: Array, context: Variant)  ## Array of category name strings
 signal category_random_complete(title: Variant, context: Variant)     ## one random article from a category
 signal wikitext_complete(titles: Array, context: Variant)
@@ -10,6 +9,7 @@ signal wikitext_failed(titles: Array, message: String)
 signal wikidata_complete(ids: Variant, context: Variant)
 signal images_complete(files: Array, context: Variant)
 signal commons_images_complete(category: Array, context: Variant)
+signal backlinks_complete(backlinks: Array, context: Variant)  ## Array of backlink titles
 
 const MAX_BATCH_SIZE: int = 50
 const REQUEST_DELAY_MS: int = 1000
@@ -24,9 +24,6 @@ var lang: String = TranslationServer.get_locale()
 var wikipedia_prefix: String = "https://" + lang + ".wikipedia.org/wiki/"
 var search_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srprop=title&origin=*&srsearch="
 ## User category filter: Toolforge randomincategory, cmnamespace=0&cmtype=page = mainspace articles only
-const TOOLFORGE_USER_CATEGORY_BASE: String = "https://randomincategory.toolforge.org/?server=en.wikipedia.org&cmnamespace=0&cmtype=page&returntype=subject&category="
-## Backlinks fetch endpoint: finds articles that link TO a given title
-var backlinks_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=backlinks&blnamespace=0&bllimit=20&origin=*&bltitle="
 var topic_search_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=0&srprop=title&srlimit=500&origin=*&srsearch="
 var random_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&generator=random&grnnamespace=0&prop=info&origin=*"
 var category_search_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=14&srprop=title&srlimit=8&origin=*&srsearch="
@@ -60,6 +57,10 @@ const TARGET_ENDPOINT_HARD: String = "https://randomincategory.toolforge.org/?ca
 
 ## RANDOM_LEVEL4_ENDPOINT used by fetch_random_level4 (Random 🎲 difficulty) — unchanged
 const RANDOM_LEVEL4_ENDPOINT: String = "https://randomincategory.toolforge.org/?category=A-Class%20level-3%20vital%20articles&category2=B-Class%20level-3%20vital%20articles&category3=C-Class%20level-3%20vital%20articles&category4=FA-Class%20level-3%20vital%20articles&category5=FL-Class%20level-3%20vital%20articles&category6=GA-Class%20level-3%20vital%20articles&category7=List-Class%20level-3%20vital%20articles&category8=Start-Class%20level-3%20vital%20articles&category9=Stub-Class%20level-3%20vital%20articles&category10=A-Class%20level-4%20vital%20articles&category11=B-Class%20level-4%20vital%20articles&category12=C-Class%20level-4%20vital%20articles&category13=FA-Class%20level-4%20vital%20articles&category14=FL-Class%20level-4%20vital%20articles&category15=GA-Class%20level-4%20vital%20articles&category16=List-Class%20level-4%20vital%20articles&category17=Start-Class%20level-4%20vital%20articles&category18=Stub-Class%20level-4%20vital%20articles&server=en.wikipedia.org&cmnamespace=&cmtype=&returntype=subject"
+
+## Toolforge user category endpoint base — cmnamespace=0 = mainspace articles only
+const TOOLFORGE_USER_CATEGORY_BASE: String = "https://randomincategory.toolforge.org/?server=en.wikipedia.org&cmnamespace=0&cmtype=page&returntype=subject&category="
+
 var wikitext_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=revisions|extracts|pageprops|categories&ppprop=wikibase_item&explaintext=true&rvprop=content&cllimit=50&clshow=!hidden&format=json&redirects=1&origin=*&titles="
 var images_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=imageinfo&iiprop=extmetadata|url&iiurlwidth=640&iiextmetadatafilter=LicenseShortName|Artist&format=json&redirects=1&origin=*&titles="
 var wikidata_endpoint: String = "https://www.wikidata.org/w/api.php?action=wbgetclaims&uselang=" + lang + "&format=json&origin=*&entity="
@@ -69,6 +70,7 @@ var wikimedia_commons_gallery_images_endpoint: String = "https://commons.wikimed
 
 var _fs_lock := Mutex.new()
 var _results_lock := Mutex.new()
+var _cache_lock := Mutex.new()  # Separate lock for cache order array
 var _results: Dictionary = {}
 ## LRU cache for results - prevents memory growth in long sessions
 const MAX_CACHE_SIZE: int = 500  # Max cached articles
@@ -112,8 +114,6 @@ func _network_request_item() -> void:
 		_fetch_category_search(item[1], item[2])
 	elif item[0] == "fetch_random_from_category":
 		_fetch_random_from_category(item[1], item[2])
-	elif item[0] == "fetch_backlinks":
-		_fetch_backlinks(item[1], item[2])
 	elif item[0] == "fetch_random_category_article":
 		_fetch_random_category_article(item[1])
 	elif item[0] == "fetch_random":
@@ -136,7 +136,6 @@ func _network_request_item() -> void:
 func set_language(language: String) -> void:
 	wikipedia_prefix = "https://" + language + ".wikipedia.org/wiki/"
 	search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srprop=title&srsearch="
-	backlinks_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=backlinks&blnamespace=0&bllimit=20&origin=*&bltitle="
 	topic_search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=0&srprop=title&srlimit=500&origin=*&srsearch="
 	random_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&generator=random&grnnamespace=0&prop=info"
 	category_search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=14&srprop=title&srlimit=8&srsearch="
@@ -162,12 +161,6 @@ func fetch_random_level4(ctx: Variant) -> void:
 ## Searches Wikipedia for category names matching [query]. Emits category_search_complete.
 func fetch_category_search(query: String, ctx: Variant) -> void:
 	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_category_search", query, ctx], null, true)
-
-## Picks a random article from the given Wikipedia category name. Emits category_random_complete.
-func fetch_backlinks(article_title: String, ctx: Variant) -> void:
-	## Fetches up to 20 mainspace articles that link TO article_title.
-	## Emits backlinks_complete(titles: Array, ctx) when done.
-	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_backlinks", article_title, ctx], null, true)
 
 func fetch_random_from_category(category_name: String, ctx: Variant) -> void:
 	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_random_from_category", category_name, ctx], null, true)
@@ -322,6 +315,15 @@ func _fetch_category_search(query: String, context: Variant) -> void:
 	var ctx := {"category_search": true}
 	_dispatch_request(url, ctx, context)
 
+func fetch_backlinks(title: String, context: Variant = null) -> void:
+	"""Fetch all articles that link to the given title (backlinks)"""
+	var url := "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=backlinks&bllimit=500&bltitle=" + title.uri_encode() + "&blnamespace=0&origin=*"
+	var ctx := {
+		"backlinks": true,
+		"title": title
+	}
+	_dispatch_request(url, ctx, context)
+
 func _fetch_random_from_category(category_name: String, context: Variant) -> void:
 	## Uses Toolforge randomincategory with cmnamespace=0&cmtype=page — mainspace articles only.
 	## This prevents Category:, Portal:, and other namespace pages from appearing as candidates.
@@ -333,12 +335,6 @@ func _fetch_random_from_category(category_name: String, context: Variant) -> voi
 		return
 	var url := TOOLFORGE_USER_CATEGORY_BASE + cat.uri_encode()
 	var ctx := {"random_level4": true}
-	_dispatch_request(url, ctx, context)
-
-func _fetch_backlinks(article_title: String, context: Variant) -> void:
-	## Fetches up to 20 mainspace articles that link TO article_title.
-	var url := backlinks_endpoint + article_title.uri_encode()
-	var ctx := {"backlinks_fetch": true}
 	_dispatch_request(url, ctx, context)
 
 func _fetch_random(context: Variant) -> void:
@@ -415,6 +411,7 @@ func _fetch_wikitext(titles: Array, context: Variant) -> void:
 func get_result(title: String) -> Variant:
 	var res: Variant = null
 	_results_lock.lock()
+	_cache_lock.lock()
 	if _results.has(title):
 		# Move to end of cache order (most recently used)
 		_cache_order.erase(title)
@@ -427,6 +424,7 @@ func get_result(title: String) -> Variant:
 				res = null
 		else:
 			res = result
+	_cache_lock.unlock()
 	_results_lock.unlock()
 	return res
 
@@ -439,7 +437,8 @@ func has_result(title: String) -> bool:
 ## Cache a result with LRU eviction to prevent memory growth
 func _cache_result(title: String, data: Dictionary) -> void:
 	_results_lock.lock()
-	
+	_cache_lock.lock()
+
 	# If already cached, update access order
 	if _results.has(title):
 		_cache_order.erase(title)
@@ -449,11 +448,12 @@ func _cache_result(title: String, data: Dictionary) -> void:
 			var oldest: String = _cache_order.pop_front()
 			_results.erase(oldest)
 			Log.debug("ExhibitFetcher", "LRU cache evicted: %s" % oldest)
-	
+
 	# Add new entry
 	_results[title] = data
 	_cache_order.append(title)
-	
+
+	_cache_lock.unlock()
 	_results_lock.unlock()
 
 func _dispatch_request(url: String, ctx: Dictionary, caller_ctx: Variant) -> void:
@@ -473,21 +473,25 @@ func _dispatch_request(url: String, ctx: Dictionary, caller_ctx: Variant) -> voi
 
 func _set_page_field(title: String, field: String, value: Variant) -> void:
 	_results_lock.lock()
+	_cache_lock.lock()
 	if not _results.has(title):
 		_results[title] = {}
 		# Track in cache order for new entries
 		_cache_order.append(title)
 	_results[title][field] = value
+	_cache_lock.unlock()
 	_results_lock.unlock()
 
 func _append_page_field(title: String, field: String, values: Array) -> void:
 	_results_lock.lock()
+	_cache_lock.lock()
 	if not _results.has(title):
 		_results[title] = {}
 		_cache_order.append(title)
 	if not _results[title].has(field):
 		_results[title][field] = []
 	_results[title][field].append_array(values)
+	_cache_lock.unlock()
 	_results_lock.unlock()
 
 func _get_json(body: PackedByteArray) -> Variant:
@@ -552,6 +556,15 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 	if res.has("query"):
 		var query = res.query
 
+		# Handle backlinks response
+		if ctx.get("backlinks", false) and query.has("backlinks"):
+			var backlinks: Array[String] = []
+			for bl in query.backlinks:
+				if bl.has("title"):
+					backlinks.append(bl.title)
+			backlinks_complete.emit.call_deferred(backlinks, caller_ctx)
+			return true
+
 		# handle the canonical names
 		if query.has("normalized"):
 			var normalized = query.normalized
@@ -586,8 +599,6 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		return _on_category_search_complete(res, ctx, caller_ctx)
 	elif ctx.get("topic_search", false):
 		return _on_topic_search_complete(res, ctx, caller_ctx)
-	elif ctx.get("backlinks_fetch", false):
-		return _on_backlinks_complete(res, ctx, caller_ctx)
 	elif ctx.url.begins_with(random_endpoint):
 		return _on_random_request_complete(res, ctx, caller_ctx)
 	elif ctx.get("random_batch", false):
@@ -815,17 +826,6 @@ func _on_topic_search_complete(res: Dictionary, ctx: Dictionary, caller_ctx: Var
 			_dispatch_request(url, retry_ctx, caller_ctx)
 			return true
 	random_complete.emit.call_deferred(null, caller_ctx)
-	return true
-
-func _on_backlinks_complete(res: Dictionary, _ctx: Dictionary, caller_ctx: Variant) -> bool:
-	## Extracts article titles from a backlinks API response and emits backlinks_complete.
-	var titles: Array = []
-	if res.has("query") and res.query.has("backlinks"):
-		for entry in res.query.backlinks:
-			var t: String = entry.get("title", "")
-			if t != "":
-				titles.append(t)
-	backlinks_complete.emit.call_deferred(titles, caller_ctx)
 	return true
 
 func _on_random_category_step1_complete(res: Dictionary, _ctx: Dictionary, caller_ctx: Variant) -> bool:

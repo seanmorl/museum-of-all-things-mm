@@ -7,25 +7,10 @@ signal exhibit_loaded(title: String)
 
 var _museum: Node3D = null
 var _exhibits: Dictionary = {}
-var _backlink_map: Dictionary = {}
 var _exhibit_hist: Array = []
 var _used_exhibit_heights: Dictionary = {}
 var _loading_exhibits: Dictionary = {}  # Track in-flight fetches to prevent duplicates
 var _logged_slot_cap: bool = false
-var _race_start_article: String = ""  # Exclude from backlink processing
-var _race_target_article: String = ""  # Only true backlinks link to this
-var _backlink_titles: Array = []  # List of articles that link to target
-
-func set_race_start_article(article: String) -> void:
-	_race_start_article = article
-
-func set_race_target_article(target: String) -> void:
-	_race_target_article = target
-
-func set_backlink_titles(titles: Array) -> void:
-	_backlink_titles = titles
-	if OS.is_debug_build():
-		print("ExhibitLoader: Set %d backlink titles: %s" % [titles.size(), str(titles)])
 
 var _starting_height: int = 40
 var _height_increment: int = 20
@@ -56,41 +41,9 @@ func get_exhibits() -> Dictionary:
 	return _exhibits
 
 
-func get_backlink_map() -> Dictionary:
-	return _backlink_map
-
-
-func clear_backlink_map() -> void:
-	_backlink_map.clear()
-
-func update_backlink_exits(backlink_titles: Array, target_article: String) -> void:
-	## Called after backlinks are fetched - updates existing exhibits that are in the backlink list
-	_debug_log("ExhibitLoader: Updating backlink exits for %d rooms, target=%s" % [backlink_titles.size(), target_article])
-	_debug_log("ExhibitLoader: Current exhibits: %s" % str(_exhibits.keys()))
-	
-	for room_title in backlink_titles:
-		if _exhibits.has(room_title):
-			var exhibit_data = _exhibits[room_title]
-			var exhibit = exhibit_data.exhibit
-			if is_instance_valid(exhibit) and exhibit.has_node("Entry"):
-				var entry_hall = exhibit.get_node("Entry")
-				if entry_hall and entry_hall.has_node("ExitDoor"):
-					# Set the exit to lead to target article
-					entry_hall.to_title = target_article
-					_debug_log("ExhibitLoader: Updated %s exit to target %s" % [room_title, target_article])
-				else:
-					_debug_log("ExhibitLoader: %s Entry has no ExitDoor" % room_title)
-			else:
-				_debug_log("ExhibitLoader: %s exhibit invalid or no Entry" % room_title)
-		else:
-			_debug_log("ExhibitLoader: %s not in loaded exhibits" % room_title)
-
 func _debug_log(msg: String) -> void:
 	if OS.is_debug_build():
 		print(msg)
-
-func is_backlink_room(title: String) -> bool:
-	return _backlink_titles.has(title)
 
 func get_free_exhibit_height() -> int:
 	var height: int = _starting_height
@@ -110,21 +63,18 @@ func load_exhibit_from_entry(entry: Hall) -> void:
 	var prev_article: String = Util.coalesce(entry.from_title, "Fungus")
 
 	if entry.from_title == "Lobby":
-		_link_backlink_to_exit(_museum.get_node("Lobby"), entry)
 		return
 
 	if _exhibits.has(prev_article):
 		var exhibit: Node = _exhibits[prev_article].exhibit
 		if is_instance_valid(exhibit):
-			_link_backlink_to_exit(exhibit, entry)
 			return
 
-	# Don't set backlink=true here - that's only for rooms confirmed to link to target on Wikipedia
-	# Normal exhibit loading should NOT have backlink flag
+	# Fetch exhibit data
 	ExhibitFetcher.fetch([prev_article], {
 		"title": prev_article,
 		"entry": entry,
-		"backlink": false,  # Will be set to true later if this room is in backlink list
+		"backlink": false,
 	})
 
 
@@ -138,14 +88,8 @@ func load_exhibit_from_exit(exit: Hall) -> void:
 			next_exhibit.entry.hall_type[1] == exit.hall_type[1] and
 			next_exhibit.entry.floor_type == exit.floor_type
 		):
-			# Don't link halls immediately - only link if this is a confirmed backlink room
-			# or if we're in normal gameplay (not race mode)
-			if _race_target_article == "" or _backlink_titles.has(next_article):
-				# Normal mode or confirmed backlink - safe to link
-				link_halls(next_exhibit.entry, exit)
-			else:
-				# Race mode and not a confirmed backlink - don't link yet
-				_debug_log("ExhibitLoader: %s exists but not a backlink, NOT linking halls" % next_article)
+			# Link halls for existing exhibits
+			link_halls(next_exhibit.entry, exit)
 			next_exhibit.entry.from_title = exit.from_title
 			return
 		else:
@@ -202,31 +146,39 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	var hall: Hall = context.entry if backlink else context.get("exit")
 	var result: Dictionary = ExhibitFetcher.get_result(context.title)
 
+	# ERROR HANDLING: If fetch failed, show error and revert
+	if not result:
+		Log.error("ExhibitLoader", "Failed to fetch data for '%s'" % context.title)
+		_loading_exhibits.erase(context.get("title", ""))
+		_show_error_to_player("Failed to load room: " + context.title)
+		# Revert player to previous room if this was a rider load
+		if rider_load and _museum and _museum.has_method("_teleport_player_to_lobby"):
+			_museum._teleport_player_to_lobby()
+		return
+
 	# For rider_load, we don't require a hall - we'll use defaults
 	if not result or (not rider_load and not is_instance_valid(hall)):
 		_loading_exhibits.erase(context.get("title", ""))
 		return
 
 	var prev_title: String
-	if backlink:
-		prev_title = _backlink_map[context.title]
-	elif rider_load:
+	if rider_load:
 		prev_title = context.get("from_room", "")
 	else:
 		prev_title = hall.from_title
 
+	# Async item generation (runs on worker thread)
 	ItemProcessor.create_items(context.title, result, prev_title)
 
-	var data: Dictionary
-	while not data:
-		data = await ItemProcessor.items_complete
-		if data.title != context.title:
-			data = {}
+	# Wait for items_complete signal with matching title
+	var data: Dictionary = await _wait_for_items_complete(context.title)
 
 	var doors: Array = data.doors
 	var items: Array = data.items
 	var extra_text: Array = data.extra_text
 	var mood: int = data.get("mood", ExhibitMood.Mood.DEFAULT)
+
+	Log.info("ExhibitLoader", "Room '%s' has %d doors" % [context.title, doors.size()])
 
 	var exhibit_height: int = get_free_exhibit_height()
 
@@ -234,7 +186,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	_museum.add_child(new_exhibit)
 	_logged_slot_cap = false
 
-	# For rider_load without hall, use default hall_type; don't connect exit_added
+	# For rider_load without hall, use default hall_type
 	var hall_type: Array = hall.hall_type if is_instance_valid(hall) else [0, 0]
 	if is_instance_valid(hall):
 		new_exhibit.exit_added.connect(_on_exit_added.bind(doors, backlink, new_exhibit, hall))
@@ -253,9 +205,16 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 		"mood": mood,
 	})
 
+	Log.info("ExhibitLoader", "Generated '%s': exit_limit=%d, doors=%d, items=%d" % [
+		context.title, doors.size(), doors.size(), items.size()])
+
 	if not _exhibits.has(context.title):
 		_exhibits[context.title] = { "entry": new_exhibit.entry, "exhibit": new_exhibit, "height": exhibit_height, "mood": mood }
 		_exhibit_hist.append(context.title)
+
+		# Link halls if we have exit context (critical for door teleportation!)
+		if is_instance_valid(hall):
+			link_halls(new_exhibit.entry, hall)
 
 		# Spawn NPCs if enabled
 		if _museum.npcs_enabled:
@@ -334,9 +293,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	if backlink:
 		new_exhibit.entry.loader.body_entered.connect(_museum._on_loader_body_entered.bind(new_exhibit.entry, true))
 	elif rider_load:
-		# For rider_load, just connect the entry loader without linking to a source hall
 		new_exhibit.entry.loader.body_entered.connect(_museum._on_loader_body_entered.bind(new_exhibit.entry, true))
-	# For normal exhibits, hall linking is done in _on_exit_added
 
 
 func _on_exit_added_no_hall(exit: Hall, doors: Array, new_exhibit: Node3D) -> void:
@@ -349,30 +306,22 @@ func _on_exit_added_no_hall(exit: Hall, doors: Array, new_exhibit: Node3D) -> vo
 
 
 func _on_exit_added(exit: Hall, doors: Array, backlink: bool, new_exhibit: Node3D, hall: Hall) -> void:
-	var linked_exhibit: String = Util.coalesce(doors.pop_front(), "")
-	if OS.is_debug_build():
-		print("ExhibitLoader: _on_exit_added for %s, backlink=%s, linked_exhibit=%s, doors=%s, backlink_titles=%s" % [new_exhibit.title, backlink, linked_exhibit, str(doors), str(_backlink_titles)])
+	var linked_exhibit: String = ""
+
+	# Simple: just pop the first door (target is already at front if it exists)
+	if doors.size() > 0:
+		linked_exhibit = Util.coalesce(doors.pop_front(), "")
+		Log.debug("ExhibitLoader", "Exit '%s' -> '%s' (doors remaining: %d)" % [
+			new_exhibit.title, linked_exhibit, doors.size()])
+	else:
+		# No more doors left! This exit won't lead anywhere useful
+		linked_exhibit = "Lobby"  # Fallback
+		Log.warn("ExhibitLoader", "Exit added but no doors remaining! Using fallback to Lobby")
 	
 	exit.to_title = linked_exhibit
 	if linked_exhibit != "":
 		ExhibitGraph.add_edge(new_exhibit.title, linked_exhibit)
 	exit.loader.body_entered.connect(_museum._on_loader_body_entered.bind(exit))
-	
-	# Check if this room is a true backlink (its Wikipedia article links to target)
-	var is_true_backlink = _backlink_titles.has(new_exhibit.title)
-	
-	if is_true_backlink and _race_target_article != "":
-		# This room's article links to target on Wikipedia - set exit to target
-		exit.to_title = _race_target_article
-		if OS.is_debug_build():
-			print("ExhibitLoader: BACKLINK %s → exit set to target %s" % [new_exhibit.title, _race_target_article])
-		# Create hall connection so player can walk from this backlink room to target
-		if is_instance_valid(hall):
-			link_halls(hall, exit)
-	elif not backlink:
-		# Normal exhibit - just connect entry to source hall
-		if is_instance_valid(hall):
-			link_halls(new_exhibit.entry, hall)
 
 
 func link_halls(entry: Hall, exit: Hall) -> void:
@@ -382,11 +331,6 @@ func link_halls(entry: Hall, exit: Hall) -> void:
 	for hall: Hall in [entry, exit]:
 		Util.clear_listeners(hall, "on_player_toward_exit")
 		Util.clear_listeners(hall, "on_player_toward_entry")
-
-	# Only add to backlink map if this is a true backlink (room article links to target)
-	# and the exit leads to the race target
-	if exit.to_title == _race_target_article:
-		_backlink_map[exit.from_title] = exit.to_title
 
 	exit.on_player_toward_exit.connect(func():
 		if is_instance_valid(exit) and is_instance_valid(entry): _museum._teleport_manager.teleport(exit, entry))
@@ -399,22 +343,6 @@ func link_halls(entry: Hall, exit: Hall) -> void:
 		_museum._teleport_manager.teleport(exit, entry)
 	elif entry.player_in_hall and entry.player_direction == "entry":
 		_museum._teleport_manager.teleport(entry, exit, true)
-
-
-func _link_backlink_to_exit(exhibit: Node, hall: Hall) -> void:
-	if not is_instance_valid(exhibit) or not is_instance_valid(hall):
-		return
-
-	var new_hall: Hall = null
-	for exit: Hall in exhibit.exits:
-		if exit.to_title == hall.to_title:
-			new_hall = exit
-			break
-	if not new_hall and exhibit.has_method("get") and exhibit.entry:
-		Log.error("ExhibitLoader", "could not backlink new hall")
-		new_hall = exhibit.entry
-	if new_hall:
-		link_halls(hall, new_hall)
 
 
 func _cleanup_old_exhibits(new_title: String) -> void:
@@ -431,6 +359,26 @@ func _cleanup_old_exhibits(new_title: String) -> void:
 			break
 
 
+func _show_error_to_player(message: String) -> void:
+	"""Show error message to player via chat system"""
+	var main := get_tree().get_first_node_in_group("main")
+	if main and main.has_method("_show_system_message"):
+		main._show_system_message("❌ " + message)
+	Log.error("ExhibitLoader", message)
+
+
+func _wait_for_items_complete(expected_title: String) -> Dictionary:
+	"""Wait for ItemProcessor.items_complete signal with matching title"""
+	while true:
+		var data: Dictionary = await ItemProcessor.items_complete
+		if data.title == expected_title:
+			return data
+		# Wrong title, keep waiting
+	
+	# This line is never reached, but satisfies Godot's return check
+	return {}
+
+
 func _on_secret_room_fetch_complete(context: Dictionary) -> void:
 	var result: Dictionary = ExhibitFetcher.get_result(context.title)
 	if not result:
@@ -443,13 +391,9 @@ func _on_secret_room_fetch_complete(context: Dictionary) -> void:
 	if secret_slots.is_empty():
 		return
 
-	# Create items from the secret article
+	# Create items from the secret article (async)
 	ItemProcessor.create_items(context.title, result)
-	var data: Dictionary
-	while not data:
-		data = await ItemProcessor.items_complete
-		if data.title != context.title:
-			data = {}
+	var data: Dictionary = await _wait_for_items_complete(context.title)
 
 	var items: Array = data.items
 	var slot_idx: int = 0
@@ -467,6 +411,8 @@ func _on_secret_room_fetch_complete(context: Dictionary) -> void:
 
 	if image_titles.size() > 0:
 		_museum._queue_item_front(context.exhibit_title, ExhibitFetcher.fetch_images.bind(image_titles, null))
+	
+	pass  # Ensure function has explicit end
 
 
 func _add_item_at_slot(exhibit: Node3D, item_data: Dictionary, slot: Array) -> void:
@@ -527,10 +473,13 @@ func _init_item(exhibit: Node3D, item: Node3D, data: Dictionary) -> void:
 			var media_url: String = ""
 			if get_res and get_res.has("url"):
 				media_url = get_res.url
+				Log.info("ExhibitLoader", "Audio URL found for '%s': %s" % [data.get("title", ""), media_url])
+			else:
+				Log.warn("ExhibitLoader", "No audio URL for '%s' - get_res=%s" % [data.get("title", ""), "YES" if get_res else "NO"])
 			item.init(exhibit.title, data.get("text", ""), media_url)
 		else:
 			item.init(data)
-		
+
 		# Check if this painting should be stolen (missing)
 		if data.type == "image":
 			var main: Node = _museum.get_parent()
@@ -551,5 +500,4 @@ func _restore_placed_painting(exhibit: Node3D, exhibit_title: String,
 	# Delegate to PaintingController if available, otherwise build the mesh directly
 	var main: Node = _museum.get_parent()
 	if main and main.has_method("restore_placed_painting"):
-		main.restore_placed_painting(exhibit, exhibit_title, image_title,
-				image_url, wall_position, wall_normal, image_size)
+		main.restore_placed_painting(exhibit, exhibit_title, image_title, image_url, wall_position, wall_normal, image_size)

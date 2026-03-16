@@ -16,6 +16,7 @@ const MAX_PLAYERS := Constants.MAX_PLAYERS
 # tunnel such as playit.gg. ENetMultiplayerPeer uses UDP natively and works
 # with playit.gg out of the box.
 var peer: ENetMultiplayerPeer = null
+var _host_port: int = DEFAULT_PORT  # Track the port we're hosting on
 
 var player_info: Dictionary = {}
 var local_player_name: String = "Player"
@@ -35,6 +36,11 @@ var _saved_player_names: Dictionary = {}  # peer_id -> last known name
 var _keepalive_timer: float = 0.0
 const _KEEPALIVE_INTERVAL: float = 5.0
 
+# Game state validation
+var _state_check_timer: float = 0.0
+const _STATE_CHECK_INTERVAL: float = 10.0  # Check every 10 seconds
+var _local_state_hash: String = ""
+
 
 func _process(delta: float) -> void:
 	if not is_multiplayer_active():
@@ -44,6 +50,13 @@ func _process(delta: float) -> void:
 		_keepalive_timer = 0.0
 		if multiplayer.has_multiplayer_peer() and peer:
 			_send_keepalive.rpc()
+	
+	# Game state validation (server only)
+	if is_hosting:
+		_state_check_timer += delta
+		if _state_check_timer >= _STATE_CHECK_INTERVAL:
+			_validate_game_state()
+			_state_check_timer = 0.0
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -69,6 +82,7 @@ func host_game(port: int = DEFAULT_PORT, dedicated: bool = false) -> Error:
 	multiplayer.multiplayer_peer = peer
 	is_hosting = true
 	is_dedicated_server = dedicated
+	_host_port = port  # Store the port we're hosting on
 
 	if not dedicated:
 		player_info[1] = {
@@ -175,9 +189,7 @@ func get_server_address() -> String:
 
 func _get_host_port() -> int:
 	## Get the port we're hosting on
-	if peer and peer is ENetMultiplayerPeer:
-		return peer.get_peer_port()
-	return DEFAULT_PORT
+	return _host_port
 
 func _get_local_ip() -> String:
 	## Get the local IP address of this machine (LAN IP, not public IP)
@@ -206,6 +218,22 @@ func is_multiplayer_active() -> bool:
 
 func is_server() -> bool:
 	return is_multiplayer_active() and multiplayer.is_server()
+
+func kick_peer(peer_id: int) -> void:
+	"""Kick a player from the game (server only)."""
+	if not is_server():
+		Log.warn("Network", "Cannot kick peer - not server")
+		return
+
+	if peer_id == 1:
+		Log.warn("Network", "Cannot kick host")
+		return
+
+	if peer and peer is ENetMultiplayerPeer:
+		Log.info("Network", "Kicking peer %d" % peer_id)
+		peer.disconnect_peer(peer_id)
+	else:
+		Log.warn("Network", "Cannot kick peer - invalid multiplayer peer")
 
 func get_unique_id() -> int:
 	if is_multiplayer_active():
@@ -420,9 +448,167 @@ func _on_connection_failed() -> void:
 
 func _on_server_disconnected() -> void:
 	Log.info("Network", "Server disconnected")
+	
+	# If we're a client, try to migrate to a new host
+	if not is_hosting and not is_dedicated_server:
+		var connected_peers = _get_connected_peers()
+		if not connected_peers.is_empty():
+			Log.info("Network", "Attempting host migration...")
+			_elect_and_migrate_host(connected_peers)
+			return
+	
+	# Normal cleanup if no migration possible
 	peer = null
 	multiplayer.multiplayer_peer = null
 	player_info.clear()
 	is_hosting = false
 	is_dedicated_server = false
 	server_disconnected.emit()
+
+func _elect_and_migrate_host(connected_peers: Array) -> void:
+	"""Elect a new host from connected peers and migrate"""
+	if connected_peers.is_empty():
+		Log.error("Network", "No peers available for host migration")
+		_cleanup_connection()
+		return
+	
+	# Elect new host (peer with lowest ID = longest connected)
+	var new_host_id = connected_peers[0]
+	Log.info("Network", "Electing peer %d as new host" % new_host_id)
+	
+	# Request host migration from the new host
+	_request_host_migration.rpc_id(new_host_id)
+
+func _get_connected_peers() -> Array:
+	"""Get array of connected peer IDs"""
+	var peers: Array = []
+	if multiplayer.has_multiplayer_peer():
+		for peer_id in multiplayer.get_peers():
+			peers.append(peer_id)
+	return peers
+
+func _cleanup_connection() -> void:
+	"""Clean up connection and emit disconnect"""
+	peer = null
+	multiplayer.multiplayer_peer = null
+	player_info.clear()
+	is_hosting = false
+	is_dedicated_server = false
+	server_disconnected.emit()
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_host_migration() -> void:
+	"""Called by clients to request becoming the new host"""
+	if not is_hosting:
+		return  # Only current host can transfer
+	
+	var requesting_peer = multiplayer.get_remote_sender_id()
+	Log.info("Network", "Transferring host to peer %d" % requesting_peer)
+	
+	# Transfer all game state to new host
+	var game_state = _serialize_game_state()
+	_transfer_host_state.rpc_id(requesting_peer, game_state)
+	
+	# Make them the new host
+	_make_peer_host.rpc_id(requesting_peer)
+	
+	# We become a client now
+	is_hosting = false
+
+@rpc("authority", "call_local", "reliable")
+func _transfer_host_state(game_state: Dictionary) -> void:
+	"""New host receives all game state"""
+	Log.info("Network", "Received host state, becoming host...")
+	_deserialize_game_state(game_state)
+
+@rpc("authority", "call_local", "reliable")
+func _make_peer_host(peer_id: int) -> void:
+	"""Tell a peer they are now the host"""
+	is_hosting = true
+	Log.info("Network", "Now hosting! Peer ID: %d" % peer_id)
+	
+	# Reinitialize as server
+	peer = ENetMultiplayerPeer.new()
+	peer.create_server(_host_port, MAX_PLAYERS)
+	multiplayer.multiplayer_peer = peer
+
+func _serialize_game_state() -> Dictionary:
+	"""Serialize current game state for host migration"""
+	return {
+		"player_info": player_info.duplicate(true),
+		"race_state": _get_race_state(),
+		"timestamp": Time.get_ticks_msec()
+	}
+
+func _deserialize_game_state(state: Dictionary) -> void:
+	"""Restore game state from host migration"""
+	if state.has("player_info"):
+		player_info = state.player_info.duplicate(true)
+	if state.has("race_state"):
+		_set_race_state(state.race_state)
+
+func _get_race_state() -> Dictionary:
+	"""Get current race state for serialization"""
+	if not RaceManager or not RaceManager.has_method("get_state"):
+		return {}
+	return {
+		"state": RaceManager.get_state(),
+		"target": RaceManager.get_target_article() if RaceManager.has_method("get_target_article") else "",
+		"start": RaceManager.get_start_article() if RaceManager.has_method("get_start_article") else ""
+	}
+
+func _set_race_state(state: Dictionary) -> void:
+	"""Restore race state"""
+	if not RaceManager:
+		return
+	# Race state restoration would go here
+	# For now, just log it
+	Log.info("Network", "Restored race state: %s" % str(state))
+
+
+func _validate_game_state() -> void:
+	"""Validate game state across all clients"""
+	if not is_hosting:
+		return
+	
+	# Calculate our local state hash
+	_local_state_hash = _calculate_state_hash()
+	
+	# Request state hashes from all clients
+	for peer_id in _get_connected_peers():
+		_request_state_hash.rpc_id(peer_id)
+
+func _calculate_state_hash() -> String:
+	"""Calculate hash of current game state"""
+	var state := {
+		"player_count": player_info.size(),
+		"race_state": RaceManager.get_state() if RaceManager and RaceManager.has_method("get_state") else 0,
+		"race_target": RaceManager.get_target_article() if RaceManager and RaceManager.has_method("get_target_article") else "",
+		"timestamp": int(Time.get_ticks_msec() / 1000)  # Round to seconds
+	}
+	return str(state.hash())
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_state_hash() -> void:
+	"""Request state hash from a client"""
+	var client_hash = _calculate_state_hash()
+	_send_state_hash.rpc_id(1, multiplayer.get_remote_sender_id(), client_hash)
+
+@rpc("authority", "call_local", "reliable")
+func _send_state_hash(peer_id: int, client_hash: String) -> void:
+	"""Receive state hash from client and compare"""
+	if client_hash != _local_state_hash:
+		Log.warn("Network", "State desync detected for peer %d! Resyncing..." % peer_id)
+		_resync_client(peer_id)
+
+func _resync_client(peer_id: int) -> void:
+	"""Resync a desynchronized client"""
+	var game_state = _serialize_game_state()
+	_send_full_state.rpc_id(peer_id, game_state)
+	Log.info("Network", "Sent full state to peer %d for resync" % peer_id)
+
+@rpc("authority", "call_remote", "reliable")
+func _send_full_state(peer_id: int, game_state: Dictionary) -> void:
+	"""Receive full state from server and resync"""
+	_deserialize_game_state(game_state)
+	Log.info("Network", "Client resync complete")

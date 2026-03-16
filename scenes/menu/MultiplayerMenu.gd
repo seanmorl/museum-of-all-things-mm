@@ -13,7 +13,9 @@ enum MenuState { MAIN, HOST, JOIN, LOBBY }
 var current_state: MenuState = MenuState.MAIN
 var _serif_font: Font = null
 var _panel_style: StyleBoxFlat = null
+var _dedicated_host_btn: Button = null  # unused here, kept for parity
 var _closing: bool = false
+var _background: Control = null
 
 # The single panel node that slides/fades (mirrors PauseMenu's _panel approach)
 @onready var _panel = get_node_or_null("MarginContainer/Panel")
@@ -53,6 +55,7 @@ const _DIVIDERS_BY_CONTAINER := {
 
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
+	_spawn_background()
 
 	# Build panel style identical to PauseMenu / VoteHUD
 	if _inner_panel:
@@ -76,6 +79,20 @@ func _ready() -> void:
 	_load_saved_identity()
 	call_deferred("_build_dividers")
 	_animate_in()
+
+
+func _spawn_background() -> void:
+	## Shared animated background — same script as MainMenu for visual continuity.
+	var bg_script := load("res://scenes/menu/MainMenuBackground.gd")
+	if not bg_script:
+		return
+	_background = Control.new()
+	_background.name        = "Background"
+	_background.set_script(bg_script)
+	_background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_background)
+	move_child(_background, 0)
 
 
 func _on_visibility_changed() -> void:
@@ -522,9 +539,16 @@ func _on_back_pressed() -> void:
 # -- Host menu buttons --------------------------------------------------------
 
 func _on_host_start_pressed() -> void:
-	var port := int(_host_port_input.text)
+	var port_str: String = _host_port_input.text.strip_edges()
+	
+	# Validate port input
+	if not port_str.is_valid_int():
+		_show_error("Port must be a number")
+		return
+	
+	var port: int = int(port_str)
 	if port <= 0 or port > 65535:
-		_show_error("Invalid port number")
+		_show_error("Invalid port number (must be 1-65535)")
 		return
 
 	var host_pronouns := _get_pronouns_from(_host_pronoun_option, _host_pronoun_custom)
@@ -564,19 +588,31 @@ func _on_join_connect_pressed() -> void:
 	var port: int
 
 	if ":" in raw and not raw.begins_with("["):
-		var colon := raw.rfind(":")
+		var colon: int = raw.rfind(":")
 		address = raw.substr(0, colon).strip_edges()
-		port    = int(raw.substr(colon + 1).strip_edges())
+		var port_str: String = raw.substr(colon + 1).strip_edges()
+		
+		# Validate port from address
+		if not port_str.is_valid_int():
+			_show_error("Port in address must be a number")
+			return
+		port = int(port_str)
 	else:
 		address = raw
-		port    = int(_join_port_input.text)
+		var port_str: String = _join_port_input.text.strip_edges()
+		
+		# Validate port input
+		if not port_str.is_valid_int():
+			_show_error("Port must be a number")
+			return
+		port = int(port_str)
 
 	if address.is_empty():
 		_show_error("Please enter an address")
 		return
 
 	if port <= 0 or port > 65535:
-		_show_error("Invalid port number (got %d)" % port)
+		_show_error("Invalid port number (must be 1-65535)")
 		return
 
 	var join_pronouns := _get_pronouns_from(_join_pronoun_option, _join_pronoun_custom)
@@ -586,15 +622,36 @@ func _on_join_connect_pressed() -> void:
 	_save_identity(_host_name_input.text, _join_name_input.text, _join_color_picker.color, join_pronouns)
 
 	%JoinConnectButton.disabled = true
-	_error_label.text    = "Resolving %s..." % address
+	_error_label.text    = "Connecting to %s..." % address
 	_error_label.visible = true
 	# Neutral colour while connecting (not red)
 	_error_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
 
-	var error: Error = await NetworkManager.join_game(address, port)
-
+	# Connect with timeout (10 seconds) - simplified approach
+	var timeout_timer := get_tree().create_timer(10.0)
+	var join_complete := false
+	var error: Error = OK
+	
+	# Start join operation in background
+	var join_task := func():
+		error = await NetworkManager.join_game(address, port)
+		join_complete = true
+	
+	# Start the task
+	join_task.call_deferred()
+	
+	# Wait for completion or timeout
+	while not join_complete and timeout_timer.time_left > 0:
+		await get_tree().process_frame
+	
 	%JoinConnectButton.disabled = false
-
+	
+	if not join_complete:
+		# Timeout
+		NetworkManager.close_connection()
+		_show_error("Connection timed out. Server may be offline or address is incorrect.")
+		return
+	
 	if error != OK:
 		_show_error("Failed to connect: " + error_string(error))
 		return

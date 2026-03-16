@@ -116,9 +116,46 @@ func load_exhibit_for_rider(from_room: String, to_room: String) -> void:
 		# Last resort: load without hall context (uses default hall styling)
 		_rider_loading_exhibits[to_room] = true
 		_exhibit_loader.load_exhibit_for_rider_without_hall(to_room, from_room)
-	
+
 	# Update room title immediately for network sync (even before load completes)
 	_set_current_room_title(to_room)
+	
+	# Schedule validation - if exhibit fails to load, revert to lobby
+	await get_tree().create_timer(2.0).timeout
+	if _rider_loading_exhibits.has(to_room) and not has_exhibit(to_room):
+		# Exhibit failed to load - player might be in void
+		_revert_to_safe_position(to_room)
+
+func _revert_to_safe_position(failed_room: String) -> void:
+	"""When exhibit fails to load, teleport player back to lobby to prevent void falling."""
+	_rider_loading_exhibits.erase(failed_room)
+	
+	# Find all players in the failed room and teleport them to lobby
+	var players = get_tree().get_nodes_in_group("Player")
+	for player in players:
+		if player.has_node("CollisionShape2") and player.has_node("Feet"):
+			# Player has collision - teleport to safe position
+			player.global_position = Vector3(0, 1, 23)  # Start line position
+			player.velocity = Vector3.ZERO
+			if "current_room" in player:
+				player.current_room = "Lobby"
+	
+	# Reset to lobby
+	reset_to_lobby()
+	
+	# Cancel the race - target is unreachable
+	if RaceManager.is_race_active():
+		RaceManager.cancel_race()
+	
+	# Show error message to player
+	print("Museum: Reverted players to lobby after failed load of '%s'" % failed_room)
+	_show_exhibit_load_error(failed_room)
+
+func _show_exhibit_load_error(failed_room: String) -> void:
+	"""Display error message when exhibit fails to load."""
+	var main = get_tree().get_first_node_in_group("main")
+	if main and main.has_method("_show_error_message"):
+		main._show_error_message("Failed to load exhibit: " + failed_room + "\n\nRace cancelled. Please try again.")
 
 
 func _find_hall_for_room_transition(from_room: String, to_room: String) -> Hall:
@@ -289,6 +326,36 @@ func get_current_room() -> String:
 	return _current_room_title
 
 
+func hint_preload_nearby_exhibits(from_position: Vector3, extra_radius: float = 0.0) -> void:
+	## Called by MinimapHUD when the player zooms out, so rooms that are
+	## visible on the map but not yet loaded start generating.
+	## Walks all exit halls reachable from the current room and fires their
+	## loader triggers if the player is within (normal_range + extra_radius).
+	if not _exhibit_loader:
+		return
+	var check_radius: float = max_teleport_distance + extra_radius
+	var lobby: Node = get_node_or_null("Lobby")
+
+	# Collect all halls from loaded exhibits + lobby
+	var halls_to_check: Array = []
+	if lobby and "exits" in lobby:
+		halls_to_check.append_array(lobby.exits)
+	for exhibit_data in _exhibit_loader.get_exhibits().values():
+		var exhibit: Node = exhibit_data.get("exhibit")
+		if is_instance_valid(exhibit) and "exits" in exhibit:
+			halls_to_check.append_array(exhibit.exits)
+
+	for hall in halls_to_check:
+		if not is_instance_valid(hall):
+			continue
+		if hall.to_title == "" or _exhibits.has(hall.to_title):
+			continue  # Already loaded or no destination
+		# Check if the hall entrance is within view range
+		var hall_pos: Vector3 = hall.global_position
+		if from_position.distance_to(hall_pos) <= check_radius:
+			_exhibit_loader.load_exhibit_from_exit(hall)
+
+
 func _get_exhibit_mood(room_title: String) -> int:
 	if _exhibits.has(room_title) and _exhibits[room_title].has("mood"):
 		return _exhibits[room_title].mood
@@ -308,9 +375,6 @@ func reset_to_lobby() -> void:
 
 
 func _set_current_room_title(title: String) -> void:
-	if title == "Lobby":
-		_exhibit_loader.clear_backlink_map()
-
 	_current_room_title = title
 	WorkQueue.set_current_exhibit(title)
 	SettingsEvents.emit_set_current_room(title)
@@ -330,9 +394,18 @@ func _set_current_room_title(title: String) -> void:
 	if NetworkManager.is_multiplayer_active():
 		NetworkManager.set_local_player_room(title)
 
-	# Race win detection
+	# Race win detection - only trigger if exhibit actually loaded successfully
 	if RaceManager.is_race_active() and title == RaceManager.get_target_article():
-		RaceManager.notify_article_reached(NetworkManager.get_unique_id(), title)
+		# Verify the exhibit exists and has content before allowing win
+		if has_exhibit(title):
+			var exhibit_data = _exhibits[title]
+			if exhibit_data and exhibit_data.get("exhibit"):
+				# Exhibit loaded successfully - valid win
+				RaceManager.notify_article_reached(NetworkManager.get_unique_id(), title)
+			else:
+				print("Museum: Blocked false win - exhibit '%s' has no content" % title)
+		else:
+			print("Museum: Blocked false win - exhibit '%s' not loaded" % title)
 
 	var mood: int = _get_exhibit_mood(_current_room_title)
 	_tween_fog_color(ExhibitStyle.gen_fog(_current_room_title), mood)
@@ -361,6 +434,20 @@ func _tween_fog_color(fog_color: Color, mood: int = ExhibitMood.Mood.DEFAULT) ->
 	var target_ambient_energy: float = ExhibitMood.get_adjusted_ambient_energy(mood, is_dark)
 	_fog_tween.tween_property(environment, "ambient_light_color", target_ambient_color, 1.0)
 	_fog_tween.tween_property(environment, "ambient_light_energy", target_ambient_energy, 1.0)
+
+	# Per-room glow intensity — varies with mood so each exhibit feels distinct.
+	var target_glow: float = _get_glow_for_mood(mood)
+	GraphicsManager.tween_room_glow(target_glow, 1.2)
+
+
+func _get_glow_for_mood(mood: int) -> float:
+	## Maps exhibit mood to a target glow intensity.
+	## Art / creative exhibits glow more; science / tech exhibits glow less.
+	match mood:
+		ExhibitMood.Mood.DEFAULT: return 1.0
+		_:
+			# Fall back gracefully if extra moods are added later.
+			return 1.0
 
 
 func _update_lighting() -> void:
@@ -442,14 +529,12 @@ func _on_loader_body_entered(body: Node, hall: Hall, backlink: bool = false) -> 
 		return
 
 	if body.is_in_group(_GROUP_PLAYER):
-		# In multiplayer, only the local player triggers transitions
 		if NetworkManager.is_multiplayer_active() and not _multiplayer_sync.is_local_player(body):
 			return
 
 		if NetworkManager.is_multiplayer_active():
 			_multiplayer_sync.request_multiplayer_transition(hall, backlink)
 		else:
-			# Single player mode - direct transition
 			if backlink:
 				_load_exhibit_from_entry(hall)
 			else:
@@ -475,10 +560,12 @@ func sync_to_exhibit(exhibit_title: String) -> void:
 # =============================================================================
 func _process(delta: float) -> void:
 	if ThemeManager.disco_mode:
-		_disco_hue = fmod(_disco_hue + delta * 0.5, 1.0)
+		## Respect the "reduce motion" accessibility setting by capping hue speed.
+		var hue_speed: float = 0.08 if GraphicsManager.reduce_motion else 0.5
+		_disco_hue = fmod(_disco_hue + delta * hue_speed, 1.0)
 		var disco_color = Color.from_hsv(_disco_hue, 0.8, 0.8)
 		get_node("WorldEnvironment").environment.ambient_light_color = disco_color
-		get_node("WorldEnvironment").environment.ambient_light_energy = 0.6 # Brighter during disco!
+		get_node("WorldEnvironment").environment.ambient_light_energy = 0.6
 
 	var queue: Array = _global_item_queue_map.get(_current_room_title, [])
 	if queue.is_empty():
@@ -516,7 +603,19 @@ func _queue_item_front(title: String, item: Variant) -> void:
 func _queue_item(title: String, item: Variant, front: bool = false) -> void:
 	if not _global_item_queue_map.has(title):
 		_global_item_queue_map[title] = []
-	if typeof(item) == TYPE_ARRAY:
+	if typeof(item) == TYPE_CALLABLE:
+		# Wrap callable in lambda to check instance validity before calling
+		var original_callable: Callable = item as Callable
+		var safe_callable: Callable = func():
+			# Check if the first bound object (exhibit) is still valid
+			var obj: Object = original_callable.get_object()
+			if is_instance_valid(obj):
+				original_callable.call()
+		if not front:
+			_global_item_queue_map[title].append(safe_callable)
+		else:
+			_global_item_queue_map[title].push_front(safe_callable)
+	elif typeof(item) == TYPE_ARRAY:
 		_global_item_queue_map[title].append_array(item)
 	elif not front:
 		_global_item_queue_map[title].append(item)

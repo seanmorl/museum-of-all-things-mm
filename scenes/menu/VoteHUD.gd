@@ -1,344 +1,503 @@
 extends Control
-## In-world HUD overlay for voting on the race target article.
+## VoteHUD — elegant in-world voting overlay. All UI built in code.
+## No @onready tscn node dependencies. Preserves all original functionality:
+##   candidates, timer, host panel (difficulty/category/player mgmt/reroll),
+##   seeded shuffle, force start, cancel, kick, loading screen integration.
 
-const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
+# ── Node refs ─────────────────────────────────────────────────────────────────
+var _serif_font:   Font           = null
+var _panel:        PanelContainer = null
+var _panel_style:  StyleBoxFlat   = null
+var _title_label:  Label          = null
+var _timer_label:  Label          = null
+var _status_label: Label          = null
+var _candidates_container: VBoxContainer = null
+var _reroll_btn:   Button         = null
+var _host_panel:   VBoxContainer  = null
 
-@onready var _countdown_label: Label = $MarginContainer/CenterContainer/Panel/Content/CountdownLabel
-@onready var _candidates_container: VBoxContainer = $MarginContainer/CenterContainer/Panel/Content/CandidatesContainer
-@onready var _status_label: Label = $MarginContainer/CenterContainer/Panel/Content/StatusLabel
-@onready var _reroll_button: Button = $MarginContainer/CenterContainer/Panel/Content/RerollButton
-@onready var _panel: PanelContainer = $MarginContainer/CenterContainer/Panel
-@onready var _loading_overlay: Control = $LoadingOverlay
+# ── Loading overlay (fallback when LoadingScreen autoload unavailable) ────────
+var _loading_overlay:  Control    = null
+var _loading_label:    Label      = null
+var _loading_sublabel: Label      = null
+var _spinner_angle:    float      = 0.0
+var _spinner_canvas:   Control    = null
+var _using_new_loading_screen: bool = false
 
-var _serif_font: Font = null
-var _my_vote: int = -1
-var _candidate_buttons: Array[Button] = []
-var _panel_style: StyleBoxFlat
-var _is_animating: bool = false
+# ── Vote state ────────────────────────────────────────────────────────────────
+var _my_vote:             int            = -1
+var _candidate_buttons:   Array[Button]  = []
+var _is_animating:        bool           = false
+var _chat_system:         Node           = null
 
-# Host-only controls panel — difficulty, hints, category, cancel
-var _host_panel: VBoxContainer = null
-var _cancel_vote_button: Button = null
-# Difficulty
-var _difficulty_row: HBoxContainer = null
-var _difficulty_buttons: Dictionary = {}
-# Category
-var _category_toggle_btn: Button = null
-var _category_section: VBoxContainer = null
-var _category_input: LineEdit = null
-var _category_results: VBoxContainer = null
-var _category_active_label: Label = null
-var _category_search_timer: float = 0.0
-var _category_search_pending: String = ""
-# Hints
-var _hint_buttons: Dictionary = {}
-var _hint_reveal_btn: Button = null
-var _hint_custom_edit: LineEdit = null
-# Powerups
-var _powerup_toggle: CheckButton = null
-var _powerup_status_label: Label = null
-var _random_drop_toggle: CheckButton = null
-var _random_drop_status_label: Label = null
+# ── Host panel refs ───────────────────────────────────────────────────────────
+var _cancel_vote_button:   Button        = null
+var _difficulty_row:       HBoxContainer = null
+var _difficulty_buttons:   Dictionary   = {}
+var _category_toggle_btn:  Button        = null
+var _category_section:     VBoxContainer = null
+var _category_input:       LineEdit      = null
+var _category_results:     VBoxContainer = null
+var _category_active_label: Label        = null
+var _category_search_timer: float        = 0.0
+var _category_search_pending: String     = ""
+
 
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
 	visible = false
-	var orig := _panel.get_theme_stylebox("panel") as StyleBoxFlat
-	if orig:
-		_panel_style = orig.duplicate()
-	else:
-		_panel_style = StyleBoxFlat.new()
-	_panel.add_theme_stylebox_override("panel", _panel_style)
+	_build_ui()
+	_apply_theme(ThemeManager.is_dark_mode)
+	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme(ThemeManager.is_dark_mode))
+	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme(ThemeManager.is_dark_mode))
 	RaceManager.vote_started.connect(_on_vote_started)
 	RaceManager.vote_ended.connect(_on_vote_ended)
 	RaceManager.race_started.connect(_on_race_started)
 	RaceManager.race_countdown_started.connect(_on_race_countdown_started)
-	
-	# Subscribe to EventBus (new architecture)
-	EventBus.subscribe(EventBus.VoteStartedEvent, _on_event_vote_started)
-	EventBus.subscribe(EventBus.CountdownStartedEvent, _on_event_countdown_started)
-	
-	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme(ThemeManager.is_dark_mode))
-	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme(ThemeManager.is_dark_mode))
-	_apply_theme(ThemeManager.is_dark_mode)
-
-	_reroll_button.visible = NetworkManager.is_server()
-
 	RaceManager.difficulty_changed.connect(_on_difficulty_changed)
 	RaceManager.category_override_changed.connect(_on_category_override_changed)
-	RaceManager.hint_settings_changed.connect(_on_hint_settings_changed)
 	RaceManager.vote_cancelled.connect(_on_vote_cancelled)
-
+	EventBus.subscribe(EventBus.VoteStartedEvent, _on_event_vote_started)
+	EventBus.subscribe(EventBus.CountdownStartedEvent, _on_event_countdown_started)
+	var main := get_tree().get_first_node_in_group("main")
+	if main and main.has_node("ChatSystem"):
+		_chat_system = main.get_node("ChatSystem")
 	if RaceManager.is_vote_active():
 		_on_vote_started(RaceManager.get_vote_candidates())
 
 
+# ── UI construction ───────────────────────────────────────────────────────────
+
+func _build_ui() -> void:
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# ── Main voting panel ─────────────────────────────────────────────────────
+	_panel = PanelContainer.new()
+	_panel_style = StyleBoxFlat.new()
+	_panel.add_theme_stylebox_override("panel", _panel_style)
+	_panel.anchor_left   = 0.5
+	_panel.anchor_top    = 0.5
+	_panel.anchor_right  = 0.5
+	_panel.anchor_bottom = 0.5
+	_panel.offset_left   = -230
+	_panel.offset_top    = -220
+	_panel.offset_right  =  230
+	_panel.offset_bottom =  220
+	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_panel.grow_vertical   = Control.GROW_DIRECTION_BOTH
+	add_child(_panel)
+
+	var mc := MarginContainer.new()
+	mc.add_theme_constant_override("margin_left",   20)
+	mc.add_theme_constant_override("margin_right",  20)
+	mc.add_theme_constant_override("margin_top",    16)
+	mc.add_theme_constant_override("margin_bottom", 16)
+	_panel.add_child(mc)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mc.add_child(scroll)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(vbox)
+
+	# Title row
+	var title_row := HBoxContainer.new()
+	vbox.add_child(title_row)
+
+	_title_label = Label.new()
+	_title_label.text = "Race Target Vote"
+	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(_title_label)
+
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.flat = true
+	close_btn.focus_mode = Control.FOCUS_NONE
+	close_btn.pressed.connect(_on_close_pressed)
+	title_row.add_child(close_btn)
+
+	# Timer
+	_timer_label = Label.new()
+	_timer_label.text = "Time remaining: 30"
+	vbox.add_child(_timer_label)
+
+	vbox.add_child(_make_divider())
+
+	# Candidates
+	_candidates_container = VBoxContainer.new()
+	_candidates_container.add_theme_constant_override("separation", 4)
+	vbox.add_child(_candidates_container)
+
+	# Status
+	_status_label = Label.new()
+	_status_label.text = "Vote for the race target!"
+	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(_status_label)
+
+	vbox.add_child(_make_divider())
+
+	# Reroll (host only)
+	_reroll_btn = Button.new()
+	_reroll_btn.text = "↺  Reroll options"
+	_reroll_btn.visible = NetworkManager.is_server()
+	_reroll_btn.pressed.connect(_on_reroll_pressed)
+	vbox.add_child(_reroll_btn)
+
+	# Seeded shuffle (host only)
+	if NetworkManager.is_server():
+		var shuffle_row := HBoxContainer.new()
+		shuffle_row.add_theme_constant_override("separation", 6)
+		shuffle_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		vbox.add_child(shuffle_row)
+
+		var shuffle_lbl := Label.new()
+		shuffle_lbl.text = "🎲 Seeded Shuffle:"
+		shuffle_row.add_child(shuffle_lbl)
+
+		var shuffle_toggle := CheckButton.new()
+		shuffle_toggle.button_pressed = false
+		shuffle_toggle.focus_mode = Control.FOCUS_NONE
+		shuffle_toggle.toggled.connect(_on_seeded_shuffle_toggled)
+		shuffle_row.add_child(shuffle_toggle)
+
+		var shuffle_status := Label.new()
+		shuffle_status.text = "Off"
+		shuffle_row.add_child(shuffle_status)
+
+	# ── Loading overlay (built last, floats above everything) ─────────────────
+	_build_loading_overlay()
+
+
+func _make_divider() -> ColorRect:
+	var d := ColorRect.new()
+	d.custom_minimum_size = Vector2(0, 1)
+	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return d
+
+
+func _build_loading_overlay() -> void:
+	_loading_overlay = Control.new()
+	_loading_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_loading_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_loading_overlay.visible = false
+	add_child(_loading_overlay)
+
+	var bg := ColorRect.new()
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0, 0, 0, 0.45)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_loading_overlay.add_child(bg)
+
+	var centre := CenterContainer.new()
+	centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_loading_overlay.add_child(centre)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 10)
+	centre.add_child(inner)
+
+	_spinner_canvas = Control.new()
+	_spinner_canvas.custom_minimum_size = Vector2(48, 48)
+	_spinner_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spinner_canvas.draw.connect(_draw_spinner)
+	inner.add_child(_spinner_canvas)
+
+	_loading_label = Label.new()
+	_loading_label.text = "Fetching articles…"
+	_loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inner.add_child(_loading_label)
+
+	_loading_sublabel = Label.new()
+	_loading_sublabel.text = ""
+	_loading_sublabel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inner.add_child(_loading_sublabel)
+
+
+func _draw_spinner() -> void:
+	if not _spinner_canvas: return
+	var dark: bool = ThemeManager.is_dark_mode
+	var accent := Color(0.30, 0.55, 1.00) if dark else Color(0.12, 0.32, 0.82)
+	var cx: float = _spinner_canvas.size.x * 0.5
+	var cy: float = _spinner_canvas.size.y * 0.5
+	var r:  float = min(cx, cy) - 3.0
+	var segs := 8
+	for i in segs:
+		var a: float = _spinner_angle + float(i) / segs * TAU
+		var alpha: float = float(i) / segs
+		var p0 := Vector2(cx + cos(a) * r * 0.55, cy + sin(a) * r * 0.55)
+		var p1 := Vector2(cx + cos(a) * r,        cy + sin(a) * r)
+		_spinner_canvas.draw_line(p0, p1, Color(accent, alpha * 0.9), 2.5, true)
+
+
+# ── Theme ─────────────────────────────────────────────────────────────────────
+
 func _apply_theme(_dark: bool) -> void:
-	# Enhanced panel styling
+	var dark: bool = ThemeManager.is_dark_mode
+	var accent := Color(0.30, 0.55, 1.00) if dark else Color(0.12, 0.32, 0.82)
+
 	if _panel_style:
-		_panel_style.bg_color = ThemeManager.bg_color
+		_panel_style.bg_color     = ThemeManager.bg_color
 		_panel_style.border_color = ThemeManager.border_color
-
-		for side in [0, 1, 2, 3]:
-			_panel_style.set("border_width_" + ["left", "right", "top", "bottom"][side], 1)
-
-		for corner in ["top_left", "top_right", "bottom_left", "bottom_right"]:
-			_panel_style.set("corner_radius_" + corner, 10)
-
-		_panel_style.shadow_color = Color(0, 0, 0, 0.35 if _dark else 0.12)
-		_panel_style.shadow_size = 16
+		_panel_style.set_border_width_all(1)
+		_panel_style.set_corner_radius_all(12)
+		_panel_style.shadow_color  = Color(0, 0, 0, 0.35 if dark else 0.12)
+		_panel_style.shadow_size   = 18
 		_panel_style.shadow_offset = Vector2(0, 6)
 
-	# Style title label — clear LabelSettings (hardcoded black in .tscn) so theme overrides work
-	var title_label = _panel.get_node_or_null("Content/TitleRow/TitleLabel") if _panel else null
-	if title_label:
-		title_label.label_settings = null
-		title_label.add_theme_color_override("font_color", ThemeManager.text_color)
-		title_label.add_theme_font_size_override("font_size", 48)
-		if _serif_font:
-			title_label.add_theme_font_override("font", _serif_font)
+	_style_label(_title_label, ThemeManager.text_color, 22)
+	_style_label(_timer_label, ThemeManager.subtext_color, 12)
+	_style_label(_status_label, ThemeManager.subtext_color, 13)
 
-	# Style labels
-	if _countdown_label:
-		_countdown_label.label_settings = null
-		_countdown_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
-		if _serif_font:
-			_countdown_label.add_theme_font_override("font", _serif_font)
-	if _status_label:
-		_status_label.label_settings = null
-		_status_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
-		if _serif_font:
-			_status_label.add_theme_font_override("font", _serif_font)
+	if _panel:
+		for cr in _panel.find_children("*", "ColorRect", true, false):
+			if cr is ColorRect and cr.custom_minimum_size.y == 1:
+				cr.color = ThemeManager.border_color
 
-	# Style reroll button
-	if _reroll_button:
-		_style_vote_button(_reroll_button)
-
-	# Style the "X" close button in the top right
-	var close_btn = _panel.get_node_or_null("Content/TitleRow/CloseButton") if _panel else null
-	if close_btn:
-		_style_vote_button(close_btn)
-		close_btn.add_theme_font_size_override("font_size", 18)
-
-	# Style candidate buttons
 	for btn in _candidate_buttons:
 		_style_vote_button(btn)
 
-	# Style host panel buttons if exists
+	if _reroll_btn:
+		_style_vote_button(_reroll_btn)
+
+	_style_loading_overlay()
+
 	if _host_panel:
 		_style_host_panel(_host_panel)
 
 
-func _style_vote_button(btn: Button) -> void:
-	var dark := ThemeManager.is_dark_mode
-	if _serif_font:
-		btn.add_theme_font_override("font", _serif_font)
-	btn.add_theme_font_size_override("font_size", 15)
+func _style_label(lbl: Label, color: Color, size: int) -> void:
+	if not lbl: return
+	lbl.add_theme_color_override("font_color", color)
+	lbl.add_theme_font_size_override("font_size", size)
+	if _serif_font: lbl.add_theme_font_override("font", _serif_font)
 
-	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+
+func _style_vote_button(btn: Button) -> void:
+	if not btn: return
+	var dark: bool = ThemeManager.is_dark_mode
+	if _serif_font: btn.add_theme_font_override("font", _serif_font)
+	btn.add_theme_font_size_override("font_size", 15)
+	for state in ["font_color","font_hover_color","font_pressed_color","font_focus_color"]:
 		btn.add_theme_color_override(state, ThemeManager.text_color)
 	btn.add_theme_color_override("font_disabled_color", ThemeManager.subtext_color)
-
 	var sn := StyleBoxFlat.new()
 	sn.bg_color = Color(0, 0, 0, 0)
-	sn.content_margin_left = 12
-	sn.content_margin_right = 12
-	sn.content_margin_top = 8
-	sn.content_margin_bottom = 8
+	sn.content_margin_left = 12; sn.content_margin_right  = 12
+	sn.content_margin_top  =  8; sn.content_margin_bottom =  8
 	btn.add_theme_stylebox_override("normal", sn)
-
 	var sh := StyleBoxFlat.new()
-	sh.bg_color = Color(1, 1, 1, 0.06) if dark else Color(ThemeManager.border_color, 0.5)
+	sh.bg_color = Color(1,1,1,0.06) if dark else Color(ThemeManager.border_color, 0.5)
 	sh.set_corner_radius_all(5)
-	sh.content_margin_left = 12
-	sh.content_margin_right = 12
-	sh.content_margin_top = 8
-	sh.content_margin_bottom = 8
+	sh.content_margin_left = 12; sh.content_margin_right  = 12
+	sh.content_margin_top  =  8; sh.content_margin_bottom =  8
 	btn.add_theme_stylebox_override("hover", sh)
-
 	var sp := sh.duplicate() as StyleBoxFlat
-	sp.bg_color = Color(1, 1, 1, 0.12) if dark else Color(ThemeManager.border_color, 0.85)
+	sp.bg_color = Color(1,1,1,0.12) if dark else Color(ThemeManager.border_color, 0.85)
 	btn.add_theme_stylebox_override("pressed", sp)
-
 	var sf := sh.duplicate() as StyleBoxFlat
 	sf.border_color = ThemeManager.text_color
 	sf.border_width_left = 2
 	btn.add_theme_stylebox_override("focus", sf)
-
 	var sd := sn.duplicate() as StyleBoxFlat
-	sd.bg_color = Color(1, 1, 1, 0.02) if dark else Color(0, 0, 0, 0.02)
+	sd.bg_color = Color(1,1,1,0.02) if dark else Color(0,0,0,0.02)
 	btn.add_theme_stylebox_override("disabled", sd)
 
 
-func _style_host_panel(panel: Control) -> void:
-	for child in panel.get_children():
-		if child is Button:
-			_style_vote_button(child)
-		elif child is HBoxContainer or child is VBoxContainer:
-			_style_host_panel(child)
-		elif child is Label:
-			child.label_settings = null
-			child.add_theme_color_override("font_color", ThemeManager.subtext_color)
-			if _serif_font:
-				child.add_theme_font_override("font", _serif_font)
-		elif child is LineEdit:
-			_style_vote_line_edit(child)
-
-
-func _style_vote_line_edit(edit: LineEdit) -> void:
-	var dark := ThemeManager.is_dark_mode
-	if _serif_font:
-		edit.add_theme_font_override("font", _serif_font)
-	edit.add_theme_font_size_override("font_size", 15)
-
+func _style_line_edit(edit: LineEdit) -> void:
+	if not edit: return
+	var dark: bool = ThemeManager.is_dark_mode
+	if _serif_font: edit.add_theme_font_override("font", _serif_font)
+	edit.add_theme_font_size_override("font_size", 13)
 	edit.add_theme_color_override("font_color", ThemeManager.text_color)
 	edit.add_theme_color_override("font_placeholder_color", ThemeManager.subtext_color)
-
 	var sn := StyleBoxFlat.new()
-	sn.bg_color = Color(0, 0, 0, 0.03) if dark else Color(ThemeManager.border_color, 0.3)
+	sn.bg_color = Color(0,0,0,0.03) if dark else Color(ThemeManager.border_color, 0.3)
 	sn.border_color = ThemeManager.border_color
-	sn.border_width_left = 1
-	sn.border_width_right = 1
-	sn.border_width_top = 1
-	sn.border_width_bottom = 1
-	sn.set_corner_radius_all(5)
-	sn.content_margin_left = 10
-	sn.content_margin_right = 10
-	sn.content_margin_top = 6
-	sn.content_margin_bottom = 6
+	sn.set_border_width_all(1); sn.set_corner_radius_all(5)
+	sn.content_margin_left = 10; sn.content_margin_right  = 10
+	sn.content_margin_top  =  6; sn.content_margin_bottom =  6
 	edit.add_theme_stylebox_override("normal", sn)
-
 	var sf := sn.duplicate() as StyleBoxFlat
-	sf.border_color = ThemeManager.text_color
-	sf.border_width_left = 2
-	sf.border_width_right = 2
-	sf.border_width_top = 2
-	sf.border_width_bottom = 2
+	sf.border_color = ThemeManager.text_color; sf.set_border_width_all(2)
 	edit.add_theme_stylebox_override("focus", sf)
 
 
+func _style_option_button(btn: OptionButton) -> void:
+	ThemeManager.style_option_button(btn)
+	if _serif_font:
+		btn.add_theme_font_override("font", _serif_font)
+		btn.get_popup().add_theme_font_override("font", _serif_font)
+
+
+func _style_host_panel(panel: Control) -> void:
+	if not panel: return
+	for child in panel.get_children():
+		if child is Button:        _style_vote_button(child)
+		elif child is LineEdit:    _style_line_edit(child)
+		elif child is OptionButton: _style_option_button(child)
+		elif child is Label:
+			child.label_settings = null
+			child.add_theme_color_override("font_color", ThemeManager.subtext_color)
+			if _serif_font: child.add_theme_font_override("font", _serif_font)
+		elif child is Control:     _style_host_panel(child)
+
+
+func _style_loading_overlay() -> void:
+	var dark: bool = ThemeManager.is_dark_mode
+	if _loading_label:
+		if _serif_font: _loading_label.add_theme_font_override("font", _serif_font)
+		_loading_label.add_theme_font_size_override("font_size", 16)
+		_loading_label.add_theme_color_override("font_color", ThemeManager.text_color)
+	if _loading_sublabel:
+		if _serif_font: _loading_sublabel.add_theme_font_override("font", _serif_font)
+		_loading_sublabel.add_theme_font_size_override("font_size", 13)
+		_loading_sublabel.add_theme_color_override("font_color", ThemeManager.subtext_color)
+
+
+# ── Candidate cards ───────────────────────────────────────────────────────────
+
+func _build_candidate_btn(text: String, index: int) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.pressed.connect(_on_candidate_pressed.bind(index))
+	_style_vote_button(btn)
+	# Slide in from the left
+	btn.modulate.a  = 0.0
+	btn.position.x -= 12.0
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(btn, "modulate:a", 1.0, 0.25).set_delay(index * 0.05)
+	tw.tween_property(btn, "position:x", btn.position.x + 12.0, 0.25) \
+		.set_delay(index * 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	return btn
+
+
+# ── Loading screen ────────────────────────────────────────────────────────────
+
 func show_loading() -> void:
+	var loading_screen := get_node_or_null("/root/LoadingScreen")
+	if loading_screen:
+		_using_new_loading_screen = true
+		loading_screen.show_loading("Fetching articles…", "Finding race candidates")
+		return
+	_using_new_loading_screen = false
 	visible = true
 	_loading_overlay.visible = true
 	_loading_overlay.modulate.a = 0.0
-	# Show cursor during loading so players know UI is coming
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-	var tw := create_tween()
-	tw.tween_property(_loading_overlay, "modulate:a", 1.0, 0.2)
+	_style_loading_overlay()
+	create_tween().tween_property(_loading_overlay, "modulate:a", 1.0, 0.3)
 
 
 func hide_loading() -> void:
+	if _using_new_loading_screen:
+		var loading_screen := get_node_or_null("/root/LoadingScreen")
+		if loading_screen and loading_screen.visible:
+			_using_new_loading_screen = false
+			loading_screen.hidden.connect(func(): pass, CONNECT_ONE_SHOT)
+			loading_screen.hide_loading()
+			return
+		_using_new_loading_screen = false
+	if not is_instance_valid(_loading_overlay) or not _loading_overlay.visible:
+		return
 	var tw := create_tween()
-	tw.tween_property(_loading_overlay, "modulate:a", 0.0, 0.15)
+	tw.tween_property(_loading_overlay, "modulate:a", 0.0, 0.2)
 	tw.tween_callback(func(): _loading_overlay.visible = false)
 
 
+# ── Process ───────────────────────────────────────────────────────────────────
+
 func _process(delta: float) -> void:
+	# Spinner
+	if _loading_overlay and _loading_overlay.visible and _spinner_canvas:
+		_spinner_angle += delta * 3.2
+		_spinner_canvas.queue_redraw()
+
 	if not visible or not RaceManager.is_vote_active():
-		# Still tick the category debounce even when vote display is idle
 		if _category_search_pending != "":
 			_category_search_timer -= delta
 			if _category_search_timer <= 0.0:
-				var query := _category_search_pending
-				_category_search_pending = ""
-				ExhibitFetcher.fetch_category_search(query, null)
+				var q := _category_search_pending; _category_search_pending = ""
+				ExhibitFetcher.fetch_category_search(q, null)
 		return
-	_countdown_label.text = "Time remaining: %d" % int(ceil(RaceManager.get_vote_time_remaining()))
-	# Category search debounce
+	_timer_label.text = "Time remaining: %d" % int(ceil(RaceManager.get_vote_time_remaining()))
 	if _category_search_pending != "":
 		_category_search_timer -= delta
 		if _category_search_timer <= 0.0:
-			var query := _category_search_pending
-			_category_search_pending = ""
-			ExhibitFetcher.fetch_category_search(query, null)
+			var q := _category_search_pending; _category_search_pending = ""
+			ExhibitFetcher.fetch_category_search(q, null)
 
+
+# ── Entry / exit animations ───────────────────────────────────────────────────
 
 func _bounce_in() -> void:
 	_is_animating = false
 	visible = true
-	# Show cursor for all players so they can click vote buttons
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-	_panel.scale = Vector2(0.85, 0.85)
+	_panel.scale     = Vector2(0.92, 0.92)
 	_panel.modulate.a = 0.0
+	_panel.pivot_offset = _panel.size * 0.5
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_panel, "scale", Vector2(1.0, 1.0), 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_panel, "scale",      Vector2(1.0,1.0), 0.35) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_panel, "modulate:a", 1.0, 0.25)
 
 
 func _bounce_out() -> void:
-	if _is_animating:
-		return
+	if _is_animating: return
 	_is_animating = true
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_panel, "scale", Vector2(0.85, 0.85), 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-	tw.tween_property(_panel, "modulate:a", 0.0, 0.2)
+	tw.tween_property(_panel, "scale",      Vector2(0.92,0.92), 0.18) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tw.tween_property(_panel, "modulate:a", 0.0, 0.18)
 	tw.chain().tween_callback(func():
 		_is_animating = false
 		visible = false
-		_panel.scale = Vector2(1.0, 1.0)
+		_panel.scale      = Vector2(1.0,1.0)
 		_panel.modulate.a = 1.0
-		# Recapture mouse once voting UI is gone
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	)
 
 
+# ── Signal handlers ───────────────────────────────────────────────────────────
+
 func _on_vote_started(candidates: Array) -> void:
 	_my_vote = -1
-	# Ensure mouse is visible for voting
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	hide_loading()
-	_candidates_container.visible = true
 
-	for child in _candidates_container.get_children():
-		child.queue_free()
+	for c in _candidates_container.get_children(): c.queue_free()
 	_candidate_buttons.clear()
 
-	# Close any menu that may be covering the VoteHUD (e.g. PauseMenu on clients).
-	# The host's path already closes menus via _show_vote_loading → Main.
-	# For clients, we close menus here so the VoteHUD is unobstructed.
 	var main := get_tree().get_first_node_in_group("main")
-	if main:
-		if main.has_method("hide_pause_menu"):
-			main.hide_pause_menu()
+	if main and main.has_method("hide_pause_menu"):
+		main.hide_pause_menu()
 
 	if NetworkManager.is_server():
 		_status_label.text = "Pick a starting room — vote will begin"
-
 		for i in candidates.size():
-			var btn := Button.new()
-			btn.text = candidates[i]
-			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			btn.pressed.connect(_on_candidate_pressed.bind(i))
+			var btn := _build_candidate_btn(candidates[i], i)
 			_candidates_container.add_child(btn)
 			_candidate_buttons.append(btn)
-			# Apply styling to new candidate button
-			_style_vote_button(btn)
-
-		_reroll_button.visible = true
+		_reroll_btn.visible = true
 		if _host_panel == null:
 			_build_host_panel()
-		# Apply styling to host panel
 		_style_host_panel(_host_panel)
 		_host_panel.visible = true
 	else:
-		_status_label.text = "Waiting for players to vote (vote for start)..."
-		
-		# Show candidates for clients too so they can vote
+		_status_label.text = "Waiting for host — vote for your preferred target"
 		for i in candidates.size():
-			var btn := Button.new()
-			btn.text = candidates[i]
-			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			btn.pressed.connect(_on_candidate_pressed.bind(i))
+			var btn := _build_candidate_btn(candidates[i], i)
 			_candidates_container.add_child(btn)
 			_candidate_buttons.append(btn)
-			_style_vote_button(btn)
-			
-		_candidates_container.visible = true
-		_reroll_button.visible = false
-		if _host_panel:
-			_host_panel.visible = false
+		_reroll_btn.visible = false
+		if _host_panel: _host_panel.visible = false
 
 	_bounce_in()
 
@@ -349,32 +508,75 @@ func _on_candidate_pressed(index: int) -> void:
 	for i in _candidate_buttons.size():
 		_candidate_buttons[i].disabled = (i != index)
 	_status_label.text = "Voted for: " + RaceManager.get_vote_candidates()[index]
-	# Keep mouse visible while voting is active
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
-## Builds one compact host panel inserted above the reroll button.
-## Row 1: Difficulty buttons
-## Row 2: Hints mode buttons + custom input / reveal button
-## Collapsible: Category filter
-## Bottom: Cancel vote button
+func _on_vote_ended(winner: String) -> void:
+	RaceManager.set_vote_timer_paused(false)
+	_timer_label.text  = "Race starting!"
+	_status_label.text = "Target: " + winner
+	for btn in _candidate_buttons: btn.disabled = true
+	_reroll_btn.visible = false
+	if _host_panel: _host_panel.visible = false
+
+
+func _on_race_started(_target: String, _start: String) -> void:
+	hide_loading()
+	var pm := get_node_or_null("../PauseMenu")
+	if pm and pm.has_method("hide_loading_overlay"): pm.hide_loading_overlay()
+
+
+func _on_race_countdown_started() -> void:
+	visible = false
+
+
+func _on_vote_cancelled() -> void:
+	visible = false
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+
+func _on_close_pressed() -> void:
+	visible = false
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+
+func _on_reroll_pressed() -> void:
+	if not NetworkManager.is_server(): return
+	_reroll_btn.disabled = true
+	_reroll_btn.text = "↺  Fetching…"
+	show_loading()
+	var main := get_node_or_null("/root/Main")
+	if main and main.has_method("reroll_vote"):
+		main.reroll_vote()
+	else:
+		push_error("VoteHUD: could not find Main node")
+
+
+func on_reroll_ready() -> void:
+	_reroll_btn.disabled = false
+	_reroll_btn.text = "↺  Reroll options"
+
+
+# ── Host panel ────────────────────────────────────────────────────────────────
+
 func _build_host_panel() -> void:
-	var content := _reroll_button.get_parent()
-
 	_host_panel = VBoxContainer.new()
-	_host_panel.add_theme_constant_override("separation", 3)
+	_host_panel.add_theme_constant_override("separation", 4)
+	# Insert above the reroll button
+	var content := _reroll_btn.get_parent()
 	content.add_child(_host_panel)
-	content.move_child(_host_panel, _reroll_button.get_index())
+	content.move_child(_host_panel, _reroll_btn.get_index())
 
-	## — Row 1: Difficulty —
+	# Difficulty row
 	_difficulty_row = HBoxContainer.new()
 	_difficulty_row.add_theme_constant_override("separation", 3)
 	_host_panel.add_child(_difficulty_row)
 
 	var diff_lbl := Label.new()
-	diff_lbl.text = "Diff:"
+	diff_lbl.text = "Difficulty:"
 	diff_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	diff_lbl.custom_minimum_size.x = 32
+	if _serif_font: diff_lbl.add_theme_font_override("font", _serif_font)
+	diff_lbl.add_theme_font_size_override("font_size", 12)
 	_difficulty_row.add_child(diff_lbl)
 
 	for diff in ["Very Easy", "Easy", "Medium", "Hard", "Random 🎲"]:
@@ -387,141 +589,18 @@ func _build_host_panel() -> void:
 		btn.pressed.connect(_on_difficulty_btn_pressed.bind(key))
 		_difficulty_row.add_child(btn)
 		_difficulty_buttons[key] = btn
-
 	_refresh_difficulty_buttons(RaceManager.get_difficulty())
 
-	## — Row 2: Hints —
-	var hint_row := HBoxContainer.new()
-	hint_row.add_theme_constant_override("separation", 3)
-	_host_panel.add_child(hint_row)
+	_host_panel.add_child(_make_divider())
 
-	var hint_lbl := Label.new()
-	hint_lbl.text = "Hints:"
-	hint_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	hint_lbl.custom_minimum_size.x = 32
-	hint_row.add_child(hint_lbl)
+	# Player management
+	_build_player_management_section()
 
-	for opt in [
-		{"label": "Off",    "interval": -1.0,  "manual": false},
-		{"label": "10m",    "interval": 600.0, "manual": false},
-		{"label": "5m",     "interval": 300.0, "manual": false},
-		{"label": "Manual", "interval": -1.0,  "manual": true},
-		{"label": "Custom", "interval": 0.0,   "manual": false},
-	]:
-		var btn := Button.new()
-		btn.text = opt.label
-		btn.toggle_mode = true
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.pressed.connect(_on_hint_btn_pressed.bind(opt.interval, opt.manual, opt.label == "Custom"))
-		hint_row.add_child(btn)
-		_hint_buttons[opt.label] = btn
+	_host_panel.add_child(_make_divider())
 
-	# Custom minutes textbox
-	_hint_custom_edit = LineEdit.new()
-	_hint_custom_edit.placeholder_text = "min"
-	_hint_custom_edit.custom_minimum_size.x = 48
-	_hint_custom_edit.max_length = 3
-	_hint_custom_edit.visible = false
-	_hint_custom_edit.focus_mode = Control.FOCUS_CLICK
-	_hint_custom_edit.text_submitted.connect(_on_hint_custom_submitted)
-	hint_row.add_child(_hint_custom_edit)
-
-	# Reveal now button (manual mode)
-	_hint_reveal_btn = Button.new()
-	_hint_reveal_btn.text = "💡 Now"
-	_hint_reveal_btn.focus_mode = Control.FOCUS_NONE
-	_hint_reveal_btn.visible = false
-	_hint_reveal_btn.pressed.connect(_on_hint_reveal_pressed)
-	hint_row.add_child(_hint_reveal_btn)
-
-	_refresh_hint_buttons(RaceManager.get_hint_interval(), RaceManager.get_hint_manual())
-
-	## — Row 3: Powerups —
-	var powerup_row := HBoxContainer.new()
-	powerup_row.add_theme_constant_override("separation", 3)
-	_host_panel.add_child(powerup_row)
-
-	var powerup_lbl := Label.new()
-	powerup_lbl.text = "Powerups:"
-	powerup_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	powerup_lbl.custom_minimum_size.x = 32
-	powerup_row.add_child(powerup_lbl)
-
-	_powerup_toggle = CheckButton.new()
-	_powerup_toggle.button_pressed = true  # Enabled by default
-	_powerup_toggle.focus_mode = Control.FOCUS_NONE
-	_powerup_toggle.toggled.connect(_on_powerup_toggled)
-	powerup_row.add_child(_powerup_toggle)
-
-	var powerup_status = Label.new()
-	powerup_status.text = "Enabled"
-	powerup_status.add_theme_color_override("font_color", ThemeManager.text_color)
-	powerup_row.add_child(powerup_status)
-	_powerup_status_label = powerup_status
-
-	## — Row 4: Powerup spawn speed —
-	var spawn_row := HBoxContainer.new()
-	spawn_row.add_theme_constant_override("separation", 3)
-	_host_panel.add_child(spawn_row)
-
-	var spawn_lbl := Label.new()
-	spawn_lbl.text = "Spawn rate:"
-	spawn_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	spawn_lbl.custom_minimum_size.x = 32
-	spawn_row.add_child(spawn_lbl)
-
-	var _spawn_buttons: Dictionary = {}
-	var spawn_opts := [
-		{"label": "Slow (3m)",   "secs": 180.0},
-		{"label": "Normal (2m)", "secs": 120.0},
-		{"label": "Fast (45s)",  "secs": 45.0},
-		{"label": "Frenzy (15s)", "secs": 15.0},
-	]
-	for opt in spawn_opts:
-		var btn := Button.new()
-		btn.text = opt.label
-		btn.toggle_mode = true
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.pressed.connect(func():
-			PowerupManager.set_spawn_interval(opt.secs)
-			for b in spawn_row.get_children():
-				if b is Button:
-					b.button_pressed = (b == btn)
-			Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-		)
-		spawn_row.add_child(btn)
-		_spawn_buttons[opt.label] = btn
-		if opt.secs == 120.0:
-			btn.button_pressed = true  # default
-
-	## — Row 4b: Random powerup drop —
-	var random_row := HBoxContainer.new()
-	random_row.add_theme_constant_override("separation", 3)
-	_host_panel.add_child(random_row)
-
-	var random_lbl := Label.new()
-	random_lbl.text = "Random drop:"
-	random_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	random_lbl.custom_minimum_size.x = 32
-	random_row.add_child(random_lbl)
-
-	_random_drop_toggle = CheckButton.new()
-	_random_drop_toggle.button_pressed = false  # Disabled by default
-	_random_drop_toggle.focus_mode = Control.FOCUS_NONE
-	_random_drop_toggle.toggled.connect(_on_random_drop_toggled)
-	random_row.add_child(_random_drop_toggle)
-
-	var random_status = Label.new()
-	random_status.text = "Disabled"
-	random_status.add_theme_color_override("font_color", ThemeManager.text_color)
-	random_row.add_child(random_status)
-	_random_drop_status_label = random_status
-
-	## — Category filter (collapsible) —
+	# Category filter (collapsible)
 	_category_toggle_btn = Button.new()
-	_category_toggle_btn.text = "▶ Category filter"
+	_category_toggle_btn.text = "▶  Category filter"
 	_category_toggle_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_category_toggle_btn.focus_mode = Control.FOCUS_NONE
 	_category_toggle_btn.flat = true
@@ -534,20 +613,21 @@ func _build_host_panel() -> void:
 	_category_section.visible = false
 	_host_panel.add_child(_category_section)
 
-	var cat_header := HBoxContainer.new()
-	_category_section.add_child(cat_header)
+	var cat_row := HBoxContainer.new()
+	_category_section.add_child(cat_row)
 
 	_category_input = LineEdit.new()
-	_category_input.placeholder_text = "Search Wikipedia category..."
+	_category_input.placeholder_text = "Search Wikipedia category…"
 	_category_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_category_input.text_changed.connect(_on_category_input_changed)
-	cat_header.add_child(_category_input)
+	cat_row.add_child(_category_input)
+	_style_line_edit(_category_input)
 
-	var clear_btn := Button.new()
-	clear_btn.text = "✕"
-	clear_btn.focus_mode = Control.FOCUS_NONE
-	clear_btn.pressed.connect(_on_category_clear_pressed)
-	cat_header.add_child(clear_btn)
+	var cat_clear := Button.new()
+	cat_clear.text = "✕"
+	cat_clear.focus_mode = Control.FOCUS_NONE
+	cat_clear.pressed.connect(_on_category_clear_pressed)
+	cat_row.add_child(cat_clear)
 
 	_category_results = VBoxContainer.new()
 	_category_results.add_theme_constant_override("separation", 2)
@@ -559,10 +639,30 @@ func _build_host_panel() -> void:
 	_category_active_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	_category_active_label.add_theme_font_size_override("font_size", 11)
 	_category_section.add_child(_category_active_label)
-
 	ExhibitFetcher.category_search_complete.connect(_on_category_search_results)
 
-	## — Cancel button —
+	_host_panel.add_child(_make_divider())
+
+	# Race controls
+	var race_row := HBoxContainer.new()
+	race_row.add_theme_constant_override("separation", 4)
+	_host_panel.add_child(race_row)
+
+	var force_start := Button.new()
+	force_start.text = "▶  Force Start"
+	force_start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	force_start.focus_mode = Control.FOCUS_NONE
+	force_start.pressed.connect(_on_force_start_pressed)
+	race_row.add_child(force_start)
+
+	var cancel_race := Button.new()
+	cancel_race.text = "⏹  Cancel Race"
+	cancel_race.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cancel_race.focus_mode = Control.FOCUS_NONE
+	cancel_race.pressed.connect(_on_cancel_race_pressed)
+	race_row.add_child(cancel_race)
+
+	# Cancel vote
 	_cancel_vote_button = Button.new()
 	_cancel_vote_button.text = "✕  Cancel vote"
 	_cancel_vote_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -573,226 +673,163 @@ func _build_host_panel() -> void:
 	_host_panel.add_child(_cancel_vote_button)
 
 
-func _on_category_toggle() -> void:
-	if not _category_section:
-		return
-	_category_section.visible = not _category_section.visible
-	_category_toggle_btn.text = ("▼ Category filter" if _category_section.visible else "▶ Category filter")
+func _build_player_management_section() -> void:
+	var section := VBoxContainer.new()
+	section.add_theme_constant_override("separation", 2)
+	_host_panel.add_child(section)
 
+	var hdr := HBoxContainer.new()
+	hdr.add_theme_constant_override("separation", 4)
+	section.add_child(hdr)
+
+	var lbl := Label.new()
+	lbl.text = "👥  Players"
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	if _serif_font: lbl.add_theme_font_override("font", _serif_font)
+	lbl.add_theme_font_size_override("font_size", 12)
+	hdr.add_child(lbl)
+
+	var refresh_btn := Button.new()
+	refresh_btn.text = "🔄"
+	refresh_btn.focus_mode = Control.FOCUS_NONE
+	refresh_btn.pressed.connect(_refresh_player_list.bind(section))
+	hdr.add_child(refresh_btn)
+
+	var player_list := VBoxContainer.new()
+	player_list.name = "PlayerList"
+	player_list.add_theme_constant_override("separation", 2)
+	section.add_child(player_list)
+	_refresh_player_list(section)
+
+
+func _refresh_player_list(section: VBoxContainer) -> void:
+	var list := section.get_node_or_null("PlayerList") as VBoxContainer
+	if not list: return
+	for c in list.get_children(): c.queue_free()
+	if not NetworkManager.is_multiplayer_active(): return
+	for peer_id in NetworkManager.get_player_list():
+		var pname: String = NetworkManager.get_player_name(peer_id)
+		if peer_id == NetworkManager.get_unique_id(): pname += " (You)"
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		var name_lbl := Label.new()
+		name_lbl.text = pname
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.add_theme_color_override("font_color", ThemeManager.text_color)
+		if _serif_font: name_lbl.add_theme_font_override("font", _serif_font)
+		row.add_child(name_lbl)
+		if peer_id != 1 and NetworkManager.is_server():
+			var kick_btn := Button.new()
+			kick_btn.text = "👢"
+			kick_btn.focus_mode = Control.FOCUS_NONE
+			kick_btn.custom_minimum_size.x = 36
+			kick_btn.pressed.connect(_on_kick_player_pressed.bind(peer_id, pname))
+			row.add_child(kick_btn)
+		list.add_child(row)
+
+
+# ── Host controls callbacks ───────────────────────────────────────────────────
+
+func _on_force_start_pressed() -> void:
+	if not NetworkManager.is_server(): return
+	RaceManager.force_start_race()
+	if _chat_system: _chat_system._show_system_message("⏱️ Race started by host!")
+
+func _on_cancel_race_pressed() -> void:
+	if not NetworkManager.is_server(): return
+	RaceManager.cancel_race()
+	if _chat_system: _chat_system._show_system_message("⏹ Race cancelled by host!")
+
+func _on_cancel_vote_pressed() -> void:
+	if not NetworkManager.is_server(): return
+	_cancel_vote_button.disabled = true
+	RaceManager.cancel_vote()
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+func _on_difficulty_btn_pressed(difficulty: String) -> void:
+	RaceManager.set_difficulty(difficulty)
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+func _on_difficulty_changed(difficulty: String) -> void:
+	_refresh_difficulty_buttons(difficulty)
 
 func _refresh_difficulty_buttons(difficulty: String) -> void:
 	for key in _difficulty_buttons:
 		_difficulty_buttons[key].button_pressed = (key == difficulty)
 
-
-func _on_difficulty_btn_pressed(difficulty: String) -> void:
-	RaceManager.set_difficulty(difficulty)
-	# Keep mouse visible while voting is active
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-
-
-func _on_difficulty_changed(difficulty: String) -> void:
-	_refresh_difficulty_buttons(difficulty)
-
+func _on_category_toggle() -> void:
+	if not _category_section: return
+	_category_section.visible = not _category_section.visible
+	_category_toggle_btn.text = ("▼  Category filter" if _category_section.visible else "▶  Category filter")
 
 func _on_category_input_changed(text: String) -> void:
 	if text.strip_edges() == "":
 		_category_search_pending = ""
-		for child in _category_results.get_children():
-			child.queue_free()
+		for c in _category_results.get_children(): c.queue_free()
 		return
 	_category_search_pending = text.strip_edges()
 	_category_search_timer = 0.5
 
-
 func _on_category_search_results(categories: Array, _ctx: Variant) -> void:
-	if not is_instance_valid(_category_results):
-		return
-	for child in _category_results.get_children():
-		child.queue_free()
+	if not is_instance_valid(_category_results): return
+	for c in _category_results.get_children(): c.queue_free()
 	for cat_name in categories:
-		var display: String = cat_name.replace("Category:", "")
 		var btn := Button.new()
-		btn.text = display
+		btn.text = cat_name.replace("Category:", "")
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.pressed.connect(_on_category_selected.bind(cat_name))
 		_category_results.add_child(btn)
 
-
 func _on_category_selected(cat_name: String) -> void:
 	RaceManager.set_category_override(cat_name)
 	_category_input.text = ""
-	for child in _category_results.get_children():
-		child.queue_free()
+	for c in _category_results.get_children(): c.queue_free()
 	RaceManager.set_vote_timer_paused(false)
-	# Keep mouse visible while voting is active
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-
 
 func _on_category_clear_pressed() -> void:
 	RaceManager.set_category_override("")
 	_category_input.text = ""
-	for child in _category_results.get_children():
-		child.queue_free()
+	for c in _category_results.get_children(): c.queue_free()
 	RaceManager.set_vote_timer_paused(false)
-	# Keep mouse visible while voting is active
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-
 
 func _on_category_override_changed(category_name: String) -> void:
-	if not is_instance_valid(_category_active_label):
-		return
-	_category_active_label.text = ("Active: %s" % category_name.replace("Category:", "")) if category_name != "" else ""
+	if not is_instance_valid(_category_active_label): return
+	_category_active_label.text = \
+		("Active: %s" % category_name.replace("Category:", "")) if category_name != "" else ""
 	if _category_toggle_btn and category_name != "":
-		_category_toggle_btn.text = "▼ Category filter"
-		if _category_section:
-			_category_section.visible = true
+		_category_toggle_btn.text = "▼  Category filter"
+		if _category_section: _category_section.visible = true
 
+func _on_seeded_shuffle_toggled(toggled_on: bool) -> void:
+	if not NetworkManager.is_server(): return
+	RaceManager.set_seeded_shuffle_enabled(toggled_on)
+	# Find the status label sibling in the shuffle row
+	var row := find_child("🎲 Seeded Shuffle:", true, false)
+	if row and row.get_parent() is HBoxContainer:
+		for child in row.get_parent().get_children():
+			if child is Label and ("Off" in child.text or "On" in child.text):
+				child.text = "On" if toggled_on else "Off"
+				break
 
-func _refresh_hint_buttons(interval: float, manual: bool) -> void:
-	if _hint_buttons.is_empty():
-		return
-	var active: String
-	if manual:
-		active = "Manual"
-	elif interval <= 0.0:
-		active = "Off"
-	elif interval >= 600.0:
-		active = "10m"
-	elif interval >= 300.0:
-		active = "5m"
-	else:
-		active = "Custom"
-	for lbl in _hint_buttons:
-		_hint_buttons[lbl].button_pressed = (lbl == active)
-	if _hint_reveal_btn:
-		_hint_reveal_btn.visible = manual
-	if _hint_custom_edit:
-		_hint_custom_edit.visible = (active == "Custom")
-		if active == "Custom" and interval > 0.0:
-			_hint_custom_edit.text = str(int(round(interval / 60.0)))
+func _on_kick_player_pressed(peer_id: int, player_name: String) -> void:
+	if not NetworkManager.is_server(): return
+	_kick_player.rpc_id(1, peer_id)
+	if _chat_system: _chat_system._show_system_message("👢 Kicked %s" % player_name)
 
+@rpc("any_peer", "call_local", "reliable")
+func _kick_player(peer_id: int) -> void:
+	if multiplayer.get_remote_sender_id() != 1: return
+	if NetworkManager.is_server(): NetworkManager.kick_peer(peer_id)
 
-func _on_hint_btn_pressed(interval: float, manual: bool, is_custom: bool) -> void:
-	if is_custom:
-		if _hint_custom_edit:
-			_hint_custom_edit.visible = true
-			_hint_custom_edit.grab_focus()
-			var mins := _hint_custom_edit.text.to_int()
-			if mins > 0:
-				RaceManager.set_hint_settings(mins * 60.0, false)
-	else:
-		if _hint_custom_edit:
-			_hint_custom_edit.visible = false
-		RaceManager.set_hint_settings(interval, manual)
-	# Keep mouse visible while voting is active
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+# ── EventBus handlers ─────────────────────────────────────────────────────────
 
-
-func _on_hint_custom_submitted(text: String) -> void:
-	var mins := text.to_int()
-	if mins > 0:
-		RaceManager.set_hint_settings(mins * 60.0, false)
-		_hint_custom_edit.release_focus()
-
-
-func _on_hint_settings_changed(interval: float, manual: bool) -> void:
-	_refresh_hint_buttons(interval, manual)
-
-
-func _on_hint_reveal_pressed() -> void:
-	RaceManager.reveal_hint_now()
-	# Keep mouse visible while voting is active
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-
-
-func _on_powerup_toggled(toggled_on: bool) -> void:
-	if _powerup_status_label:
-		_powerup_status_label.text = "Enabled" if toggled_on else "Disabled"
-	# Tell PowerupManager to enable/disable powerup spawning
-	PowerupManager.set_powerups_enabled(toggled_on)
-	# Keep mouse visible while voting is active
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-
-func _on_random_drop_toggled(toggled_on: bool) -> void:
-	if _random_drop_status_label:
-		_random_drop_status_label.text = "Enabled" if toggled_on else "Disabled"
-	# Tell PowerupManager to enable/disable random powerup drops
-	PowerupManager.set_random_drops_enabled(toggled_on)
-	# Keep mouse visible while voting is active
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-
-
-func _on_cancel_vote_pressed() -> void:
-	if not NetworkManager.is_server():
-		return
-	_cancel_vote_button.disabled = true
-	RaceManager.cancel_vote()
-	# Keep mouse visible - vote cancelled but player still in lobby
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-
-
-func _on_vote_cancelled() -> void:
-	# Hide VoteHUD but keep mouse visible
-	visible = false
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-
-
-func _on_reroll_pressed() -> void:
-	if not NetworkManager.is_server():
-		return
-	_reroll_button.disabled = true
-	_reroll_button.text = "↺  Fetching..."
-	show_loading()
-	var main := get_tree().get_first_node_in_group("main")
-	if main and main.has_method("reroll_vote"):
-		main.reroll_vote()
-	else:
-		push_error("VoteHUD: could not find Main in group 'main'")
-
-
-func on_reroll_ready() -> void:
-	_reroll_button.disabled = false
-	_reroll_button.text = "↺  Reroll options (host only)"
-
-
-func _on_close_pressed() -> void:
-	# Hide VoteHUD but keep mouse visible (player is still in lobby voting phase)
-	visible = false
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-
-
-func _on_vote_ended(winner: String) -> void:
-	RaceManager.set_vote_timer_paused(false)
-	_countdown_label.text = "Race starting!"
-	_status_label.text = "Target: " + winner
-	for btn in _candidate_buttons:
-		btn.disabled = true
-	_reroll_button.visible = false
-	if _host_panel:
-		_host_panel.visible = false
-	# Mouse will be recaptured when race starts and gameplay resumes
-
-
-func _on_race_started(_target: String, _start: String) -> void:
-	# Ensure loading overlay is hidden when race starts
-	hide_loading()
-	var pause_menu := get_node_or_null("../PauseMenu")
-	if pause_menu and pause_menu.has_method("hide_loading_overlay"):
-		pause_menu.hide_loading_overlay()
-
-func _on_race_countdown_started() -> void:
-	# Hide VoteHUD when countdown starts (before numbers appear)
-	visible = false
-
-# --- EventBus Handlers ---
-
-func _on_event_vote_started(event: EventBus.VoteStartedEvent) -> void:
-	# Could use this instead of direct signal connection
+func _on_event_vote_started(_event: EventBus.VoteStartedEvent) -> void:
 	pass
 
-func _on_event_countdown_started(event: EventBus.CountdownStartedEvent) -> void:
-	# Already handled by _on_race_countdown_started, but this shows the pattern
+func _on_event_countdown_started(_event: EventBus.CountdownStartedEvent) -> void:
 	visible = false

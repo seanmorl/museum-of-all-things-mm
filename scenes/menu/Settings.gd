@@ -10,7 +10,6 @@ signal resume
 	_vbox.get_node("DataSettings") if not Platform.is_web() else null,
 	_build_multiplayer_settings(),
 	_build_accessibility_settings(),
-	_build_twitch_settings(),
 ]
 
 var _serif_font: Font = null
@@ -668,98 +667,6 @@ func _build_accessibility_settings() -> Control:
 	return container
 
 
-func _build_twitch_settings() -> Control:
-	var container := VBoxContainer.new()
-	container.name = "TwitchSettings"
-	container.add_theme_constant_override("separation", 14)
-	_vbox.add_child(container)
-
-	var h := Label.new()
-	h.text = "Twitch Integration"
-	h.add_theme_font_size_override("font_size", 18)
-	container.add_child(h)
-
-	var hint := Label.new()
-	hint.text = "Connect to Twitch chat to allow viewers to vote for the race target and change ambient lighting colors."
-	hint.set_meta("settings_role", "hint")
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
-	container.add_child(hint)
-
-	var channel_row := HBoxContainer.new()
-	var lbl := Label.new()
-	lbl.text = "Twitch Channel"
-	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	channel_row.add_child(lbl)
-
-	var edit := LineEdit.new()
-	edit.placeholder_text = "channel_name"
-	edit.custom_minimum_size = Vector2(200, 0)
-	var saved = SettingsManager.get_settings("twitch")
-	if saved and saved.has("channel"):
-		edit.text = saved.channel
-	channel_row.add_child(edit)
-	container.add_child(channel_row)
-
-	var status_lbl := Label.new()
-	status_lbl.text = "Status: Disconnected"
-	status_lbl.set_meta("settings_role", "hint")
-	container.add_child(status_lbl)
-
-	var btn_row := HBoxContainer.new()
-	btn_row.alignment = BoxContainer.ALIGNMENT_END
-	var connect_btn := Button.new()
-	connect_btn.text = "Connect"
-
-	# Twitch integration disabled
-	# var update_ui = func():
-	# 	if TwitchManager.is_connected:
-	# 		connect_btn.text = "Disconnect"
-	# 		status_lbl.text = "Status: Connected to #%s" % TwitchManager.channel_name
-	# 		status_lbl.modulate = Color(0.4, 1.0, 0.4)
-	# 	else:
-	# 		connect_btn.text = "Connect"
-	# 		status_lbl.text = "Status: Disconnected"
-	# 		status_lbl.modulate = Color(1.0, 0.4, 0.4)
-
-	# connect_btn.pressed.connect(func():
-	# 	if TwitchManager.is_connected:
-	# 		TwitchManager.disconnect_from_twitch()
-	# 	else:
-	# 		if edit.text.is_empty(): return
-	# 		SettingsManager.save_settings("twitch", {"channel": edit.text})
-	# 		TwitchManager.connect_to_twitch(edit.text)
-	# 	update_ui.call()
-	# )
-
-	# btn_row.add_child(connect_btn)
-	# container.add_child(btn_row)
-
-	container.add_child(HSeparator.new())
-
-	var guide_h := Label.new()
-	guide_h.text = "Twitch Integration (Disabled)"
-	guide_h.add_theme_font_size_override("font_size", 16)
-	container.add_child(guide_h)
-
-	var guide := Label.new()
-	guide.text = "Twitch integration has been disabled.\nTo re-enable:\n" + \
-				 "1. Add TwitchManager back to project.godot autoloads\n" + \
-				 "2. Uncomment TwitchManager code in Museum.gd and Settings.gd\n" + \
-				 "3. Restore TwitchManager.gd functionality"
-	guide.set_meta("settings_role", "hint")
-	guide.autowrap_mode = TextServer.AUTOWRAP_WORD
-	container.add_child(guide)
-
-	# Twitch integration disabled
-	# TwitchManager.connected.connect(update_ui)
-	# TwitchManager.disconnected.connect(update_ui)
-
-	# update_ui.call()
-
-	# _tab_bar.add_tab("Twitch") # Hidden from user as it's still WIP
-	return container
-
-
 func _apply_screen_reader(enabled: bool) -> void:
 	## Activates AccessKit via Godot 4.3+ DisplayServer accessibility API.
 	## Falls back gracefully on older builds.
@@ -794,7 +701,5 @@ func _save_accessibility(key: String, value: Variant) -> void:
 func _emit_accessibility_event(key: String, value: Variant) -> void:
 	## Fires SettingsEvents.accessibility_changed if the signal exists.
 	## Add  `signal accessibility_changed(key: String, value: Variant)`
-	## and  `func emit_accessibility_changed(key, value): accessibility_changed.emit(key, value)`
-	## to SettingsEvents.gd to wire up consumers (RaceHUD, ItemProcessor, etc.).
-	if SettingsEvents.has_method("emit_accessibility_changed"):
-		SettingsEvents.emit_accessibility_changed(key, value)
+	if SettingsEvents.has_signal("accessibility_changed"):
+		SettingsEvents.accessibility_changed.emit(key, value)

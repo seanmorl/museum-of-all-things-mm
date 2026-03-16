@@ -8,10 +8,6 @@ signal race_ended(winner_peer_id: int, winner_name: String)
 signal race_cancelled
 ## Emitted every second while a race is active. Connect to update a HUD timer.
 signal race_timer_updated(elapsed_seconds: float)
-## Emitted on all peers when a backlink hint is revealed during a race.
-signal race_hint_revealed(hint_article: String, hint_number: int)
-## Emitted on all peers when hint interval/mode is changed by the host.
-signal hint_settings_changed(interval: float, manual: bool)
 
 ## Emitted on all peers when the host cancels the vote.
 signal vote_cancelled
@@ -49,8 +45,6 @@ var _timer_signal_accumulator: float = 0.0
 var _vote_candidates: Array = []
 ## peer_id -> candidate index voted for.
 var _votes: Dictionary = {}
-## twitch_user -> candidate index voted for.
-var _twitch_votes: Dictionary = {}
 ## Seconds remaining in the vote window.
 var _vote_timer: float = 0.0
 var _vote_timer_paused: bool = false
@@ -62,29 +56,43 @@ const CANDIDATE_COUNT: int = 5
 var _difficulty: String = "medium"
 ## When non-empty, target is drawn from this Wikipedia category instead of difficulty pool.
 var _category_override: String = ""
-
-## Backlink hints — revealed to all players on a timer during the race.
-var _hint_pool: Array = []         ## shuffled backlinks of the target
-var _hints_revealed: Array = []    ## hints already shown (index 0 = first)
-var _hint_timer: float = 0.0       ## counts up; hint drops every _hint_interval seconds
-var _hint_interval: float = 600.0  ## default: 10 minutes
-var _hint_manual: bool = false     ## if true, host triggers hints manually only
-const MAX_HINTS: int = 5           ## cap so we don't spoil everything
+## Seeded shuffle for vote candidates (same order for all players)
+var _seeded_shuffle_enabled: bool = false
+var _vote_seed: int = 0  # Random seed for vote shuffling
 
 ## Local path this client has walked during the current race.
 ## Sent to the server when the target article is reached.
 var _local_visited_pages: Array[String] = []
 
+## Server-side: tracks room history for each peer (anti-cheat)
+var _player_room_history: Dictionary = {}  # peer_id -> Array[String]
+
 func _ready() -> void:
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
 	NetworkManager.peer_connected.connect(_on_peer_connected)
 	SettingsEvents.set_current_room.connect(_on_local_room_changed)
+	
+	# Track player rooms for anti-cheat (server-side)
+	if NetworkManager.is_server():
+		NetworkManager.player_room_changed.connect(_on_player_room_changed)
 
 
 func _on_local_room_changed(room: String) -> void:
 	if not is_race_active() or room == "Lobby":
 		return
 	_local_visited_pages.append(room)
+
+
+func _on_player_room_changed(peer_id: int, room: String) -> void:
+	"""Server-side: track player room transitions for anti-cheat"""
+	if not NetworkManager.is_server() or not is_race_active():
+		return
+	if room == "Lobby":
+		return  # Don't track lobby
+	
+	if not _player_room_history.has(peer_id):
+		_player_room_history[peer_id] = []
+	_player_room_history[peer_id].append(room)
 
 
 func _process(delta: float) -> void:
@@ -105,14 +113,6 @@ func _process(delta: float) -> void:
 	if _timer_signal_accumulator >= 1.0:
 		_timer_signal_accumulator -= 1.0
 		race_timer_updated.emit(_elapsed_time)
-
-	# Reveal a backlink hint every _hint_interval seconds (server only — synced via RPC)
-	if NetworkManager.is_server() and _hint_pool.size() > 0 and not _hint_manual:
-		_hint_timer += delta
-		if _hint_timer >= _hint_interval and _hints_revealed.size() < MAX_HINTS:
-			_hint_timer = 0.0
-			var hint: String = _hint_pool.pop_front()
-			_reveal_hint.rpc(hint, _hints_revealed.size() + 1)
 
 
 func is_race_active() -> bool:
@@ -152,14 +152,21 @@ func get_elapsed_time_string() -> String:
 func begin_vote(candidates: Array, start_article: String = "") -> void:
 	if not NetworkManager.is_server():
 		return
-	_vote_candidates = candidates
+
+	_vote_candidates = candidates.duplicate()
+
+	# Apply seeded shuffle if enabled (same order for all players)
+	if _seeded_shuffle_enabled and _vote_seed != 0:
+		seed(_vote_seed)
+		_vote_candidates.shuffle()
+		seed(Time.get_ticks_msec())  # Re-seed random to avoid affecting other RNG
+
 	_vote_start_article = start_article
 	_votes.clear()
-	_twitch_votes.clear()
 	_vote_active = true
 	_vote_timer = VOTE_DURATION
 	_vote_timer_paused = false  # always clear pause on new/rerolled vote
-	_sync_vote_start.rpc(candidates)
+	_sync_vote_start.rpc(_vote_candidates)
 
 ## Called by any peer to cast or change their vote (index into candidates array).
 func cast_vote(candidate_index: int) -> void:
@@ -169,15 +176,6 @@ func cast_vote(candidate_index: int) -> void:
 		_receive_vote(multiplayer.get_unique_id(), candidate_index)
 	else:
 		_send_vote.rpc_id(1, candidate_index)
-
-func cast_twitch_vote(voter_name: String, candidate_index: int) -> void:
-	if not _vote_active or not NetworkManager.is_server():
-		return
-	if candidate_index < 0 or candidate_index >= _vote_candidates.size():
-		return
-	_twitch_votes[voter_name] = candidate_index
-	if OS.is_debug_build():
-		print("RaceManager: Twitch vote from ", voter_name, " for ", _vote_candidates[candidate_index])
 
 func _finish_vote() -> void:
 	if not _vote_active:
@@ -190,11 +188,6 @@ func _finish_vote() -> void:
 	# Player votes
 	for pid in _votes:
 		var v: int = _votes[pid]
-		if tally.has(v):
-			tally[v] += 1
-	# Twitch votes
-	for vname in _twitch_votes:
-		var v: int = _twitch_votes[vname]
 		if tally.has(v):
 			tally[v] += 1
 			
@@ -277,71 +270,16 @@ func _sync_category_override(category_name: String) -> void:
 	_category_override = category_name
 	category_override_changed.emit(category_name)
 
-## Called by Main after fetching backlinks for the target article.
-## Only the server calls this; hints are revealed via RPC at _hint_interval.
-func set_hint_pool(titles: Array) -> void:
-	_hint_pool = titles.duplicate()
-	_hint_pool.shuffle()
-	_hint_pool = _hint_pool.slice(0, MAX_HINTS + 2)
-	_hints_revealed.clear()
-	_hint_timer = 0.0
+## Host enables/disables seeded shuffle for vote candidates
+func set_seeded_shuffle_enabled(enabled: bool) -> void:
+	_seeded_shuffle_enabled = enabled
+	# Always generate a new seed when the setting changes (on or off)
+	# This ensures all clients have the same seed for reproducible shuffling
+	_vote_seed = randi()
+	_sync_vote_settings.rpc(_difficulty, _category_override, _seeded_shuffle_enabled, _vote_seed)
 
-## Host sets hint interval (seconds) and whether hints are manual-only.
-## interval <= 0 means hints are disabled entirely.
-func set_hint_settings(interval: float, manual: bool) -> void:
-	if not NetworkManager.is_server():
-		return
-	_sync_hint_settings.rpc(interval, manual)
-
-## Host manually reveals the next hint immediately.
-func reveal_hint_now() -> bool:
-	## Reveal next hint to all players. Returns false if no hints available.
-	if not NetworkManager.is_server():
-		return false
-	if _hint_pool.is_empty() or _hints_revealed.size() >= MAX_HINTS:
-		return false
-	_hint_timer = 0.0
-	var hint: String = _hint_pool.pop_front()
-	_reveal_hint.rpc(hint, _hints_revealed.size() + 1)
-	return true
-
-func reveal_hint_to_peer(peer_id: int) -> void:
-	## Reveal next hint privately to a specific peer only.
-	if not NetworkManager.is_server():
-		return
-	if _hint_pool.is_empty() or _hints_revealed.size() >= MAX_HINTS:
-		return
-	var hint: String = _hint_pool[0]  # peek, don't consume — still available for everyone later
-	var number: int = _hints_revealed.size() + 1
-	if peer_id == multiplayer.get_unique_id():
-		race_hint_revealed.emit(hint, number)
-	else:
-		_reveal_hint_private.rpc_id(peer_id, hint, number)
-
-@rpc("authority", "call_local", "reliable")
-func _sync_hint_settings(interval: float, manual: bool) -> void:
-	_hint_interval = interval
-	_hint_manual = manual
-	hint_settings_changed.emit(interval, manual)
-
-func get_hint_interval() -> float:
-	return _hint_interval
-
-func get_hint_manual() -> bool:
-	return _hint_manual
-
-func get_hints_revealed() -> Array:
-	return _hints_revealed.duplicate()
-
-@rpc("authority", "call_local", "reliable")
-func _reveal_hint(hint_article: String, hint_number: int) -> void:
-	_hints_revealed.append(hint_article)
-	race_hint_revealed.emit(hint_article, hint_number)
-
-@rpc("authority", "call_remote", "reliable")
-func _reveal_hint_private(hint_article: String, hint_number: int) -> void:
-	## Private hint — only the receiving peer sees this; not added to _hints_revealed.
-	race_hint_revealed.emit(hint_article, hint_number)
+func get_seeded_shuffle_enabled() -> bool:
+	return _seeded_shuffle_enabled
 
 func is_vote_active() -> bool:
 	return _vote_active
@@ -350,7 +288,6 @@ func is_vote_active() -> bool:
 func _sync_vote_start(candidates: Array) -> void:
 	_vote_candidates = candidates
 	_votes.clear()
-	_twitch_votes.clear()
 	_vote_active = true
 	_vote_timer = VOTE_DURATION
 	_vote_timer_paused = false  # clear on all peers, not just server
@@ -360,6 +297,14 @@ func _sync_vote_start(candidates: Array) -> void:
 func _sync_vote_end(winning_idx: int) -> void:
 	_vote_active = false
 	vote_ended.emit(_vote_candidates[winning_idx])
+
+@rpc("authority", "call_local", "reliable")
+func _sync_vote_settings(difficulty: String, category: String, seeded_shuffle: bool, seed: int) -> void:
+	"""Sync vote settings from server to all clients."""
+	_difficulty = difficulty
+	_category_override = category
+	_seeded_shuffle_enabled = seeded_shuffle
+	_vote_seed = seed
 
 @rpc("any_peer", "call_remote", "reliable")
 func _send_vote(candidate_index: int) -> void:
@@ -389,12 +334,16 @@ func start_race(target_article: String, start_article: String) -> void:
 	_winner_name = ""
 	_winner_path.clear()
 	_local_visited_pages.clear()
+	_player_room_history.clear()  # Clear server-side tracking for new race
 	_elapsed_time = 0.0
 	_timer_signal_accumulator = 0.0
-	_hint_timer = 0.0  # reset hint timer for new race
+
+	# Pre-fetch backlinks for hint system (non-blocking, improves hint success rate)
+	# Note: Backlinks are now fetched by Main.gd at race start, not here
 
 	if OS.is_debug_build():
 		print("RaceManager: Starting countdown to race...")
+		print("RaceManager: Pre-fetching backlinks for hints...")
 
 	# Start countdown on server
 	_start_countdown(target_article, start_article)
@@ -411,14 +360,16 @@ func _start_countdown(target_article: String, start_article: String) -> void:
 	print("RaceManager: Starting countdown: 3...")
 
 	while countdown >= 0:
-		# Emit locally
+		# Always emit locally so single-player and the server itself receive the signal.
 		race_countdown.emit(countdown)
 		EventBus.publish_countdown_tick(countdown)
-		print("RaceManager: Countdown emit: ", countdown)
-		# Sync to all clients
+		if OS.is_debug_build():
+			print("RaceManager: Countdown emit: ", countdown)
+		# Only RPC to clients when multiplayer is actually running.
+		# (Previously race_countdown.emit + _sync_countdown.rpc(call_local) fired twice
+		# on the server in multiplayer — now we guard the rpc behind is_multiplayer_active.)
 		if NetworkManager.is_multiplayer_active():
-			_sync_countdown.rpc(countdown)
-			print("RaceManager: Sent countdown RPC: ", countdown)
+			_sync_countdown.rpc_id(0, countdown)
 
 		await get_tree().create_timer(interval).timeout
 		if countdown == 0:
@@ -435,9 +386,9 @@ func _start_countdown(target_article: String, start_article: String) -> void:
 	race_started.emit(target_article, start_article)
 	EventBus.publish_race_started(target_article, start_article)
 
-@rpc("authority", "call_local", "reliable")
+@rpc("authority", "call_remote", "reliable")
 func _sync_countdown(number: int) -> void:
-	## Broadcast countdown to all clients
+	## Clients receive countdown ticks via this RPC.
 	race_countdown.emit(number)
 
 func notify_article_reached(peer_id: int, article_title: String, visited_path: Array = []) -> void:
@@ -447,18 +398,49 @@ func notify_article_reached(peer_id: int, article_title: String, visited_path: A
 	if article_title != _target_article:
 		return
 
-	# Prefer explicitly-provided path; fall back to the internally-tracked one.
-	var path: Array[String] = []
-	if visited_path.size() > 0:
-		path.assign(visited_path)
-	else:
-		path = _local_visited_pages.duplicate()
-
+	# Server-side: validate path against tracked room history
 	if NetworkManager.is_server():
-		_winner_path = path.duplicate()
+		# Dictionary.get() returns untyped Array — assign via explicit typed local
+		var raw_server_path: Array = _player_room_history.get(peer_id, [])
+		var server_path: Array[String] = []
+		for item in raw_server_path:
+			server_path.append(str(item))
+
+		var path: Array[String] = []
+
+		if server_path.size() > 0:
+			# Best case: server has tracked this peer's rooms (multiplayer anti-cheat path)
+			for item in server_path:
+				path.append(item)
+		elif visited_path.size() > 0:
+			# Client provided a path (multiplayer client win RPC)
+			for item in visited_path:
+				path.append(str(item))
+			if OS.is_debug_build():
+				print("RaceManager: Using client-provided path (server tracking unavailable)")
+		else:
+			# Single player: NetworkManager.is_multiplayer_active() is false so
+			# set_local_player_room is never called and _player_room_history stays empty.
+			# Use _local_visited_pages which is populated via SettingsEvents.set_current_room.
+			for item in _local_visited_pages:
+				path.append(item)
+			if OS.is_debug_build():
+				print("RaceManager: Using local visited pages (single player path)")
+
+		# Require at least one room visited to prevent teleport/void exploits.
+		if path.is_empty():
+			if OS.is_debug_build():
+				print("RaceManager: Blocked win — empty path for '%s'" % article_title)
+			return
+
+		var winner_path_copy: Array[String] = []
+		for item in path:
+			winner_path_copy.append(item)
+		_winner_path = winner_path_copy
 		_handle_win(peer_id)
 	else:
-		_request_win_validation.rpc_id(1, peer_id, article_title, path)
+		# Client: send path to server for validation
+		_request_win_validation.rpc_id(1, peer_id, article_title, visited_path)
 
 func _handle_win(peer_id: int) -> void:
 	if _state != State.ACTIVE:
@@ -482,6 +464,17 @@ func _handle_win(peer_id: int) -> void:
 
 	_sync_race_end.rpc(peer_id, _winner_name, final_time, _winner_path)
 	race_ended.emit(peer_id, _winner_name)
+
+func force_start_race() -> void:
+	"""Host can force race to start immediately (skips remaining vote time)."""
+	if not _vote_active:
+		return  # Can only force start during voting
+	
+	if not NetworkManager.is_server():
+		return
+	
+	# End vote immediately and start race
+	_finish_vote()
 
 func cancel_race() -> void:
 	if _state != State.ACTIVE:
@@ -591,3 +584,37 @@ func _request_race_cancel() -> void:
 		return
 
 	cancel_race()
+
+# === Host Menu Support Methods ===
+
+func skip_countdown() -> void:
+	"""Skip countdown and start race immediately"""
+	# Just emit race started directly to skip remaining countdown
+	race_started.emit(_target_article, _start_article)
+
+func extend_vote_timer(seconds: int) -> void:
+	"""Extend vote timer by specified seconds"""
+	if _vote_active and _vote_timer > 0:
+		_vote_timer += seconds
+
+func force_vote_end() -> void:
+	"""End voting immediately with current results"""
+	if not _vote_active:
+		return
+	# Call the existing finish vote method
+	_finish_vote()
+
+func set_custom_target(target: String) -> void:
+	"""Set custom race target article"""
+	if target != "":
+		_target_article = target
+
+func get_race_stats() -> Dictionary:
+	"""Get current race statistics"""
+	return {
+		"time": _elapsed_time,
+		"players": _player_room_history.size() if NetworkManager.is_server() else 0,
+		"target": _target_article,
+		"start": _start_article,
+		"state": "ACTIVE" if _state == State.ACTIVE else "IDLE"
+	}

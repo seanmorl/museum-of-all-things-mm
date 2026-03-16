@@ -15,6 +15,8 @@ var _dark_mode_toggle: Button = null
 var _patch_notes_popup: Control = null
 var _patch_notes_panel: PanelContainer = null
 
+## Logo entrance animation state — no idle loop
+
 # Thin 1px divider lines placed above specific buttons, matching PauseMenu style.
 # A divider is drawn just above each button named here.
 const _DIVIDER_BEFORE := ["Multiplayer", "DarkMode", "Settings", "DedicatedHost", "Quit", "Language"]
@@ -23,6 +25,7 @@ var _dividers: Array[Dictionary] = []
 
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
+	_spawn_background()
 	_build_dedicated_host_button()
 	_build_dark_mode_toggle()
 	_build_patch_notes_popup()
@@ -37,6 +40,22 @@ func _ready() -> void:
 		if q: q.visible = false
 	call_deferred("_entrance_animation")
 	call_deferred("_build_dividers")
+
+
+func _spawn_background() -> void:
+	var old_bg := get_node_or_null("Background")
+	if old_bg:
+		old_bg.queue_free()
+	var bg_script := load("res://scenes/menu/MainMenuBackground.gd")
+	if not bg_script:
+		return
+	var bg := Control.new()
+	bg.name = "Background"
+	bg.set_script(bg_script)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(bg)
+	move_child(bg, 0)
 
 
 func _on_visibility_changed() -> void:
@@ -301,53 +320,92 @@ func _build_patch_notes_popup() -> void:
 	vbox.add_child(separator)
 
 	var content := [
-		{"text": "🏗️ Major Refactoring Complete!", "size": 16, "color": Color(0.4, 0.8, 1.0)},
-		{"text": "• New service-based architecture", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• EventBus for clean communication", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• Proper state machine implementation", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "🎨 UI & Graphics Overhaul — March 2026", "size": 18, "color": ThemeManager.text_color},
+		{"text": "A complete visual refresh with new screens, modernized components, and critical bug fixes.", "size": 13, "color": ThemeManager.subtext_color},
 		{"text": "", "size": 0, "color": Color()},
-		{"text": "🌐 Multiplayer Room Sync", "size": 16, "color": Color(0.4, 0.8, 1.0)},
-		{"text": "• Server generates rooms once", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• All clients see identical rooms", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• RoomData serialization for sync", "size": 13, "color": ThemeManager.subtext_color},
+		
+		{"text": "✨ New Screens & Overlays", "size": 16, "color": Color(0.4, 0.8, 1.0)},
+		{"text": "🎯 RaceCountdown — Full-screen 3→2→1→GO countdown with elastic animations", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Shows target article before the race starts", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Ink-ring burst effects on each number", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "📦 LoadingScreen — Animated spinner with progress bar support", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• 8-segment animated spinner, theme-aware colors", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Progress tracking (0–100%)", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "🏆 VictoryScreen — Winner celebration panel with starburst animation", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• 8-spoke compass rose rotates gently", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Color-coded path through rooms to target", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Auto-dismiss after 12s with countdown", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "📊 LeaderboardHUD — Session leaderboard (press Tab to toggle)", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Shows rank, player, target article, and time", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Top entry highlighted in gold", "size": 12, "color": ThemeManager.subtext_color},
 		{"text": "", "size": 0, "color": Color()},
-		{"text": "👥 Player Position Sync", "size": 16, "color": Color(0.4, 0.8, 1.0)},
-		{"text": "• Real-time player movement sync", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• Smooth interpolation", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• Network abstraction layer", "size": 13, "color": ThemeManager.subtext_color},
+		
+		{"text": "🔄 Rewritten Components", "size": 16, "color": Color(0.4, 0.8, 1.0)},
+		{"text": "🗳️ VoteHUD — Full code-driven rewrite, no tscn dependencies", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Staggered button slide-in animations", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Custom loading spinner fallback", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Host panel with visual dividers", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "⏱️ RaceHUD — Modernized with custom pulse ring", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Timer ring fires on every second tick", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Breadcrumb trail: green=start, white=current, blue=target", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Room entries slide in from the right", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Smooth auto-scroll for new rooms", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "👥 PlayerListOverlay — Color-coded player dots", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Shows player color, name, room, and host badge", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Individual fade-in on refresh", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "🏠 MainMenu — Animated entrance sequence", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Logo drops with elastic overshoot", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Buttons cascade in every 55ms", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Animated background with floating cards & dust motes", "size": 12, "color": ThemeManager.subtext_color},
 		{"text": "", "size": 0, "color": Color()},
-		{"text": "📋 New Services", "size": 16, "color": Color(0.4, 0.8, 1.0)},
-		{"text": "• RoomService - Room generation & sync", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• NetworkService - Network abstraction", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• ExhibitService - Exhibit lifecycle", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• RaceService - Race logic & validation", "size": 13, "color": ThemeManager.subtext_color},
+		
+		{"text": "🐛 Critical Bug Fixes", "size": 16, "color": Color(1.0, 0.6, 0.4)},
+		{"text": " Hint System Removed — Architectural issues", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Multiplayer sync problems with backlink caching", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Door injection conflicted with room generation", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Now pure Wikipedia navigation (no artificial hints)", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "🏁 Race Win Detection — Fixed single-player win not triggering", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Fallback to local visited pages when network paths empty", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "🔢 Countdown Double-Fire — Fixed broken animation", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Separated local vs remote signal firing", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "📦 LoadingScreen Flash — Fixed black flash on vote start", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Removed premature visibility toggle", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "📖 JournalOverlay — Fixed dark mode crash", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Removed problematic article fetch from theme callback", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "📍 LoadingScreen Centering — Fixed off-center position", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Switched to symmetric anchor positioning", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "🔧 Type Errors — Fixed Array[String] and Dictionary issues", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• RaceManager path handling corrected", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• GraphicsSettings line 656 crash fixed", "size": 12, "color": ThemeManager.subtext_color},
 		{"text": "", "size": 0, "color": Color()},
-		{"text": "🎮 Existing Features (Still Working!)", "size": 16, "color": ThemeManager.text_color},
-		{"text": "• 📅 Daily Challenge System", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• 🔒 Anti-Cheat Measures", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• 🎮 All 9 Power-ups", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• ⏱️ Race Countdown (3-2-1-GO!)", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• 🚪 Search Corridor Door System", "size": 13, "color": ThemeManager.subtext_color},
+		
+		{"text": "🎨 Polish & Theming", "size": 16, "color": Color(0.4, 0.8, 1.0)},
+		{"text": "✨ Consistent panel styling across all UI", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Theme-aware backgrounds, borders, shadows", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Ghost button style with accent hover tint", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "🗺️ MinimapHUD — Theme-aware panel & accent border", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Slide animations on toggle", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Serif font on zoom label", "size": 12, "color": ThemeManager.subtext_color},
 		{"text": "", "size": 0, "color": Color()},
-		{"text": "🎯 Recent Improvements", "size": 16, "color": Color(0.4, 0.8, 1.0)},
-		{"text": "• 🏁 Fixed raceline spawn position", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• 🧭 Players now face search corridor", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• 👥 Multi-player spawn spread (no stacking)", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• 📋 Fixed timeline duplicate entries", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• 🎨 Light mode text readability fixes", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• 🪑 Fixed bench dismount issue", "size": 13, "color": ThemeManager.subtext_color},
+		
+		{"text": "⚡ Performance", "size": 16, "color": Color(0.4, 0.8, 1.0)},
+		{"text": "🧹 Debug logs stripped in release builds", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "💾 LRU cache for article data (500 max)", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "🛑 Memory leak prevention in long sessions", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "🌐 Faster network queue processing", "size": 13, "color": ThemeManager.subtext_color},
 		{"text": "", "size": 0, "color": Color()},
-		{"text": "⚡ Performance Optimizations", "size": 16, "color": Color(0.4, 0.8, 1.0)},
-		{"text": "• Debug logs stripped in release builds", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• LRU cache for article data (500 max)", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• Memory leak prevention in long sessions", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• Faster network queue processing", "size": 13, "color": ThemeManager.subtext_color},
+		
+		{"text": "⚠️ Important Notice", "size": 16, "color": Color(1.0, 0.5, 0.3)},
+		{"text": "🚫 Power-ups Temporarily Disabled", "size": 14, "color": Color(1.0, 0.5, 0.3)},
+		{"text": "• All 9 power-ups disabled for the foreseeable future", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Being reworked for better balance and stability", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "• Will return in a future update", "size": 12, "color": ThemeManager.subtext_color},
 		{"text": "", "size": 0, "color": Color()},
-		{"text": "🐛 Bug Fixes", "size": 16, "color": Color(0.4, 0.8, 1.0)},
-		{"text": "• Fixed race_won signal argument mismatch", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• Fixed Daily Challenge HUD light mode", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• Fixed mount system for static seats", "size": 13, "color": ThemeManager.subtext_color},
-		{"text": "• Added proper error handling throughout", "size": 13, "color": ThemeManager.subtext_color},
+		
+		{"text": "📁 Files Changed", "size": 16, "color": Color(0.4, 0.8, 1.0)},
+		{"text": "✨ New: RaceCountdown, LoadingScreen, LeaderboardHUD, MainMenuBackground", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "🔄 Rewritten: VictoryScreen, VoteHUD, RaceHUD, PlayerListOverlay", "size": 12, "color": ThemeManager.subtext_color},
+		{"text": "🔧 Modified: MainMenu, MultiplayerMenu, MinimapHUD, RaceManager, Main.gd", "size": 12, "color": ThemeManager.subtext_color},
 	]
 
 	for entry in content:
@@ -421,25 +479,49 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # ── Animations ────────────────────────────────────────────────────────────────
 
+# ── Animations ────────────────────────────────────────────────────────────────
+
 func _entrance_animation() -> void:
-	var vbox := get_node_or_null("MarginContainer/CenterContainer/VBoxContainer") as Control
-	if vbox:
-		vbox.modulate.a  = 0.0
-		vbox.position.y  = 14.0
+	var logo     := get_node_or_null("MarginContainer/CenterContainer/VBoxContainer/TextureRect") as TextureRect
+	var subtitle := get_node_or_null("MarginContainer/CenterContainer/VBoxContainer/Label3") as Label
+	var panel    := get_node_or_null("MarginContainer/CenterContainer/VBoxContainer/PanelContainer") as PanelContainer
+
+	# ── 1. Logo fades in gently from slightly above — no spring, just serenity ─
+	if logo:
+		logo.pivot_offset = logo.size * 0.5
+		logo.modulate.a   = 0.0
+		logo.position.y  += -18.0
+		var ltw := create_tween().set_parallel(true)
+		ltw.tween_property(logo, "modulate:a", 1.0, 0.80) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		ltw.tween_property(logo, "position:y", logo.position.y + 18.0, 0.80) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+	# ── 2. Subtitle fades in quietly after the logo settles ──────────────────
+	if subtitle:
+		subtitle.modulate.a = 0.0
+		var stw := create_tween()
+		stw.tween_property(subtitle, "modulate:a", 1.0, 0.70) \
+			.set_delay(0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+	# ── 3. Panel and buttons drift up and in ─────────────────────────────────
+	if panel:
+		panel.modulate.a  = 0.0
+		panel.position.y += 10.0
 		var ptw := create_tween().set_parallel(true)
-		ptw.tween_property(vbox, "modulate:a",  1.0,   0.40).set_delay(0.10)
-		ptw.tween_property(vbox, "position:y",  0.0,   0.40) \
-			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(0.10)
+		ptw.tween_property(panel, "modulate:a", 1.0, 0.45).set_delay(0.65)
+		ptw.tween_property(panel, "position:y", panel.position.y - 10.0, 0.45) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT).set_delay(0.65)
 
 	var container := get_node_or_null(_BTN_PATH.trim_suffix("/"))
 	if container:
-		var delay := 0.22
+		var delay := 0.78
 		for child in container.get_children():
 			if child is Button:
 				child.modulate.a = 0.0
 				var btw := create_tween()
-				btw.tween_property(child, "modulate:a", 1.0, 0.28).set_delay(delay)
-				delay += 0.06
+				btw.tween_property(child, "modulate:a", 1.0, 0.32).set_delay(delay)
+				delay += 0.05
 
 	_start_fade_in()
 
