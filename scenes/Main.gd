@@ -1236,6 +1236,15 @@ func _start_multiplayer_game() -> void:
 		for peer_id: int in NetworkManager.get_player_list():
 			if peer_id != NetworkManager.get_unique_id():
 				_multiplayer_controller.spawn_network_player(peer_id)
+		
+		# If this is a client (not the server), ensure we have a network player for the host
+		# This is critical for clients to see the host player
+		if not NetworkManager.is_server() and not _multiplayer_controller.get_network_players().has(1):
+			print("Main: Spawning network player for host (peer 1) on game start")
+			var host_player := _multiplayer_controller.spawn_network_player(1)
+			# Request host's player info if not already received
+			if not NetworkManager.player_info.has(1):
+				NetworkManager._request_player_info.rpc_id(1, NetworkManager.get_unique_id())
 
 func _on_network_peer_connected(peer_id: int) -> void:
 	# Set timeout unconditionally — must happen regardless of game state.
@@ -1243,14 +1252,24 @@ func _on_network_peer_connected(peer_id: int) -> void:
 		var enet_peer := NetworkManager.peer.get_peer(peer_id)
 		if enet_peer:
 			enet_peer.set_timeout(32, 20000, 60000)
-	
+
 	Log.debug("Main", "_on_network_peer_connected - peer_id=%d, game_started=%s, is_multiplayer_game=%s" % [
 		peer_id, str(game_started), str(_multiplayer_controller.is_multiplayer_game())
 	])
-	
+
 	if _multiplayer_controller.is_multiplayer_game() and game_started:
 		print("Main: Spawning network player for peer %d (game started)" % peer_id)
 		_multiplayer_controller.spawn_network_player(peer_id)
+		
+		# If this is a client connecting (not the server), spawn a network player for the host
+		# This ensures clients can see the host player
+		if not NetworkManager.is_server() and peer_id != 1 and not _multiplayer_controller.get_network_players().has(1):
+			print("Main: Spawning network player for host (peer 1)")
+			var host_player := _multiplayer_controller.spawn_network_player(1)
+			# Request host's player info if not already received
+			if not NetworkManager.player_info.has(1):
+				NetworkManager._request_player_info.rpc_id(1, NetworkManager.get_unique_id())
+			
 	elif _multiplayer_controller.is_multiplayer_game() and not game_started:
 		# Game hasn't started yet, but we should still track the player
 		print("Main: Peer %d connected but game hasn't started yet" % peer_id)
