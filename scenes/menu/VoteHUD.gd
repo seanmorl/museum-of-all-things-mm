@@ -518,6 +518,10 @@ func _on_vote_ended(winner: String) -> void:
 	for btn in _candidate_buttons: btn.disabled = true
 	_reroll_btn.visible = false
 	if _host_panel: _host_panel.visible = false
+	# Auto-close vote menu when vote ends (race is about to start)
+	# Give a brief moment for players to see the winner, then close
+	await get_tree().create_timer(2.0).timeout
+	visible = false
 
 
 func _on_race_started(_target: String, _start: String) -> void:

@@ -532,6 +532,10 @@ func _build_accessibility_settings() -> Control:
 	font_option.add_item("Default (Cormorant Garamond)")
 	font_option.add_item("OpenDyslexic")
 	font_option.add_item("Atkinson Hyperlegible")
+	# Additional fonts disabled - Godot 4.x font rendering issues
+	# font_option.add_item("Spectral")
+	# font_option.add_item("Satoshi")
+	# font_option.add_item("MonaSans")
 	var font_choice: int = saved.get("reading_font", 0)
 	font_option.selected = font_choice
 	font_option.item_selected.connect(func(idx: int):

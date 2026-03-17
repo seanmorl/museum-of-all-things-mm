@@ -3,6 +3,7 @@ class_name MultiplayerMenu
 
 signal back
 signal start_game
+signal open_tournament_setup  ## Emitted when host presses Wiki Races mode in lobby
 
 static var default_server_address := "responsible-interactions.gl.at.ply.gg:18964"
 const DEFAULT_HOST_NAME := "Host"
@@ -566,6 +567,7 @@ func _on_host_start_pressed() -> void:
 	_start_button.visible = true
 	_update_player_list()
 	_show_state(MenuState.LOBBY)
+	_add_tournament_button()
 
 func _on_host_back_pressed() -> void:
 	_show_state(MenuState.MAIN)
@@ -671,6 +673,81 @@ func _on_lobby_leave_pressed() -> void:
 
 func _on_peer_connected(_id: int) -> void:
 	_update_player_list()
+
+func _add_tournament_button() -> void:
+	## Adds the Wiki Races button to the lobby — host only.
+	## Idempotent: safe to call multiple times.
+	if not _lobby_container:
+		return
+	if _lobby_container.get_node_or_null("TournamentButton"):
+		return  # already added
+	var btn := Button.new()
+	btn.name = "TournamentButton"
+	btn.text = "🏆  Wiki Races"
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_style_button(btn)
+	# Show a visual distinction when a tournament is already running
+	if TournamentManager.is_active():
+		btn.text = "🏆  Wiki Races — Round %d/%d" % [
+			TournamentManager.get_current_round(),
+			TournamentManager.get_total_rounds()
+		]
+	btn.pressed.connect(func():
+		if TournamentManager.is_active():
+			# Give the host a cancel option instead
+			_show_tournament_cancel_confirm()
+		else:
+			open_tournament_setup.emit()
+	)
+	_lobby_container.add_child(btn)
+	# Position above the Leave button
+	var leave := _lobby_container.get_node_or_null("LobbyLeaveButton")
+	if leave:
+		_lobby_container.move_child(btn, leave.get_index())
+	# Update button text if tournament state changes while menu is open
+	TournamentManager.tournament_started.connect(func(_cfg):
+		if is_instance_valid(btn):
+			btn.text = "🏆  Wiki Races — Starting"
+	, CONNECT_ONE_SHOT)
+	TournamentManager.tournament_cancelled.connect(func():
+		if is_instance_valid(btn):
+			btn.text = "🏆  Wiki Races"
+	)
+
+
+func _show_tournament_cancel_confirm() -> void:
+	## Simple confirm dialog so the host doesn't accidentally cancel a running tournament.
+	var dialog_node := _lobby_container.get_node_or_null("TournamentCancelConfirm")
+	if dialog_node:
+		dialog_node.queue_free()
+		return
+	var hbox := HBoxContainer.new()
+	hbox.name = "TournamentCancelConfirm"
+	hbox.add_theme_constant_override("separation", 6)
+	_lobby_container.add_child(hbox)
+	var leave := _lobby_container.get_node_or_null("LobbyLeaveButton")
+	if leave:
+		_lobby_container.move_child(hbox, leave.get_index())
+	var lbl := Label.new()
+	lbl.text = "Cancel Wiki Races?"
+	lbl.add_theme_color_override("font_color", Color(0.85, 0.25, 0.25))
+	if _serif_font: lbl.add_theme_font_override("font", _serif_font)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(lbl)
+	var yes_btn := Button.new()
+	yes_btn.text = "Yes"
+	yes_btn.pressed.connect(func():
+		TournamentManager.host_cancel_tournament()
+		hbox.queue_free()
+	)
+	_style_button(yes_btn)
+	hbox.add_child(yes_btn)
+	var no_btn := Button.new()
+	no_btn.text = "No"
+	no_btn.pressed.connect(func(): hbox.queue_free())
+	_style_button(no_btn)
+	hbox.add_child(no_btn)
+
 
 func _on_peer_disconnected(_id: int) -> void:
 	_update_player_list()

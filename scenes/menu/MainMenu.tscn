@@ -3,13 +3,12 @@
 [ext_resource type="Script" uid="uid://dvi1pswxc3j03" path="res://scenes/menu/MainMenu.gd" id="1_cmhx0"]
 [ext_resource type="Theme" uid="uid://dgt5fjkytx07d" path="res://assets/resources/menu_theme.tres" id="1_dwey2"]
 [ext_resource type="Texture2D" uid="uid://dgfyxj62mioye" path="res://assets/logo/moat_logo_large_funky.png" id="3_vuiv8"]
-[ext_resource type="PackedScene" uid="uid://cv3acpc23tjw0" path="res://scenes/menu/LanguageSelection.tscn" id="4_2nud1"]
 [ext_resource type="FontFile" uid="uid://bxph8sc2vndn" path="res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf" id="5_serif"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_46gfj"]
 font = ExtResource("5_serif")
 font_size = 48
-font_color = Color(0, 0, 0, 1)
+font_color = Color(1, 1, 1, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 40.0
@@ -22,10 +21,10 @@ border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
 border_color = Color(0.635, 0.663, 0.694, 1)
-corner_radius_top_left = 2
-corner_radius_top_right = 2
-corner_radius_bottom_right = 2
-corner_radius_bottom_left = 2
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
 
 [node name="MainMenu" type="Control" unique_id=1948110404]
 layout_mode = 3
@@ -78,35 +77,10 @@ text = " "
 label_settings = SubResource("LabelSettings_46gfj")
 
 [node name="PanelContainer" type="PanelContainer" parent="MarginContainer/CenterContainer/VBoxContainer" unique_id=1319940688]
-custom_minimum_size = Vector2(400, 0)
+custom_minimum_size = Vector2(420, 380)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
-
-[node name="ButtonContainer" type="VBoxContainer" parent="MarginContainer/CenterContainer/VBoxContainer/PanelContainer" unique_id=591725381]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Start" type="Button" parent="MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer" unique_id=1316139302]
-layout_mode = 2
-text = "Enter the Museum"
-
-[node name="Multiplayer" type="Button" parent="MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer" unique_id=290461112]
-layout_mode = 2
-text = "Multiplayer"
-
-[node name="Settings" type="Button" parent="MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer" unique_id=1469059825]
-layout_mode = 2
-size_flags_vertical = 0
-text = "Settings"
-
-[node name="Quit" type="Button" parent="MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer" unique_id=1195762940]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Quit"
-
-[node name="Language" parent="MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer" unique_id=1277089359 instance=ExtResource("4_2nud1")]
-layout_mode = 2
 
 [node name="FadeIn" type="ColorRect" parent="." unique_id=1046280955]
 z_index = 2
@@ -120,6 +94,7 @@ mouse_filter = 2
 color = Color(0, 0, 0, 0)
 
 [node name="FadeInStage2" type="ColorRect" parent="." unique_id=2117895043]
+z_index = 2
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -128,9 +103,3 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0)
-
-[connection signal="visibility_changed" from="." to="." method="_on_visibility_changed"]
-[connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer/Start" to="." method="_on_start_pressed"]
-[connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer/Multiplayer" to="." method="_on_multiplayer_pressed"]
-[connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer/Settings" to="." method="_on_settings_pressed"]
-[connection signal="pressed" from="MarginContainer/CenterContainer/VBoxContainer/PanelContainer/ButtonContainer/Quit" to="." method="_on_quit_button_pressed"]

@@ -55,6 +55,7 @@ Services="*res://scenes/core/Services.gd"
 LeaderboardManager="*res://scenes/util/LeaderboardManager.gd"
 LoadingScreen="*res://scenes/ui/LoadingScreen.tscn"
 RaceCountdown="*res://scenes/ui/RaceCountdown.tscn"
+TournamentManager="*uid://c5soqs2h61dt4"
 
 [display]
 

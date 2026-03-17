@@ -99,12 +99,13 @@ func _build_race_panel() -> void:
 	_race_style = StyleBoxFlat.new()
 	_race_panel.add_theme_stylebox_override("panel", _race_style)
 	_race_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_race_panel.grow_horizontal = Control.GROW_DIRECTION_END
-	_race_panel.grow_vertical   = Control.GROW_DIRECTION_END
+	_race_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN  # Don't grow horizontally
+	_race_panel.grow_vertical   = Control.GROW_DIRECTION_BEGIN  # Don't grow vertically
 	_race_panel.offset_left   =  12
 	_race_panel.offset_top    =  12
 	_race_panel.offset_right  = 212   # 200px wide
-	_race_panel.offset_bottom = 212   # fixed height — scroll fills the gap
+	_race_panel.offset_bottom = 200   # Fixed height (188px content area)
+	_race_panel.custom_minimum_size = Vector2(200, 188)  # Enforce fixed size
 	_race_panel.visible = false
 	add_child(_race_panel)
 
@@ -158,6 +159,8 @@ func _build_race_panel() -> void:
 	_timeline_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_timeline_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_AUTO
 	_timeline_scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
+	# Fix maximum height to prevent panel from growing
+	_timeline_scroll.custom_minimum_size = Vector2(0, 80)  # Fixed height for timeline
 	# Never let the scroll bar itself be interactive (auto-scroll only)
 	_timeline_scroll.get_v_scroll_bar().mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(_timeline_scroll)
@@ -333,8 +336,7 @@ func _refresh_timeline() -> void:
 			tw.tween_property(lbl, "position:x", 0.0, 0.25) \
 				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
-	# Panel is fixed height — scroll fills the remaining space automatically.
-	# No need to resize custom_minimum_size here.
+	# Panel is fixed height — scroll container enforces max height
 	_scroll_to_bottom()
 
 

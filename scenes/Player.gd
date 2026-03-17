@@ -377,7 +377,13 @@ func _physics_process(delta: float) -> void:
 	if is_local and is_instance_valid(_map_camera):
 		# Camera is 10m above player, looking down with near=7 far=11
 		# This skips ceilings (2-3m above) and sees floors/walls
-		_map_camera.global_position = Vector3(global_position.x, global_position.y + 10.0, global_position.z)
+		# Lock Y to floor level so jumps don't bring ceilings into the near clipping plane
+		var map_y: float = _last_valid_position.y if _last_valid_position.y > -40.0 else global_position.y
+		if is_on_floor():
+			_map_camera.global_position = Vector3(global_position.x, global_position.y + 10.0, global_position.z)
+		else:
+			# Only update XZ while in the air (jumping)
+			_map_camera.global_position = Vector3(global_position.x, _map_camera.global_position.y, global_position.z)
 
 	_footstep_player.set_on_floor(is_on_floor())
 

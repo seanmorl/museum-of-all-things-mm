@@ -23,11 +23,17 @@ func get_nav_queue() -> Array:
 
 func open_menu(menu: Menu) -> void:
 	_menu_layer.visible = menu != Menu.NONE
-	_menu_layer.get_node("MainMenu").visible = menu == Menu.MAIN
-	_menu_layer.get_node("PauseMenu").visible = menu == Menu.PAUSE
-	_menu_layer.get_node("Settings").visible = menu == Menu.SETTINGS
-	_menu_layer.get_node("PopupTerminalMenu").visible = menu == Menu.TERMINAL
-	_menu_layer.get_node("MultiplayerMenu").visible = menu == Menu.MULTIPLAYER
+	var main_menu = _menu_layer.get_node_or_null("MainMenu")
+	var pause_menu = _menu_layer.get_node_or_null("PauseMenu")
+	var settings_menu = _menu_layer.get_node_or_null("Settings")
+	var terminal_menu = _menu_layer.get_node_or_null("PopupTerminalMenu")
+	var multiplayer_menu = _menu_layer.get_node_or_null("MultiplayerMenu")
+	
+	if main_menu: main_menu.visible = menu == Menu.MAIN
+	if pause_menu: pause_menu.visible = menu == Menu.PAUSE
+	if settings_menu: settings_menu.visible = menu == Menu.SETTINGS
+	if terminal_menu: terminal_menu.visible = menu == Menu.TERMINAL
+	if multiplayer_menu: multiplayer_menu.visible = menu == Menu.MULTIPLAYER
 
 
 func close_menus() -> void:
@@ -36,6 +42,8 @@ func close_menus() -> void:
 
 func open_main_menu() -> void:
 	open_menu(Menu.MAIN)
+	# Trigger entrance animation when opening main menu
+	_trigger_main_menu_entrance()
 
 
 func open_pause_menu() -> void:
@@ -64,9 +72,31 @@ func is_menu_visible() -> bool:
 	return _menu_layer.visible
 
 
+func _trigger_main_menu_entrance() -> void:
+	"""Re-trigger the Main Menu entrance animation when returning from sub-menus."""
+	if not _menu_layer:
+		push_warning("MainMenuController: _menu_layer is null")
+		return
+	var main_menu := _menu_layer.get_node_or_null("MainMenu")
+	if not main_menu:
+		push_warning("MainMenuController: MainMenu node not found in _menu_layer")
+		return
+	if not main_menu.visible:
+		push_warning("MainMenuController: MainMenu is not visible when trying to trigger entrance animation")
+	if not main_menu.has_method("_entrance_animation"):
+		push_warning("MainMenuController: MainMenu does not have _entrance_animation method")
+		return
+	main_menu.call("_entrance_animation")
+
+
 func on_main_menu_settings() -> void:
 	_menu_nav_queue.append(open_main_menu)
 	open_settings_menu()
+
+
+func on_main_menu_start_pressed() -> void:
+	# Start game directly from main menu
+	game_start_requested.emit()
 
 
 func on_pause_menu_settings() -> void:
@@ -92,7 +122,7 @@ func on_settings_back() -> void:
 	if prev:
 		prev.call()
 	else:
-		game_start_requested.emit()
+		open_main_menu()
 
 
 func on_multiplayer_start_game() -> void:

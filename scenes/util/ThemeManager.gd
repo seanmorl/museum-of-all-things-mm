@@ -30,7 +30,11 @@ const _DARK := {
 const FONT_PATHS := [
 	"res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf",
 	"res://assets/fonts/OpenDyslexic/OpenDyslexic-Regular.otf",
-	"res://assets/fonts/AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf"
+	"res://assets/fonts/AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf",
+	# Additional fonts (may not render properly in Godot 4.x):
+	# "res://assets/fonts/Spectral/Spectral-Regular.ttf",
+	# "res://assets/fonts/Satoshi/Fonts/WEB/fonts/Satoshi-Regular.ttf",
+	# "res://assets/fonts/MonaSans/MonaSans-Black.ttf"
 ]
 
 func _ready() -> void:
@@ -62,7 +66,14 @@ func get_reading_font() -> Font:
 	var path := FONT_PATHS[0]
 	if current_font_index >= 0 and current_font_index < FONT_PATHS.size():
 		path = FONT_PATHS[current_font_index]
-	return load(path) as Font
+	
+	var font := load(path) as Font
+	if not font:
+		# Fallback to first font if selected font fails to load
+		push_warning("ThemeManager: Failed to load font '%s', using fallback" % path)
+		font = load(FONT_PATHS[0]) as Font
+	
+	return font
 
 
 func set_reading_font(index: int) -> void:

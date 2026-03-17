@@ -588,15 +588,18 @@ func _calculate_state_hash() -> String:
 	}
 	return str(state.hash())
 
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _request_state_hash() -> void:
 	"""Request state hash from a client"""
 	var client_hash = _calculate_state_hash()
 	_send_state_hash.rpc_id(1, multiplayer.get_remote_sender_id(), client_hash)
 
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _send_state_hash(peer_id: int, client_hash: String) -> void:
 	"""Receive state hash from client and compare"""
+	# Only server processes state hashes
+	if not is_server():
+		return
 	if client_hash != _local_state_hash:
 		Log.warn("Network", "State desync detected for peer %d! Resyncing..." % peer_id)
 		_resync_client(peer_id)

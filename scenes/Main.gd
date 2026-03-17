@@ -35,13 +35,14 @@ var _host_menu: CanvasLayer = null
 @onready var player_list_overlay: Control = %PlayerListOverlay
 @onready var _server_console_overlay: Control = %ServerConsoleOverlay
 @onready var _map_overlay: Control = %ExhibitMapOverlay
-@onready var _minimap_hud: Control = %MinimapHUD
-@onready var _connection_hud: Control = %ConnectionHUD
+var _minimap_controller: Control = null
+
+# ── Tournament nodes (created in _ready) ──────────────────────────────────────
+var _tournament_setup_menu:    Control = null
+var _tournament_hud:           Control = null
+var _tournament_victory_screen: Control = null
 @onready var _trivia_overlay: TriviaOverlay = %TriviaOverlay
 @onready var _powerup_hud: Control = %PowerupHUD
-
-## 0 = hidden, 1 = 3D minimap, 2 = connection map
-var _minimap_mode: int = 0
 @onready var _guestbook_overlay: GuestbookOverlay = %GuestbookOverlay
 @onready var _prompt_hud: Control = %PromptHUD
 @onready var _menu_layer: CanvasLayer = %MenuLayer
@@ -142,10 +143,20 @@ func _initialize_room_service() -> void:
 	
 	# Connect dedicated host button from MainMenu
 	var main_menu_node := _menu_layer.get_node_or_null("MainMenu")
-	if main_menu_node and main_menu_node.has_signal("start_dedicated_host"):
-		main_menu_node.start_dedicated_host.connect(_on_dedicated_host_pressed)
-	# Animate card out in sync with every MainMenu button (Enter, Multiplayer, Settings, Quit)
 	if main_menu_node:
+		# Connect MainMenu buttons to controller
+		if main_menu_node.has_signal("start"):
+			main_menu_node.start.connect(func(): _menu_controller.on_main_menu_start_pressed())
+		if main_menu_node.has_signal("start_multiplayer"):
+			main_menu_node.start_multiplayer.connect(func(): _menu_controller.on_main_menu_multiplayer())
+		if main_menu_node.has_signal("settings"):
+			main_menu_node.settings.connect(func(): _menu_controller.on_main_menu_settings())
+		
+		# Connect dedicated host button
+		if main_menu_node.has_signal("start_dedicated_host"):
+			main_menu_node.start_dedicated_host.connect(_on_dedicated_host_pressed)
+		
+		# Animate card out in sync with every MainMenu button
 		for sig: String in ["start", "settings", "start_multiplayer", "start_dedicated_host"]:
 			if main_menu_node.has_signal(sig):
 				main_menu_node.connect(sig, func():
@@ -162,7 +173,7 @@ func _initialize_room_service() -> void:
 	if settings_node and settings_node.has_signal("resume") \
 			and not settings_node.resume.is_connected(_on_settings_back):
 		settings_node.resume.connect(_on_settings_back)
-	
+
 	_multiplayer_controller = MultiplayerController.new()
 	_multiplayer_controller.init(self, NetworkPlayer, starting_point)
 	add_child(_multiplayer_controller)
@@ -188,6 +199,9 @@ func _initialize_room_service() -> void:
 	_chat_hud.name = "ChatHUD"
 	add_child(_chat_hud)
 	_chat_hud.init(_chat_system)
+
+	# ── Tournament mode ────────────────────────────────────────────────────────
+	_spawn_tournament_nodes()
 
 	_trivia_manager = TriviaManager.new()
 	_trivia_manager.name = "TriviaManager"
@@ -324,19 +338,7 @@ func _initialize_room_service() -> void:
 		var ev_ss := InputEventKey.new()
 		ev_ss.physical_keycode = KEY_F12
 		InputMap.action_add_event("take_screenshot", ev_ss)
-
-	# Register leaderboard keybind (L)
-	if not InputMap.has_action("toggle_leaderboard"):
-		InputMap.add_action("toggle_leaderboard")
-		var ev_l := InputEventKey.new()
-		ev_l.physical_keycode = KEY_L
-		InputMap.action_add_event("toggle_leaderboard", ev_l)
-
-	# Add LeaderboardHUD programmatically (pure code UI)
-	var leaderboard_hud: Control = load("res://scenes/ui/LeaderboardHUD.gd").new()
-	leaderboard_hud.name = "LeaderboardHUD"
-	add_child(leaderboard_hud)
-
+	
 	if _multiplayer_controller.is_server_mode():
 		_start_dedicated_server()
 		return
@@ -345,6 +347,12 @@ func _initialize_room_service() -> void:
 		_fps_label.visible = false
 	
 	_recreate_player()
+	
+	# Create minimap controller (replaces old MinimapHUD + ConnectionHUD)
+	_minimap_controller = load("res://scenes/ui/MinimapController.gd").new()
+	_minimap_controller.name = "MinimapController"
+	add_child(_minimap_controller)
+	_minimap_controller.init(_player)
 	
 	GraphicsManager.change_post_processing.connect(_change_post_processing)
 	GraphicsManager.init()
@@ -371,13 +379,6 @@ func _initialize_room_service() -> void:
 	RaceManager.race_countdown.connect(_on_race_countdown)
 	RaceManager.race_won.connect(_on_race_won)
 	RaceManager.vote_cancelled.connect(_on_vote_cancelled)
-	## As soon as the vote winner is known, tell RaceCountdown the target so
-	## "Find: [Article]" shows on the first beat of the 3-2-1 countdown.
-	RaceManager.vote_ended.connect(func(winner: String):
-		var countdown := get_node_or_null("/root/RaceCountdown")
-		if countdown and countdown.has_method("set_target"):
-			countdown.set_target(winner)
-	)
 	if RaceManager.has_signal("race_won"):
 		RaceManager.race_won.connect(_on_race_won_for_daily_challenge)
 	ExhibitFetcher.random_complete.connect(_on_random_article_complete)
@@ -428,8 +429,8 @@ func _recreate_player() -> void:
 	_player.dampening = smooth_movement_dampening
 	_player.position = starting_point
 	_player.set_player_color(NetworkManager.local_player_color)
-	if _minimap_hud and _minimap_hud.has_method("init"):
-		_minimap_hud.init(_player)
+	if _minimap_controller and _minimap_controller.has_method("init"):
+		_minimap_controller.init(_player)
 	if _prompt_hud and _prompt_hud.has_method("init"):
 		_prompt_hud.init(_player)
 	if _powerup_hud and _powerup_hud.has_method("init"):
@@ -478,10 +479,8 @@ func _start_game() -> void:
 	if _daily_challenge_card and _daily_challenge_card.has_method("_hide_card"):
 		_daily_challenge_card._hide_card()
 	_map_overlay.restore_after_pause()
-	if _minimap_hud and _minimap_hud.has_method("restore_after_pause"):
-		_minimap_hud.restore_after_pause()
-	if _connection_hud and _connection_hud.has_method("restore_after_pause"):
-		_connection_hud.restore_after_pause()
+	if _minimap_controller and _minimap_controller.has_method("restore_after_pause"):
+		_minimap_controller.restore_after_pause()
 	# PowerupHUD will auto-show when powerups are collected
 	if not game_started:
 		game_started = true
@@ -520,37 +519,16 @@ func _use_terminal() -> void:
 		if _chat_system:
 			_chat_system._show_system_message("⚠ Terminal disabled during Daily Challenge")
 		return
-	if _minimap_hud and _minimap_hud.has_method("set_hidden"):
-		_minimap_hud.set_hidden()
-	if _connection_hud and _connection_hud.has_method("set_hidden"):
-		_connection_hud.set_hidden()
+	if _minimap_controller and _minimap_controller.has_method("set_hidden"):
+		_minimap_controller.set_hidden()
 	# Don't hide powerup HUD - players should still see their active powerups
-	_minimap_mode = 0
 	_player.pause()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_menu_controller.open_terminal_menu()
 
 func _cycle_minimap() -> void:
-	_minimap_mode = (_minimap_mode + 1) % 3
-	match _minimap_mode:
-		0: # Hidden
-			if _minimap_hud and _minimap_hud.has_method("set_hidden"):
-				_minimap_hud.set_hidden()
-			if _connection_hud and _connection_hud.has_method("set_hidden"):
-				_connection_hud.set_hidden()
-			# NOTE: Do NOT touch _powerup_hud here — minimap cycling is independent
-		1: # 3D Minimap
-			if _minimap_hud and _minimap_hud.has_method("show_hud"):
-				_minimap_hud.show_hud()
-			if _connection_hud and _connection_hud.has_method("set_hidden"):
-				_connection_hud.set_hidden()
-			# NOTE: Do NOT touch _powerup_hud here — it manages its own visibility
-		2: # Connection map
-			if _minimap_hud and _minimap_hud.has_method("set_hidden"):
-				_minimap_hud.set_hidden()
-			if _connection_hud and _connection_hud.has_method("show_hud"):
-				_connection_hud.show_hud()
-			# NOTE: Do NOT touch _powerup_hud here
+	if _minimap_controller:
+		_minimap_controller.cycle()
 
 
 # =============================================================================
@@ -768,11 +746,8 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		
 		if event.is_action_pressed("pause"):
-			if _minimap_hud and _minimap_hud.has_method("set_hidden"):
-				_minimap_hud.set_hidden()
-			if _connection_hud and _connection_hud.has_method("set_hidden"):
-				_connection_hud.set_hidden()
-			_minimap_mode = 0
+			if _minimap_controller and _minimap_controller.has_method("set_hidden"):
+				_minimap_controller.set_hidden()
 			_pause_game()
 		
 		if event.is_action_pressed("free_pointer"):
@@ -1044,6 +1019,69 @@ func _on_vote_cancelled() -> void:
 	_race_fetches_pending = 0
 	_pause_game()
 
+func _spawn_tournament_nodes() -> void:
+	## Creates and wires all tournament UI nodes. Called once from _ready.
+	## Nodes live on a dedicated CanvasLayer (layer 95) — above the game HUDs
+	## but below LoadingScreen (100) and RaceCountdown (110).
+	var t_layer := CanvasLayer.new()
+	t_layer.name   = "TournamentLayer"
+	t_layer.layer  = 95
+	add_child(t_layer)
+
+	# Tournament HUD — live standings panel, always visible during a tournament
+	var t_hud_script := load("res://scenes/tournament/TournamentHUD.gd")
+	if t_hud_script:
+		_tournament_hud = Control.new()
+		_tournament_hud.set_script(t_hud_script)
+		_tournament_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_tournament_hud.name = "TournamentHUD"
+		t_layer.add_child(_tournament_hud)
+
+	# Tournament Victory Screen — champion announcement
+	var t_vic_script := load("res://scenes/tournament/TournamentVictoryScreen.gd")
+	if t_vic_script:
+		_tournament_victory_screen = Control.new()
+		_tournament_victory_screen.set_script(t_vic_script)
+		_tournament_victory_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_tournament_victory_screen.name = "TournamentVictoryScreen"
+		t_layer.add_child(_tournament_victory_screen)
+
+	# Tournament Setup Menu — host-only config panel, shown from MultiplayerMenu
+	var t_setup_script := load("res://scenes/tournament/TournamentSetupMenu.gd")
+	if t_setup_script:
+		_tournament_setup_menu = Control.new()
+		_tournament_setup_menu.set_script(t_setup_script)
+		_tournament_setup_menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_tournament_setup_menu.name = "TournamentSetupMenu"
+		_tournament_setup_menu.visible = false
+		t_layer.add_child(_tournament_setup_menu)
+		# Wire setup menu signals
+		if _tournament_setup_menu.has_signal("tournament_started"):
+			_tournament_setup_menu.tournament_started.connect(func():
+				# Kick off the first round immediately after setup closes
+				pass  # TournamentManager.host_start_tournament already calls _start_next_round
+			)
+
+	# Wire TournamentManager → MultiplayerMenu so the lobby can show setup
+	var mp_menu := _menu_layer.get_node_or_null("MultiplayerMenu")
+	if mp_menu and mp_menu.has_signal("open_tournament_setup"):
+		mp_menu.open_tournament_setup.connect(_on_open_tournament_setup)
+
+	# Cancel tournament if the host leaves the game
+	TournamentManager.tournament_cancelled.connect(func():
+		if _tournament_hud:
+			_tournament_hud.visible = false
+	)
+
+
+func _on_open_tournament_setup() -> void:
+	## Called when the host presses "Tournament Mode" in the MultiplayerMenu lobby.
+	if not NetworkManager.is_server():
+		return
+	if _tournament_setup_menu:
+		_tournament_setup_menu.open()
+
+
 func _show_vote_loading() -> void:
 	var vote_hud := get_node_or_null("TabMenu/VoteHUD")
 	if vote_hud and vote_hud.has_method("show_loading"):
@@ -1174,16 +1212,10 @@ func _fetch_and_broadcast_start_article_non_blocking(article: String) -> void:
 	})
 
 func _on_race_countdown(number: int) -> void:
-	## Play countdown sound and ensure RaceCountdown has the target article.
+	## Play countdown sound effect
 	Log.debug("Main", "Received countdown: %d" % number)
 	if number > 0 and number <= 3:
 		_play_countdown_sound()
-		## Safety fallback: push target on the first beat in case vote_ended
-		## fired before RaceCountdown was ready.
-		if number == 3:
-			var countdown := get_node_or_null("/root/RaceCountdown")
-			if countdown and countdown.has_method("set_target"):
-				countdown.set_target(RaceManager.get_target_article())
 
 func _play_countdown_sound() -> void:
 	## Play a short beep for countdown
@@ -1236,15 +1268,6 @@ func _start_multiplayer_game() -> void:
 		for peer_id: int in NetworkManager.get_player_list():
 			if peer_id != NetworkManager.get_unique_id():
 				_multiplayer_controller.spawn_network_player(peer_id)
-		
-		# If this is a client (not the server), ensure we have a network player for the host
-		# This is critical for clients to see the host player
-		if not NetworkManager.is_server() and not _multiplayer_controller.get_network_players().has(1):
-			print("Main: Spawning network player for host (peer 1) on game start")
-			var host_player := _multiplayer_controller.spawn_network_player(1)
-			# Request host's player info if not already received
-			if not NetworkManager.player_info.has(1):
-				NetworkManager._request_player_info.rpc_id(1, NetworkManager.get_unique_id())
 
 func _on_network_peer_connected(peer_id: int) -> void:
 	# Set timeout unconditionally — must happen regardless of game state.
@@ -1252,24 +1275,14 @@ func _on_network_peer_connected(peer_id: int) -> void:
 		var enet_peer := NetworkManager.peer.get_peer(peer_id)
 		if enet_peer:
 			enet_peer.set_timeout(32, 20000, 60000)
-
+	
 	Log.debug("Main", "_on_network_peer_connected - peer_id=%d, game_started=%s, is_multiplayer_game=%s" % [
 		peer_id, str(game_started), str(_multiplayer_controller.is_multiplayer_game())
 	])
-
+	
 	if _multiplayer_controller.is_multiplayer_game() and game_started:
 		print("Main: Spawning network player for peer %d (game started)" % peer_id)
 		_multiplayer_controller.spawn_network_player(peer_id)
-		
-		# If this is a client connecting (not the server), spawn a network player for the host
-		# This ensures clients can see the host player
-		if not NetworkManager.is_server() and peer_id != 1 and not _multiplayer_controller.get_network_players().has(1):
-			print("Main: Spawning network player for host (peer 1)")
-			var host_player := _multiplayer_controller.spawn_network_player(1)
-			# Request host's player info if not already received
-			if not NetworkManager.player_info.has(1):
-				NetworkManager._request_player_info.rpc_id(1, NetworkManager.get_unique_id())
-			
 	elif _multiplayer_controller.is_multiplayer_game() and not game_started:
 		# Game hasn't started yet, but we should still track the player
 		print("Main: Peer %d connected but game hasn't started yet" % peer_id)
