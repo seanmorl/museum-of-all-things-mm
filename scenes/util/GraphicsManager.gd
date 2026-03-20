@@ -37,19 +37,26 @@ func _exit_tree() -> void:
 			tween.kill()
 	_light_tweens.clear()
 
-## ── Shadow quality ─────────────────────────────────────────────────────────────
+## ── Volumetric Fog ───────────────────────────────────────────────────────────
+## Disabled by default - causes banding artifacts and performance issues
+var volumetric_fog_enabled: bool = false
+var volumetric_fog_density: float = 0.003
+var volumetric_fog_anisotropy: float = 0.6
+
+## ── Shadow Quality ───────────────────────────────────────────────────────────
 ## 0=Low(512) 1=Medium(1024) 2=High(2048) 3=Ultra(4096)
 var shadow_quality: int = 2
 
 ## ── Global Illumination ────────────────────────────────────────────────────────
 ## SDFGI (Signed Distance Field Global Illumination) — forward+ renderer only.
-## Disabled by default; the user can opt-in via Graphics Settings.
-var sdfgi_enabled:          bool  = false
+## DISABLED - causes pitch black without proper lighting setup
+## Use ambient light + directional lights instead for procedural content
+var sdfgi_enabled:          bool  = false  # DISABLED - breaks lighting
 var sdfgi_use_occlusion:    bool  = false
 var sdfgi_read_sky_light:   bool  = true
-var sdfgi_bounces:          int   = 1   # 0..4
+var sdfgi_bounces:          int   = 2   # 0..4 (higher = more bounces, slower)
 var sdfgi_cascade_count:    int   = 6   # Environment.SDFGI_CASCADES_6 / _8
-var sdfgi_min_cell_size:    float = 0.2
+var sdfgi_min_cell_size:    float = 0.5  # Larger = less precise but faster
 
 ## ── Depth of Field ─────────────────────────────────────────────────────────────
 var dof_enabled: bool = false
@@ -79,6 +86,13 @@ var contrast:   float = 1.0   # 0.5 … 2.0 multiplier
 ## ── Accessibility: reduce motion ─────────────────────────────────────────────
 ## Caps disco hue speed and suppresses rapid ambient cycling.
 var reduce_motion: bool = false
+
+## ── VoxelGI Settings ─────────────────────────────────────────────────────────
+var voxelgi_enabled: bool = true
+var voxelgi_quality: int = 2  # 0=Low, 1=Medium, 2=High, 3=Ultra
+var voxelgi_voxel_size: float = 0.8
+var voxelgi_max_distance: float = 20.0
+var voxelgi_bounces: int = 2
 
 ## ── Per-room glow tweening ────────────────────────────────────────────────────
 ## Target glow intensity driven by Museum when the room changes.
@@ -131,8 +145,8 @@ func set_render_scale(scale: float) -> void:
 func set_scale_mode(mode: int) -> void:
 	scale_mode = mode
 	var vp = get_viewport()
-	
-	if mode == 3: # Nearest (Retro/Pixelated)
+
+	if mode == 2: # Nearest (Retro/Pixelated)
 		vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 		# FIXED: Viewports use canvas_item_default_texture_filter in Godot 4
 		vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
@@ -140,8 +154,8 @@ func set_scale_mode(mode: int) -> void:
 		vp.scaling_3d_mode = mode as Viewport.Scaling3DMode
 		# Default back to Linear for standard modes (FSR/Bilinear)
 		vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR
-		
-	if mode == 2: # FSR2 has its own AA
+
+	if mode == 1: # FSR has its own AA
 		vp.msaa_3d = Viewport.MSAA_DISABLED
 	else:
 		vp.msaa_3d = msaa_3d as Viewport.MSAA
@@ -265,21 +279,36 @@ func _apply_dof_to_env() -> void:
 	e.dof_blur_far_transition = dof_focus_range
 	e.dof_blur_far_amount = dof_blur_amount
 
+func set_volumetric_fog_enabled(enabled: bool) -> void:
+	volumetric_fog_enabled = enabled
+	if _env and _env.environment:
+		_env.environment.volumetric_fog_enabled = enabled
+
+func set_volumetric_fog_density(density: float) -> void:
+	volumetric_fog_density = density
+	if _env and _env.environment:
+		_env.environment.volumetric_fog_density = density
+
+func set_volumetric_fog_anisotropy(anisotropy: float) -> void:
+	volumetric_fog_anisotropy = anisotropy
+	if _env and _env.environment:
+		_env.environment.volumetric_fog_anisotropy = anisotropy
+
 func set_ssao_enabled(enabled: bool) -> void:
-	_env.environment.ssao_enabled = enabled
+	if _env and _env.environment:
+		_env.environment.ssao_enabled = enabled
 
 func set_ssil_enabled(enabled: bool) -> void:
-	_env.environment.ssil_enabled = enabled
-
+	if _env and _env.environment:
+		_env.environment.ssil_enabled = enabled
 
 func set_ssr_enabled(enabled: bool) -> void:
-	_env.environment.ssr_enabled = enabled
+	if _env and _env.environment:
+		_env.environment.ssr_enabled = enabled
 
 func set_glow_enabled(enabled: bool) -> void:
-	_env.environment.glow_enabled = enabled
-
-func set_volumetric_fog_enabled(enabled: bool) -> void:
-	_env.environment.volumetric_fog_enabled = enabled
+	if _env and _env.environment:
+		_env.environment.glow_enabled = enabled
 
 ## ── Field of View ─────────────────────────────────────────────────────────────
 func set_camera_fov(fov: float) -> void:
@@ -351,6 +380,59 @@ func set_contrast(value: float) -> void:
 ## ── Accessibility: reduce motion ─────────────────────────────────────────────
 func set_reduce_motion(enabled: bool) -> void:
 	reduce_motion = enabled
+
+## ── VoxelGI Settings ─────────────────────────────────────────────────────────
+func set_voxelgi_enabled(enabled: bool) -> void:
+	voxelgi_enabled = enabled
+	# Update existing VoxelGI nodes
+	_update_all_voxelgi_nodes()
+
+func set_voxelgi_quality(quality: int) -> void:
+	voxelgi_quality = clampi(quality, 0, 3)
+	_update_voxelgi_params()
+
+func set_voxelgi_voxel_size(size: float) -> void:
+	voxelgi_voxel_size = clampf(size, 0.3, 2.0)
+	_update_voxelgi_params()
+
+func set_voxelgi_max_distance(distance: float) -> void:
+	voxelgi_max_distance = clampf(distance, 5.0, 50.0)
+	_update_voxelgi_params()
+
+func set_voxelgi_bounces(bounces: int) -> void:
+	voxelgi_bounces = clampi(bounces, 0, 2)
+	_update_voxelgi_params()
+
+func _update_voxelgi_params() -> void:
+	## Update all existing VoxelGI nodes with new settings
+	for voxelgi in get_tree().get_nodes_in_group("voxelgi"):
+		if voxelgi is VoxelGI:
+			voxelgi.voxel_size = voxelgi_voxel_size
+			voxelgi.max_distance = voxelgi_max_distance
+			voxelgi.use_two_bounces = voxelgi_bounces >= 2
+			voxelgi.high_quality = voxelgi_quality >= 2
+
+func _update_all_voxelgi_nodes() -> void:
+	## Enable/disable all VoxelGI nodes
+	for voxelgi in get_tree().get_nodes_in_group("voxelgi"):
+		if voxelgi is VoxelGI:
+			voxelgi.visible = voxelgi_enabled
+
+func get_voxelgi_voxel_size() -> float:
+	match voxelgi_quality:
+		0: return 1.5  # Low
+		1: return 1.0  # Medium
+		2: return 0.8  # High
+		3: return 0.5  # Ultra
+		_: return voxelgi_voxel_size
+
+func get_voxelgi_max_distance() -> float:
+	match voxelgi_quality:
+		0: return 10.0  # Low
+		1: return 15.0  # Medium
+		2: return 20.0  # High
+		3: return 30.0  # Ultra
+		_: return voxelgi_max_distance
 
 ## ── Per-room glow tweening ────────────────────────────────────────────────────
 func tween_room_glow(target_intensity: float, duration: float = 1.0) -> void:
@@ -477,6 +559,18 @@ func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 	# Accessibility
 	set_reduce_motion(s.get("reduce_motion", default.get("reduce_motion", false)))
 
+	# VoxelGI
+	set_voxelgi_enabled(s.get("voxelgi_enabled", default.get("voxelgi_enabled", true)))
+	set_voxelgi_quality(s.get("voxelgi_quality", default.get("voxelgi_quality", 2)))
+	set_voxelgi_voxel_size(s.get("voxelgi_voxel_size", default.get("voxelgi_voxel_size", 0.8)))
+	set_voxelgi_max_distance(s.get("voxelgi_max_distance", default.get("voxelgi_max_distance", 20.0)))
+	set_voxelgi_bounces(s.get("voxelgi_bounces", default.get("voxelgi_bounces", 2)))
+
+	# Volumetric Fog (disabled by default - causes artifacts)
+	set_volumetric_fog_enabled(s.get("volumetric_fog_enabled", default.get("volumetric_fog_enabled", false)))
+	set_volumetric_fog_density(s.get("volumetric_fog_density", default.get("volumetric_fog_density", 0.003)))
+	set_volumetric_fog_anisotropy(s.get("volumetric_fog_anisotropy", default.get("volumetric_fog_anisotropy", 0.6)))
+
 	var mode: int = s.get("scale_mode", default.get("scale_mode", 0))
 	set_scale_mode(mode)
 	if mode > 0:
@@ -511,7 +605,6 @@ func _create_settings_obj() -> Dictionary:
 		"ambient_light_energy": e.ambient_light_energy,
 		"ssil_enabled": e.ssil_enabled,
 		"fog_enabled": e.fog_enabled,
-		"volumetric_fog_enabled": e.volumetric_fog_enabled,
 		# SSR
 		"ssr_enabled": e.ssr_enabled,
 		"ssr_max_steps": e.ssr_max_steps,
@@ -553,6 +646,16 @@ func _create_settings_obj() -> Dictionary:
 		"contrast":             contrast,
 		# Accessibility
 		"reduce_motion":        reduce_motion,
+		# VoxelGI
+		"voxelgi_enabled":      voxelgi_enabled,
+		"voxelgi_quality":      voxelgi_quality,
+		"voxelgi_voxel_size":   voxelgi_voxel_size,
+		"voxelgi_max_distance": voxelgi_max_distance,
+		"voxelgi_bounces":      voxelgi_bounces,
+		# Volumetric Fog
+		"volumetric_fog_enabled": volumetric_fog_enabled,
+		"volumetric_fog_density": volumetric_fog_density,
+		"volumetric_fog_anisotropy": volumetric_fog_anisotropy,
 	}
 
 func restore_default_settings() -> void:

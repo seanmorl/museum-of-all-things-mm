@@ -31,6 +31,13 @@ var _timer_ring:      Control        = null
 var _ring_pulse:      float          = 0.0   # 0→1, drives scale/alpha of ring
 var _last_timer_secs: int            = -1
 
+## Active event indicator — shown below the breadcrumb trail
+var _event_row:       HBoxContainer  = null
+var _event_icon:      Control        = null   # custom drawn icon
+var _event_label:     Label          = null
+var _event_timer_lbl: Label          = null
+var _event_type_active: int          = EventManager.EventType.NONE
+
 
 # ── State ─────────────────────────────────────────────────────────────────────
 var _visited_pages:   Array[String]  = []
@@ -49,6 +56,9 @@ func _ready() -> void:
 	RaceManager.race_timer_updated.connect(_on_race_timer_updated)
 	SettingsEvents.set_current_room.connect(_on_room_changed)
 	SettingsEvents.accessibility_changed.connect(_on_accessibility_changed)
+	# Event system integration
+	EventManager.event_started.connect(_on_event_started)
+	EventManager.event_ended.connect(_on_event_ended)
 	_apply_initial_accessibility_settings()
 	# Apply saved HUD position
 	var hud_s: Variant = SettingsManager.get_settings("hud")
@@ -171,7 +181,6 @@ func _build_race_panel() -> void:
 	_timeline_scroll.add_child(_timeline_list)
 
 
-
 func _make_divider() -> ColorRect:
 	var d := ColorRect.new()
 	d.custom_minimum_size = Vector2(0, 1)
@@ -205,6 +214,16 @@ func _apply_theme(_dark: bool) -> void:
 		if _serif_font: _target_label.add_theme_font_override("font", _serif_font)
 		_target_label.add_theme_font_size_override("font_size", 11)
 		_target_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
+
+	if _event_label:
+		if _serif_font: _event_label.add_theme_font_override("font", _serif_font)
+		_event_label.add_theme_font_size_override("font_size", 10)
+		_event_label.add_theme_color_override("font_color", Color(accent, 0.90))
+
+	if _event_timer_lbl:
+		if _serif_font: _event_timer_lbl.add_theme_font_override("font", _serif_font)
+		_event_timer_lbl.add_theme_font_size_override("font_size", 10)
+		_event_timer_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
 
 	_refresh_timeline_colors()
 	_refresh_divider_colors()
@@ -397,6 +416,49 @@ func _slide_out(panel: Control, then_hide: bool = true) -> void:
 		)
 
 
+func _draw_event_icon() -> void:
+	if not _event_icon: return
+	var dark   := ThemeManager.is_dark_mode
+	var accent := Color(0.30, 0.55, 1.00) if dark else Color(0.12, 0.32, 0.82)
+	var cx: float = _event_icon.size.x * 0.5
+	var cy: float = _event_icon.size.y * 0.5
+	var r:  float = min(cx, cy)
+	# Pulsing filled dot
+	_event_icon.draw_circle(Vector2(cx, cy), r, Color(accent, 0.85))
+
+
+# ── Event signal handlers ─────────────────────────────────────────────────────
+
+func _on_event_started(event_type: int, _duration: float) -> void:
+	_event_type_active = event_type
+	var name_str: String = EventManager.get_event_name(event_type)
+	if _event_label:
+		_event_label.text = name_str
+	if _event_row:
+		_event_row.visible = true
+		# Fade in
+		_event_row.modulate.a = 0.0
+		var tw := create_tween()
+		tw.tween_property(_event_row, "modulate:a", 1.0, 0.30) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if _event_icon:
+		_event_icon.queue_redraw()
+
+
+func _on_event_ended(event_type: int) -> void:
+	if event_type != _event_type_active:
+		return
+	_event_type_active = EventManager.EventType.NONE
+	if _event_row:
+		var tw := create_tween()
+		tw.tween_property(_event_row, "modulate:a", 0.0, 0.20) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.chain().tween_callback(func():
+			if _event_row: _event_row.visible = false
+			if _event_timer_lbl: _event_timer_lbl.text = ""
+		)
+
+
 # ── _process ─────────────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
@@ -405,7 +467,16 @@ func _process(delta: float) -> void:
 		_ring_pulse = maxf(_ring_pulse - delta * 3.5, 0.0)
 		if _timer_ring: _timer_ring.queue_redraw()
 
-	# Win popup auto-dismiss
+	# Event countdown display
+	if _event_type_active != EventManager.EventType.NONE and _event_timer_lbl:
+		var remaining: float = EventManager.get_remaining_duration(_event_type_active)
+		if remaining > 0.0:
+			_event_timer_lbl.text = "%ds" % int(ceil(remaining))
+		else:
+			_event_timer_lbl.text = ""
+	# Pulse event icon
+	if _event_row and _event_row.visible and _event_icon:
+		_event_icon.queue_redraw()
 
 
 # ── Signal handlers ───────────────────────────────────────────────────────────
@@ -425,6 +496,9 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 		for c in _timeline_list.get_children(): c.queue_free()
 	if _timeline_scroll:
 		_timeline_scroll.custom_minimum_size = Vector2(0, 0)
+	# Reset event indicator
+	_event_type_active = EventManager.EventType.NONE
+	if _event_row: _event_row.visible = false
 	visible = true
 	_slide_in(_race_panel)
 

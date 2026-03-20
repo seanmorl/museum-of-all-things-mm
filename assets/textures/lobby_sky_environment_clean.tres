@@ -1,0 +1,35 @@
+[gd_resource type="Environment" format=3 uid="uid://lobby_sky_env_enhanced"]
+
+[ext_resource type="Sky" uid="uid://lobby_sky_sky" path="res://assets/textures/lobby_sky.tres" id="1_sky"]
+
+[resource]
+background_mode = 2
+sky = ExtResource("1_sky")
+sky_rotation = Vector3(0, 0.5, 0)
+ambient_light_source = 3
+ambient_light_color = Color(0.85, 0.88, 1.0, 1)
+ambient_light_sky_contribution = 0.75
+ambient_light_energy = 0.45
+fog_enabled = true
+fog_light_color = Color(0.75, 0.78, 0.85, 1)
+fog_light_energy = 0.15
+fog_sun_scatter = 0.3
+fog_density = 0.003
+fog_affect_depth_prepass = false
+ssao_enabled = true
+ssao_intensity = 0.6
+ssao_radius = 4.0
+ssao_power = 1.2
+ssao_detail = 2.0
+ssao_light_affected = false
+ssil_enabled = false
+glow_enabled = true
+glow_intensity = 0.4
+glow_strength = 1.0
+glow_bloom = 0.12
+glow_blend_mode = 2
+glow_hdr_threshold = 1.0
+glow_high_quality = false
+tonemap_mode = 4
+tonemap_exposure = 1.1
+ssr_enabled = false

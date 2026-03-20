@@ -46,6 +46,7 @@ func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
 	visible = false
 	_build_ui()
+	add_to_group("mouse_overlay")
 	_apply_theme(ThemeManager.is_dark_mode)
 	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme(ThemeManager.is_dark_mode))
 	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme(ThemeManager.is_dark_mode))
@@ -676,6 +677,70 @@ func _build_host_panel() -> void:
 	_cancel_vote_button.pressed.connect(_on_cancel_vote_pressed)
 	_host_panel.add_child(_cancel_vote_button)
 
+	# ── Environmental Events Section ────────────────────────────────────────
+	_build_events_section()
+
+
+func _build_events_section() -> void:
+	var section := VBoxContainer.new()
+	section.add_theme_constant_override("separation", 3)
+	_host_panel.add_child(section)
+
+	# Header
+	var hdr := Label.new()
+	hdr.text = "🎭 Environmental Events"
+	hdr.add_theme_font_size_override("font_size", 13)
+	if _serif_font: hdr.add_theme_font_override("font", _serif_font)
+	section.add_child(hdr)
+
+	var sep := HSeparator.new()
+	section.add_child(sep)
+
+	# Enable toggle
+	var enable_check := CheckButton.new()
+	enable_check.button_pressed = true
+	enable_check.toggled.connect(_on_events_enabled_toggled)
+	var enable_row := HBoxContainer.new()
+	enable_row.add_child(enable_check)
+	var enable_lbl := Label.new()
+	enable_lbl.text = "Enable Events"
+	enable_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	enable_row.add_child(enable_lbl)
+	section.add_child(enable_row)
+
+	# Frequency slider
+	var freq_row := HBoxContainer.new()
+	var freq_lbl := Label.new()
+	freq_lbl.text = "Frequency:"
+	freq_lbl.custom_minimum_size.x = 70
+	freq_row.add_child(freq_lbl)
+
+	var freq_slider := HSlider.new()
+	freq_slider.min_value = 30
+	freq_slider.max_value = 180
+	freq_slider.step = 15
+	freq_slider.value = 90
+	freq_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	freq_slider.value_changed.connect(_on_event_frequency_changed)
+	freq_row.add_child(freq_slider)
+
+	var freq_value := Label.new()
+	freq_value.text = "90s"
+	freq_value.custom_minimum_size.x = 40
+	freq_row.add_child(freq_value)
+	section.add_child(freq_row)
+
+	# Preset buttons
+	var preset_row := HBoxContainer.new()
+	preset_row.add_theme_constant_override("separation", 2)
+	for preset in ["Standard", "Chaos", "Chill"]:
+		var btn := Button.new()
+		btn.text = preset
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.pressed.connect(_on_event_preset_pressed.bind(preset))
+		preset_row.add_child(btn)
+	section.add_child(preset_row)
+
 
 func _build_player_management_section() -> void:
 	var section := VBoxContainer.new()
@@ -766,6 +831,45 @@ func _on_category_toggle() -> void:
 	if not _category_section: return
 	_category_section.visible = not _category_section.visible
 	_category_toggle_btn.text = ("▼  Category filter" if _category_section.visible else "▶  Category filter")
+
+# ── Event Configuration Handlers ──────────────────────────────────────────────
+
+func _on_events_enabled_toggled(enabled: bool) -> void:
+	if Engine.has_singleton("EventManager"):
+		EventManager.events_enabled = enabled
+
+func _on_event_frequency_changed(value: float) -> void:
+	if Engine.has_singleton("EventManager"):
+		EventManager.event_frequency = value
+		# Update the displayed value
+		for child in _host_panel.get_children():
+			if child is VBoxContainer:
+				for row in child.get_children():
+					if row is HBoxContainer and row.get_child(0) is Label and row.get_child(0).text == "Frequency:":
+						var value_lbl = row.get_child(3) as Label
+						if value_lbl:
+							value_lbl.text = "%ds" % int(value)
+						break
+
+func _on_event_preset_pressed(preset: String) -> void:
+	if not Engine.has_singleton("EventManager"):
+		return
+	
+	match preset:
+		"Standard":
+			EventManager.event_frequency = 90
+			EventManager.duration_modifier = 1.0
+			EventManager.max_concurrent = 1
+		"Chaos":
+			EventManager.event_frequency = 45
+			EventManager.duration_modifier = 1.5
+			EventManager.max_concurrent = 2
+		"Chill":
+			EventManager.event_frequency = 180
+			EventManager.duration_modifier = 0.75
+			EventManager.max_concurrent = 1
+	
+	print("[VoteHUD] Event preset applied: %s" % preset)
 
 func _on_category_input_changed(text: String) -> void:
 	if text.strip_edges() == "":

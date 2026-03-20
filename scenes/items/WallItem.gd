@@ -1,4 +1,5 @@
 extends Node3D
+class_name WallItem
 
 const ImageItem: PackedScene = preload("res://scenes/items/ImageItem.tscn")
 const TextItem: PackedScene = preload("res://scenes/items/TextItem.tscn")
@@ -14,6 +15,15 @@ const CEILING_DROP_Y: float = 2.0
 const LIGHT_ENERGY: float = 3.0
 const ANIMATE_DURATION: float = 0.5
 
+func _ready() -> void:
+	# Add to groups for environmental events
+	add_to_group("wall_item")
+	# Cache player references on ready
+	_update_players_cache()
+
+# Cache player references to avoid expensive get_tree() calls
+var _players_cache: Array = []
+
 @onready var _item_node: Node3D = $Item
 @onready var _item: Node3D
 @onready var _ceiling: Node3D = $Ceiling
@@ -26,13 +36,20 @@ var _item_tween: Tween = null
 var _light_tween: Tween = null
 var _ceiling_tween: Tween = null
 
+func _update_players_cache() -> void:
+	## Update cached player references
+	_players_cache.clear()
+	for player in get_tree().get_nodes_in_group("Player"):
+		_players_cache.append(player)
+
 func _start_animate() -> void:
 	var tween_time: float = 0.0
 	var visibility_range: float = $Item/Plaque.visibility_range_end
 
 	# Check if any player is close enough to see/hear the animation
-	for player in get_tree().get_nodes_in_group("Player"):
-		if position.distance_to(player.global_position) <= visibility_range:
+	# Use cached player references instead of expensive get_tree() call
+	for player in _players_cache:
+		if is_instance_valid(player) and position.distance_to(player.global_position) <= visibility_range:
 			tween_time = ANIMATE_DURATION
 			$SlideSound.play()
 			break

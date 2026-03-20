@@ -1,7 +1,7 @@
 extends VBoxContainer
 signal resume
 
-enum ScaleMode { BILINEAR, FSR1, FSR2, NEAREST }
+enum ScaleMode { BILINEAR, FSR, NEAREST }
 var post_processing_options: Array[String] = ["none", "crt", "soft", "vhs", "ps1"]
 
 ## Display options
@@ -260,8 +260,14 @@ func _apply_overall_quality(level: int) -> void:
 	use_fxaa_check.button_pressed  = GraphicsManager.use_fxaa
 	use_taa_check.button_pressed   = GraphicsManager.use_taa
 	render_distance.value          = GraphicsManager.render_distance_multiplier
-	# anisotropy: level→index: 2→0, 4→1, 8→2, 16→3
-	anisotropy_option.selected     = (GraphicsManager.anisotropy_level / 2) - 1
+	# anisotropy: level→index: 1→0, 2→1, 4→2, 8→3, 16→4 (log2 mapping)
+	match GraphicsManager.anisotropy_level:
+		1: anisotropy_option.selected = 0
+		2: anisotropy_option.selected = 1
+		4: anisotropy_option.selected = 2
+		8: anisotropy_option.selected = 3
+		16: anisotropy_option.selected = 4
+		_: anisotropy_option.selected = 2  # Default to 4x
 	enable_ssao.button_pressed     = e.ssao_enabled
 	enable_ssil.button_pressed     = e.ssil_enabled
 	enable_reflections.button_pressed = e.ssr_enabled
@@ -831,7 +837,7 @@ func _update_scaling() -> void:
 	GraphicsManager.set_scale_mode(mode)
 	
 	# Show/hide FSR‑related controls
-	var fsr_options_visible = (mode == ScaleMode.FSR1 or mode == ScaleMode.FSR2)
+	var fsr_options_visible = (mode == ScaleMode.FSR)
 	
 	var fsr_quality_node = get_node_or_null("%FSRQuality")
 	if fsr_quality_node:

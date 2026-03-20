@@ -30,6 +30,28 @@ var _winner_peer_id: int = -1
 var _winner_name: String = ""
 var _winner_path: Array[String] = []  ## Path taken by the winner, sent from their client
 
+## Global speed modifier for events (1.0 = normal, 1.5 = 50% faster, 0.6 = 40% slower)
+var _global_speed_modifier: float = 1.0
+## Timer scale for events (1.0 = normal, 0.5 = half speed, 2.0 = double speed)
+var _timer_scale: float = 1.0
+## Whether dashing is enabled (can be disabled by events)
+var _dash_enabled: bool = true
+var _hill_zone: Area3D = null
+var _hill_pos: Vector3 = Vector3.ZERO
+var _hill_radius: float = 0.0
+
+func set_hill_zone(zone: Area3D, pos: Vector3, radius: float) -> void:
+	_hill_zone = zone
+	_hill_pos = pos
+	_hill_radius = radius
+	print("[RaceManager] Hill zone set at %s (radius %.1f)" % [pos, radius])
+
+func clear_hill_zone() -> void:
+	_hill_zone = null
+	_hill_pos = Vector3.ZERO
+	_hill_radius = 0.0
+	print("[RaceManager] Hill zone cleared")
+
 ## Time (Unix seconds) when the race started, set on every peer for accuracy.
 var _race_start_time: float = 0.0
 
@@ -52,6 +74,8 @@ var _vote_active: bool = false
 const VOTE_DURATION: float = 20.0
 const CANDIDATE_COUNT: int = 5
 
+var _sudden_death: bool = false
+
 ## Target difficulty: "easy" | "medium" | "hard". Set by host, synced to all clients.
 var _difficulty: String = "medium"
 ## When non-empty, target is drawn from this Wikipedia category instead of difficulty pool.
@@ -71,10 +95,29 @@ func _ready() -> void:
 	NetworkManager.server_disconnected.connect(_on_server_disconnected)
 	NetworkManager.peer_connected.connect(_on_peer_connected)
 	SettingsEvents.set_current_room.connect(_on_local_room_changed)
-	
+
 	# Track player rooms for anti-cheat (server-side)
 	if NetworkManager.is_server():
 		NetworkManager.player_room_changed.connect(_on_player_room_changed)
+
+	# Connect to EventBus for countdown state tracking
+	if EventBus:
+		EventBus.event_published.connect(_on_event_published)
+
+
+func _on_event_published(event: EventBus.GameEvent) -> void:
+	"""Listen for countdown events to track countdown state"""
+	if event is EventBus.CountdownStartedEvent:
+		_countdown_active = true
+	elif event is EventBus.CountdownTickEvent:
+		var tick_event = event as EventBus.CountdownTickEvent
+		if tick_event.number < 0:
+			_countdown_active = false
+	elif event is EventBus.StateChangedEvent:
+		# Reset countdown state when race starts
+		var state_event = event as EventBus.StateChangedEvent
+		if state_event.new_state == GameState.State.RACE_ACTIVE:
+			_countdown_active = false
 
 
 func _on_local_room_changed(room: String) -> void:
@@ -106,7 +149,20 @@ func _process(delta: float) -> void:
 	if _state != State.ACTIVE:
 		return
 
-	_elapsed_time = Time.get_unix_time_from_system() - _race_start_time
+	# Apply timer scale modifier for events like Time Dilation and Double Time
+	var time_delta = delta * _timer_scale
+	
+	# King of the Hill logic: Pause timer if player is outside the zone
+	if _hill_zone and is_instance_valid(_hill_zone):
+		var local_player = get_tree().get_first_node_in_group("local_player")
+		if local_player:
+			var dist = local_player.global_position.distance_to(_hill_pos)
+			if dist > _hill_radius:
+				# Outside zone: timer doesn't advance (or could advance faster as penalty)
+				# Let's make it not advance to "maintain progress"
+				time_delta = 0.0
+	
+	_elapsed_time += time_delta
 
 	# Emit once per second so HUD updates without hammering every frame
 	_timer_signal_accumulator += delta
@@ -136,6 +192,25 @@ func get_state() -> State:
 ## Returns elapsed race time in seconds (0.0 if no race is active).
 func get_elapsed_time() -> float:
 	return _elapsed_time
+
+func get_race_time() -> float:
+	"""Get current race time in seconds (for EventManager)"""
+	return _elapsed_time
+
+var _countdown_active: bool = false  # Track countdown state
+
+func is_countdown_active() -> bool:
+	"""Check if race countdown is currently active (3-2-1-GO)"""
+	return _countdown_active
+
+func _set_countdown_active(active: bool) -> void:
+	"""Internal: Set countdown state (called by EventBus listener)"""
+	_countdown_active = active
+
+func leader_is_near_finish() -> bool:
+	"""Check if race leader is close to finishing (for event suppression)"""
+	# Simplified: return true if race time > 2 minutes
+	return _elapsed_time > 120.0
 
 
 func get_final_time() -> float:
@@ -573,9 +648,46 @@ func _request_win_validation(peer_id: int, article_title: String, visited_path: 
 		return
 
 	if article_title != _target_article:
+		Log.warn("RaceManager", "Win rejected - wrong target '%s' (expected '%s')" % [article_title, _target_article])
 		return
 
-	_winner_path.assign(visited_path)
+	# Server-side: validate path against tracked room history
+	var server_path: Array[String] = []
+	var raw_server_path: Array = _player_room_history.get(peer_id, [])
+	for item in raw_server_path:
+		server_path.append(str(item))
+
+	var path: Array[String] = []
+
+	if server_path.size() > 0:
+		# Use server-tracked path (anti-cheat)
+		for item in server_path:
+			path.append(item)
+	elif visited_path.size() > 0:
+		# Fallback: client provided path (server tracking unavailable)
+		# This can happen if the player joined late or tracking failed
+		for item in visited_path:
+			path.append(str(item))
+		Log.warn("RaceManager", "Using client-provided path for peer %d (server tracking unavailable)" % peer_id)
+	else:
+		# No path available - reject the win
+		Log.warn("RaceManager", "Win rejected for peer %d - no path data available" % peer_id)
+		return
+
+	# Require at least one room visited to prevent teleport/void exploits
+	if path.is_empty():
+		Log.warn("RaceManager", "Win rejected for peer %d - empty path" % peer_id)
+		return
+
+	# Validate path connectivity (anti-cheat: detect impossible jumps)
+	if not _validate_path_continuity(path):
+		Log.warn("RaceManager", "Win rejected for peer %d - invalid path (teleport detected?)" % peer_id)
+		return
+
+	var winner_path_copy: Array[String] = []
+	for item in path:
+		winner_path_copy.append(item)
+	_winner_path = winner_path_copy
 	_handle_win(peer_id)
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -609,6 +721,92 @@ func set_custom_target(target: String) -> void:
 	if target != "":
 		_target_article = target
 
+# ── Event API ────────────────────────────────────────────────────────────────
+
+func set_global_speed_modifier(modifier: float) -> void:
+	"""Set global speed modifier for all players (1.0 = normal, 1.5 = 50% faster, 0.6 = 40% slower)"""
+	_global_speed_modifier = modifier
+	# Broadcast to all clients so they apply the same modifier
+	_rpc_set_speed_modifier.rpc(modifier)
+	print("[RaceManager] Global speed modifier set to: %.2fx" % modifier)
+
+func get_global_speed_modifier() -> float:
+	"""Get current global speed modifier"""
+	return _global_speed_modifier
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_set_speed_modifier(modifier: float) -> void:
+	# All clients receive this and apply locally
+	_global_speed_modifier = modifier
+
+func set_gravity_modifier(modifier: float) -> void:
+	"""Set gravity modifier for all players (1.0 = normal, 0.3 = moon gravity)"""
+	_rpc_set_gravity_modifier.rpc(modifier)
+	print("[RaceManager] Gravity modifier set to: %.2f (MOON GRAVITY!)" % modifier)
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_set_gravity_modifier(modifier: float) -> void:
+	# All clients receive this and apply to their player
+	var local_player = get_tree().get_first_node_in_group("local_player")
+	if local_player and local_player.has_method("set_gravity_modifier"):
+		local_player.set_gravity_modifier(modifier)
+
+func set_double_jump_enabled(enabled: bool) -> void:
+	"""Enable double jump for all players"""
+	_rpc_set_double_jump.rpc(enabled)
+	print("[RaceManager] Double jump: %s" % ["ENABLED" if enabled else "DISABLED"])
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_set_double_jump(enabled: bool) -> void:
+	var local_player = get_tree().get_first_node_in_group("local_player")
+	if local_player and local_player.has_method("set_double_jump_enabled"):
+		local_player.set_double_jump_enabled(enabled)
+
+func set_triple_jump_enabled(enabled: bool) -> void:
+	"""Enable triple jump for all players"""
+	_rpc_set_triple_jump.rpc(enabled)
+	print("[RaceManager] Triple jump: %s" % ["ENABLED" if enabled else "DISABLED"])
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_set_triple_jump(enabled: bool) -> void:
+	var local_player = get_tree().get_first_node_in_group("local_player")
+	if local_player and local_player.has_method("set_triple_jump_enabled"):
+		local_player.set_triple_jump_enabled(enabled)
+
+func set_timer_scale(scale: float) -> void:
+	"""Set race timer scale (1.0 = normal, 0.5 = half speed, 2.0 = double speed)"""
+	_timer_scale = scale
+	_rpc_set_timer_scale.rpc(scale)
+	print("[RaceManager] Timer scale set to: %.2fx" % scale)
+
+func get_timer_scale() -> float:
+	return _timer_scale
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_set_timer_scale(scale: float) -> void:
+	_timer_scale = scale
+
+func set_dash_enabled(enabled: bool) -> void:
+	"""Enable or disable dashing (for events)"""
+	_dash_enabled = enabled
+	_rpc_set_dash_enabled.rpc(enabled)
+	print("[RaceManager] Dash %s" % ("disabled" if not enabled else "enabled"))
+
+func is_dash_enabled() -> bool:
+	return _dash_enabled
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_set_dash_enabled(enabled: bool) -> void:
+	_dash_enabled = enabled
+
+
+func set_sudden_death(enabled: bool) -> void:
+	_sudden_death = enabled
+	print("[RaceManager] Sudden Death %s" % ("enabled" if enabled else "disabled"))
+
+func is_sudden_death_active() -> bool:
+	return _sudden_death
+
 func get_race_stats() -> Dictionary:
 	"""Get current race statistics"""
 	return {
@@ -616,5 +814,95 @@ func get_race_stats() -> Dictionary:
 		"players": _player_room_history.size() if NetworkManager.is_server() else 0,
 		"target": _target_article,
 		"start": _start_article,
-		"state": "ACTIVE" if _state == State.ACTIVE else "IDLE"
+		"state": "ACTIVE" if _state == State.ACTIVE else "IDLE",
+		"event_modifiers": {
+			"speed": _global_speed_modifier,
+			"timer_scale": _timer_scale,
+			"dash_enabled": _dash_enabled,
+			"kot_h": _hill_zone != null,
+			"sudden_death": _sudden_death
+		}
 	}
+
+
+# ── Anti-Cheat: Path Validation ──────────────────────────────────────────────
+
+func _validate_path_continuity(path: Array[String]) -> bool:
+	"""Validate that a path through exhibits is continuous (no teleportation).
+	
+	Checks that each consecutive pair of rooms in the path are actually connected.
+	This prevents players from teleporting directly to the target.
+	
+	Returns true if path is valid, false if teleportation is detected.
+	"""
+	if path.size() < 2:
+		return true  # Single room or empty path is valid (no movement needed)
+
+	# Get the museum node to check exhibit connectivity
+	var museum = _get_museum_node()
+	if not museum:
+		# Can't validate without museum - allow the path (fallback)
+		Log.warn("RaceManager", "Path validation skipped - museum not found")
+		return true
+
+	# Check each consecutive pair of rooms
+	for i in range(path.size() - 1):
+		var from_room = path[i]
+		var to_room = path[i + 1]
+		
+		if not _are_rooms_connected(museum, from_room, to_room):
+			Log.debug("RaceManager", "Path invalid: '%s' not connected to '%s'" % [from_room, to_room])
+			return false
+
+	return true
+
+
+func _get_museum_node() -> Node:
+	"""Get the Museum node for path validation"""
+	var main = get_tree().current_scene
+	if main and main.has_node("Museum"):
+		return main.get_node("Museum")
+	return null
+
+
+func _are_rooms_connected(museum: Node, from_room: String, to_room: String) -> bool:
+	"""Check if two rooms are directly connected (share a door/hallway)."""
+	# Get exhibit nodes
+	var from_exhibit = _get_exhibit_by_title(museum, from_room)
+	var to_exhibit = _get_exhibit_by_title(museum, to_room)
+	
+	if not from_exhibit or not to_exhibit:
+		# If we can't find the exhibits, allow the transition
+		# (rooms might be dynamically generated)
+		return true
+	
+	# Check if from_exhibit has an exit to to_exhibit
+	if "exits" in from_exhibit:
+		var exits: Array = from_exhibit.exits
+		for exit_hall in exits:
+			if exit_hall and "to_title" in exit_hall:
+				if exit_hall.to_title == to_room:
+					return true
+	
+	# Check reverse connection (doors work both ways)
+	if "exits" in to_exhibit:
+		var exits: Array = to_exhibit.exits
+		for exit_hall in exits:
+			if exit_hall and "to_title" in exit_hall:
+				if exit_hall.to_title == from_room:
+					return true
+	
+	return false
+
+
+func _get_exhibit_by_title(museum: Node, title: String) -> Node:
+	"""Find an exhibit node by its title"""
+	if title == "Lobby":
+		return museum.get_node_or_null("Lobby")
+	
+	# Search through museum children for matching exhibit
+	for child in museum.get_children():
+		if "page_title" in child and child.page_title == title:
+			return child
+	
+	return null

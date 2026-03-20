@@ -18,6 +18,7 @@ var _current_tab: int = 0
 
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
+	add_to_group("mouse_overlay")
 	UIEvents.ui_cancel_pressed.connect(_on_resume)
 	for i in range(_tab_scenes.size()):
 		if _tab_scenes[i] == null:

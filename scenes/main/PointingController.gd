@@ -19,14 +19,28 @@ var _chime: AudioStream = null
 
 func init(main: Node) -> void:
 	_main = main
-	if ResourceLoader.exists(CHIME_SOUND):
-		_chime = load(CHIME_SOUND)
-		if _chime == null:
-			print("PointingController: FAILED to load chime sound: ", CHIME_SOUND)
-		else:
-			print("PointingController: Loaded chime sound: ", CHIME_SOUND)
+	# Load chime sound with proper error handling
+	_load_chime_sound()
+
+
+func _load_chime_sound() -> void:
+	"""Load chime sound with retry logic and fallback"""
+	if not ResourceLoader.exists(CHIME_SOUND):
+		Log.error("PointingController", "Chime sound file not found: %s" % CHIME_SOUND)
+		return
+	
+	# Use ResourceLoader.load() instead of load() for runtime loading
+	var resource: Resource = ResourceLoader.load(CHIME_SOUND, "AudioStream", ResourceLoader.CACHE_MODE_REUSE)
+	
+	if resource == null:
+		Log.error("PointingController", "Failed to load chime sound: %s" % CHIME_SOUND)
+		return
+	
+	if resource is AudioStream:
+		_chime = resource
+		Log.debug("PointingController", "Chime sound loaded successfully")
 	else:
-		print("PointingController: Chime sound file not found: ", CHIME_SOUND)
+		Log.error("PointingController", "Loaded resource is not an AudioStream: %s" % CHIME_SOUND)
 
 
 func spawn_reaction(reaction_index: int, world_pos: Vector3) -> void:
@@ -49,7 +63,7 @@ func spawn_reaction(reaction_index: int, world_pos: Vector3) -> void:
 	tween.tween_property(label, "modulate:a", 0.0, REACTION_LIFETIME)
 	tween.chain().tween_callback(label.queue_free)
 
-	# Play chime
+	# Play chime sound (skip if not loaded)
 	if _chime:
 		var audio: AudioStreamPlayer = AudioStreamPlayer.new()
 		audio.stream = _chime
@@ -58,3 +72,6 @@ func spawn_reaction(reaction_index: int, world_pos: Vector3) -> void:
 		_main.add_child(audio)
 		audio.play()
 		audio.finished.connect(audio.queue_free)
+	else:
+		# Visual feedback only - no audio
+		Log.debug("PointingController", "Playing reaction without audio (chime not loaded)")

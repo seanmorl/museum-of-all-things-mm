@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://0yr8udi3t7dd"]
+
+[ext_resource type="Script" path="res://scenes/ui/EventWarningBanner.gd" id="1_warning"]
+
+[node name="EventWarningBanner" type="CanvasLayer" unique_id=1000000001]
+layer = 100
+script = ExtResource("1_warning")

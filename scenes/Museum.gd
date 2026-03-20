@@ -327,7 +327,7 @@ func get_current_room() -> String:
 
 
 func hint_preload_nearby_exhibits(from_position: Vector3, extra_radius: float = 0.0) -> void:
-	## Called by MinimapHUD when the player zooms out, so rooms that are
+	## Called by minimap system when the player zooms out, so rooms that are
 	## visible on the map but not yet loaded start generating.
 	## Walks all exit halls reachable from the current room and fires their
 	## loader triggers if the player is within (normal_range + extra_radius).

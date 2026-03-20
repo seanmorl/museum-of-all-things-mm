@@ -1,4 +1,5 @@
 extends MeshInstance3D
+class_name ImageItem
 
 signal loaded
 
@@ -11,6 +12,22 @@ var is_stolen: bool = false
 
 var plate_margin: float = 0.05
 var max_text_height: float = 0.5
+
+func _ready() -> void:
+	# Add to groups for environmental events
+	add_to_group("image_item")
+	
+	# Handle plate styling
+	if not plate_style:
+		pass
+	elif plate_style == "white":
+		$Label.modulate = text_black
+		$Label.outline_modulate = text_clear
+		$Label/Plate.material_override = plate_white
+	elif plate_style == "black":
+		$Label.modulate = text_white
+		$Label.outline_modulate = text_black
+		$Label/Plate.material_override = plate_black
 
 const plate_black: Material = preload("res://assets/textures/black.tres")
 const plate_white: Material = preload("res://assets/textures/flat_white.tres")
@@ -97,6 +114,12 @@ func set_stolen(stolen: bool) -> void:
 	layers = 0 if stolen else 1
 	if has_node("InteractionBody/CollisionShape3D"):
 		$InteractionBody/CollisionShape3D.disabled = stolen
+	
+	# Actually hide the image visual
+	if has_node("Frame"):
+		$Frame.visible = !stolen
+	if has_node("Image"):
+		$Image.visible = !stolen
 
 
 func _on_pointer_event(event: Variant) -> void:
@@ -132,18 +155,6 @@ func _exit_tree() -> void:
 	if DataManager.loaded_image.is_connected(_on_image_loaded):
 		DataManager.loaded_image.disconnect(_on_image_loaded)
 
-
-func _ready() -> void:
-	if not plate_style:
-		pass
-	elif plate_style == "white":
-		$Label.modulate = text_black
-		$Label.outline_modulate = text_clear
-		$Label/Plate.material_override = plate_white
-	elif plate_style == "black":
-		$Label.modulate = text_white
-		$Label.outline_modulate = text_black
-		$Label/Plate.material_override = plate_black
 
 func init(_title: String, _text: String, _plate_style: String = "") -> void:
 	text = _text

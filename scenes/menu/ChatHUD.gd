@@ -124,15 +124,29 @@ func _ready() -> void:
 	_typing_player = AudioStreamPlayer.new()
 	_typing_player.bus = "UI"
 	_typing_player.volume_db = -8.0
-	if ResourceLoader.exists(TYPING_SOUND_PATH):
-		_typing_player.stream = load(TYPING_SOUND_PATH)
-		if _typing_player.stream == null:
-			print("ChatHUD: FAILED to load typing sound: ", TYPING_SOUND_PATH)
-		else:
-			print("ChatHUD: Loaded typing sound: ", TYPING_SOUND_PATH)
-	else:
-		print("ChatHUD: Typing sound file not found: ", TYPING_SOUND_PATH)
+	_load_typing_sound()
 	add_child(_typing_player)
+
+
+func _load_typing_sound() -> void:
+	"""Load typing sound with proper error handling and fallback"""
+	if not ResourceLoader.exists(TYPING_SOUND_PATH):
+		Log.error("ChatHUD", "Typing sound file not found: %s" % TYPING_SOUND_PATH)
+		return
+	
+	# Use ResourceLoader.load() instead of load() for runtime loading
+	var resource: Resource = ResourceLoader.load(TYPING_SOUND_PATH, "AudioStream", ResourceLoader.CACHE_MODE_REUSE)
+	
+	if resource == null:
+		Log.error("ChatHUD", "Failed to load typing sound: %s" % TYPING_SOUND_PATH)
+		return
+	
+	if resource is AudioStream:
+		_typing_player.stream = resource
+		Log.debug("ChatHUD", "Typing sound loaded successfully")
+	else:
+		Log.error("ChatHUD", "Loaded resource is not an AudioStream: %s" % TYPING_SOUND_PATH)
+
 
 	MultiplayerEvents.chat_message_received.connect(_on_chat_message_received)
 	MultiplayerEvents.player_joined.connect(_on_player_joined)
@@ -227,8 +241,8 @@ func start_chat_rebind() -> void:
 # â”€â”€ Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func _input(event: InputEvent) -> void:
-	# If chat is disabled in settings, don't process any chat input
-	if not visible:
+	# If chat is disabled in settings or console is open, don't process any chat input
+	if not visible or DebugConsole.is_active():
 		return
 
 	# Rebind capture â€” intercept next keypress

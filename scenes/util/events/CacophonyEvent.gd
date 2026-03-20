@@ -1,0 +1,48 @@
+class_name CacophonyEvent
+extends RefCounted
+## Cacophony - All sound files in the current room play at once!
+
+static var _playing_sounds: Array = []
+
+static func apply() -> void:
+	# Find all audio sources in current exhibit and play them simultaneously
+	var museum = Engine.get_main_loop().current_scene.get_node_or_null("Museum")
+	if not museum:
+		print("[CacophonyEvent] Failed: Museum not found")
+		return
+	
+	print("[CacophonyEvent] Applied: ALL THE SOUNDS AT ONCE!")
+	
+	# Find all AudioStreamPlayer3D nodes in the current exhibit
+	for audio_player in museum.get_tree().get_nodes_in_group("audio"):
+		if audio_player is AudioStreamPlayer3D:
+			if audio_player.stream and not audio_player.playing:
+				audio_player.play()
+				_playing_sounds.append(audio_player)
+	
+	# Also find any Gramophone items
+	for gramophone in museum.get_tree().get_nodes_in_group("gramophone"):
+		if gramophone.has_method("play"):
+			gramophone.play()
+			_playing_sounds.append(gramophone)
+	
+	print("[CacophonyEvent] Playing %d sounds simultaneously! CHAOS!" % _playing_sounds.size())
+
+static func end() -> void:
+	# Stop all sounds
+	for sound in _playing_sounds:
+		if is_instance_valid(sound):
+			if sound.has_method("stop"):
+				sound.stop()
+	
+	_playing_sounds.clear()
+	print("[CacophonyEvent] Ended: Silence at last")
+
+static func get_duration() -> float:
+	return randf_range(20.0, 40.0)
+
+static func get_display_name() -> String:
+	return "Cacophony"
+
+static func get_description() -> String:
+	return "Every sound in the room plays at once! CHAOS!"

@@ -38,8 +38,9 @@ func _ready() -> void:
 	ThemeManager.reading_font_changed.connect(_on_font_changed)
 	_on_dark_mode_changed(ThemeManager.is_dark_mode)
 	_on_font_changed(ThemeManager.get_reading_font())
+	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
 	# Apply perfect knowledge visibility if powerup is active
-	_apply_perfect_knowledge()
+	# _apply_perfect_knowledge()
 	# Ensure markers are invisible (they're for minimap only)
 	_hide_markers()
 
@@ -68,25 +69,26 @@ func _on_font_changed(font: Font) -> void:
 		exit_label.font = font
 		exit_label.hide()
 
-func _apply_perfect_knowledge() -> void:
-	# Check if any player has perfect knowledge powerup
-	var powerup_manager = get_node_or_null("/root/Main/PowerupManager")
-	if not powerup_manager:
-		return
-	var local_player_id = NetworkManager.get_unique_id()
-	var has_pk = powerup_manager.has_powerup(local_player_id, PowerupManager.PowerupType.PERFECT_KNOWLEDGE)
-	if entry_label:
-		entry_label.visible = has_pk
-	if exit_label:
-		exit_label.visible = has_pk
-	if from_sign:
-		var label = from_sign.get_node_or_null("Label3D")
-		if label:
-			label.visible = has_pk
-	if to_sign:
-		var label = to_sign.get_node_or_null("Label3D")
-		if label:
-			label.visible = has_pk
+# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
+# func _apply_perfect_knowledge() -> void:
+# 	# Check if any player has perfect knowledge powerup
+# 	var powerup_manager = get_node_or_null("/root/Main/PowerupManager")
+# 	if not powerup_manager:
+# 		return
+# 	var local_player_id = NetworkManager.get_unique_id()
+# 	var has_pk = powerup_manager.has_powerup(local_player_id, PowerupManager.PowerupType.PERFECT_KNOWLEDGE)
+# 	if entry_label:
+# 		entry_label.visible = has_pk
+# 	if exit_label:
+# 		exit_label.visible = has_pk
+# 	if from_sign:
+# 		var label = from_sign.get_node_or_null("Label3D")
+# 		if label:
+# 			label.visible = has_pk
+# 	if to_sign:
+# 		var label = to_sign.get_node_or_null("Label3D")
+# 		if label:
+# 			label.visible = has_pk
 
 func _hide_markers() -> void:
 	# Entry/Exit markers are for minimap rendering only - keep them invisible in 3D world
@@ -108,6 +110,20 @@ var from_dir: Vector3 = Vector3.ZERO
 var to_pos: Vector3 = Vector3.ZERO
 var to_dir: Vector3 = Vector3.ZERO
 var linked_hall: Hall = null
+var passable: bool = true
+
+func set_passable(v: bool) -> void:
+	passable = v
+	if entry_door and entry_door.has_method("set_locked"): # Wait, I named it lock/unlock
+		pass
+	
+	# Let's use the new methods
+	if not v:
+		if entry_door.has_method("lock"): entry_door.lock()
+		if exit_door.has_method("lock"): exit_door.lock()
+	else:
+		if entry_door.has_method("unlock"): entry_door.unlock()
+		if exit_door.has_method("unlock"): exit_door.unlock()
 
 var player_in_hall: bool:
 	get:

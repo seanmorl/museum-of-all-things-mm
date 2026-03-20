@@ -30,6 +30,7 @@ func _ready() -> void:
 	visible = false
 	_panel.modulate.a = 0.0
 	_panel.position.y = 14.0
+	add_to_group("mouse_overlay")
 	_close_btn.pressed.connect(close)
 	_next_btn.pressed.connect(_on_next_pressed)
 

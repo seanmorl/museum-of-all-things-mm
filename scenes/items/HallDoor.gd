@@ -6,12 +6,23 @@ const CLOSED_POS_Y: float = 2.0
 const ANIMATION_DURATION: float = 0.25
 
 @onready var _door: Node3D = $Door
-var _open: bool = false
+var _locked: bool = false
 var _open_pos: Vector3 = Vector3(0, OPEN_POS_Y, 0)
 var _closed_pos: Vector3 = Vector3(0, CLOSED_POS_Y, 0)
 
+func lock() -> void:
+	_locked = true
+	close()
+
+func unlock() -> void:
+	_locked = false
+
+func is_locked() -> bool:
+	return _locked
+
 func open() -> void:
-	set_open(true)
+	if not _locked:
+		set_open(true)
 
 func close() -> void:
 	set_open(false)

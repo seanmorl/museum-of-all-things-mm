@@ -73,6 +73,7 @@ func _ready() -> void:
 	_build_modal()
 	_build_strip()
 	_build_results()
+	add_to_group("mouse_overlay")
 	_refresh_theme()
 	_modal_root.visible   = false
 	_strip.visible        = false

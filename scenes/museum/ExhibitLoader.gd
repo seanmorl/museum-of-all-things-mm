@@ -144,7 +144,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	var backlink: bool = context.has("backlink") and context.backlink
 	var rider_load: bool = context.has("rider_load") and context.rider_load
 	var hall: Hall = context.entry if backlink else context.get("exit")
-	var result: Dictionary = ExhibitFetcher.get_result(context.title)
+	var result: Variant = ExhibitFetcher.get_result(context.title)
 
 	# ERROR HANDLING: If fetch failed, show error and revert
 	if not result:
@@ -221,6 +221,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 			var npc_manager: NPCManager = NPCManager.new()
 			new_exhibit.add_child(npc_manager)
 			npc_manager.call_deferred("init", new_exhibit, _museum.npcs_per_exhibit)
+		
 		if _exhibit_hist.size() > _max_exhibits_loaded:
 			call_deferred("_cleanup_old_exhibits", new_exhibit.title)
 	else:

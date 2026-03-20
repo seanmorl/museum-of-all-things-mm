@@ -3,10 +3,13 @@ extends Node
 
 # UI Sound Effects
 const _UI_CRYSTAL_SOUND: AudioStream = preload("res://assets/sound/UI/UI Crystal 1.ogg")
-# Note: Using same sound for skin equip, victory, and countdown events
+const _UI_SELECT_SOUND: AudioStream = preload("res://assets/sound/UI/UI Select 10.ogg")
+const _UI_GO_SOUND: AudioStream = preload("res://assets/sound/UI/UI Select 2.ogg")
+# Note: Using same sound for skin equip and victory events
 const _SKIN_EQUIP_SOUND: AudioStream = _UI_CRYSTAL_SOUND
 const _VICTORY_SOUND: AudioStream = _UI_CRYSTAL_SOUND
-const _COUNTDOWN_SOUND: AudioStream = _UI_CRYSTAL_SOUND
+const _COUNTDOWN_SOUND: AudioStream = _UI_SELECT_SOUND
+const _GO_SOUND: AudioStream = _UI_GO_SOUND
 
 @export var Player: PackedScene = preload("res://scenes/Player.tscn")
 @export var NetworkPlayer: PackedScene = preload("res://scenes/NetworkPlayer.tscn")
@@ -42,7 +45,8 @@ var _tournament_setup_menu:    Control = null
 var _tournament_hud:           Control = null
 var _tournament_victory_screen: Control = null
 @onready var _trivia_overlay: TriviaOverlay = %TriviaOverlay
-@onready var _powerup_hud: Control = %PowerupHUD
+# ── Powerup HUD archived v0.5.0 - replaced with Environmental Events
+# @onready var _powerup_hud: Control = %PowerupHUD
 @onready var _guestbook_overlay: GuestbookOverlay = %GuestbookOverlay
 @onready var _prompt_hud: Control = %PromptHUD
 @onready var _menu_layer: CanvasLayer = %MenuLayer
@@ -78,6 +82,9 @@ const POST_PROCESS_MATERIALS := {
 }
 
 func _debug_log(message: String) -> void:
+	# Only log in debug builds
+	if not OS.is_debug_build():
+		return
 	Log.debug("Main", message)
 
 func _parse_command_line() -> void:
@@ -270,15 +277,16 @@ func _initialize_room_service() -> void:
 		InputMap.action_add_event("toggle_trivia", ev_t)
 
 	# Register powerup HUD toggle (P) at runtime
-	if not InputMap.has_action("toggle_powerups"):
-		InputMap.add_action("toggle_powerups")
-		var ev_p := InputEventKey.new()
-		ev_p.physical_keycode = KEY_P
-		InputMap.action_add_event("toggle_powerups", ev_p)
-		var ev_p2 := InputEventJoypadButton.new()
-		ev_p2.button_index = JOY_BUTTON_Y
-		ev_p2.device = -1
-		InputMap.action_add_event("toggle_powerups", ev_p2)
+	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
+	# if not InputMap.has_action("toggle_powerups"):
+	# 	InputMap.add_action("toggle_powerups")
+	# 	var ev_p := InputEventKey.new()
+	# 	ev_p.physical_keycode = KEY_P
+	# 	InputMap.action_add_event("toggle_powerups", ev_p)
+	# 	var ev_p2 := InputEventJoypadButton.new()
+	# 	ev_p2.button_index = JOY_BUTTON_Y
+	# 	ev_p2.device = -1
+	# 	InputMap.action_add_event("toggle_powerups", ev_p2)
 
 	# Register daily challenge keybind (G)
 	if not InputMap.has_action("open_daily_challenge"):
@@ -433,8 +441,9 @@ func _recreate_player() -> void:
 		_minimap_controller.init(_player)
 	if _prompt_hud and _prompt_hud.has_method("init"):
 		_prompt_hud.init(_player)
-	if _powerup_hud and _powerup_hud.has_method("init"):
-		_powerup_hud.init(_player)
+	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
+	# if _powerup_hud and _powerup_hud.has_method("init"):
+	# 	_powerup_hud.init(_player)
 
 	# Re-initialise spectator with the new player reference
 	if _spectator_controller:
@@ -656,17 +665,20 @@ func _input(event: InputEvent) -> void:
 	if Input.is_action_pressed("toggle_fullscreen"):
 		UIEvents.fullscreen_toggled.emit(not GraphicsManager.fullscreen)
 
+	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
 	# DEBUG: F10 = spawn powerup near player (multiplayer only)
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F10:
-		if NetworkManager.is_multiplayer_active():
-			PowerupManager.debug_spawn_powerup_near_player()
+	# if event is InputEventKey and event.pressed and event.keycode == KEY_F10:
+	# 	if NetworkManager.is_multiplayer_active():
+	# 		PowerupManager.debug_spawn_powerup_near_player()
 
 	if not game_started:
 		return
 	
-	# Don't process game inputs while the chat input is open
+	# Don't process game inputs while the chat input or debug console is open
 	var chat_open: bool = _chat_hud != null and _chat_hud.is_input_open()
-	if not chat_open:
+	var console_open: bool = DebugConsole.is_active()
+	
+	if not chat_open and not console_open:
 		if Input.is_action_just_pressed("ui_accept"):
 			UIEvents.emit_ui_accept_pressed()
 		
@@ -694,9 +706,10 @@ func _input(event: InputEvent) -> void:
 			if event.is_action_pressed("toggle_map"):
 				_cycle_minimap()
 
-			if event.is_action_pressed("toggle_powerups"):
-				if _powerup_hud and _powerup_hud.has_method("toggle"):
-					_powerup_hud.toggle()
+			# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
+			# if event.is_action_pressed("toggle_powerups"):
+			# 	if _powerup_hud and _powerup_hud.has_method("toggle"):
+			# 		_powerup_hud.toggle()
 
 			if event.is_action_pressed("toggle_trivia"):
 				if _trivia_overlay:
@@ -758,12 +771,12 @@ func _input(event: InputEvent) -> void:
 				# Check if any UI overlay is open (including VoteHUD)
 				var vote_hud := get_node_or_null("TabMenu/VoteHUD")
 				var vote_open: bool = vote_hud != null and vote_hud.visible
-				var overlay_open: bool = (_journal_overlay and _journal_overlay.is_open()) or (_guestbook_overlay and _guestbook_overlay.is_open()) or (_trivia_overlay and _trivia_overlay.is_open()) or vote_open
+				var overlay_open: bool = (_journal_overlay and _journal_overlay.is_open()) or (_guestbook_overlay and _guestbook_overlay.is_open()) or (_trivia_overlay and _trivia_overlay.is_open()) or vote_open or console_open
 				if not overlay_open:
 					Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 		
 		# Tab key for player list overlay
-		if _multiplayer_controller.is_multiplayer_game() and not _menu_layer.visible:
+		if _multiplayer_controller.is_multiplayer_game() and not _menu_layer.visible and not console_open:
 			if event.is_action_pressed("show_player_list"):
 				player_list_overlay.visible = true
 			elif event.is_action_released("show_player_list"):
@@ -874,7 +887,8 @@ func _on_skin_selected(url: String, _texture: ImageTexture) -> void:
 	if _player:
 		_player.set_player_skin(url, _texture)
 	UISoundManager._play(_SKIN_EQUIP_SOUND)
-	_debug_log("Main: Skin selected: " + url)
+	if OS.is_debug_build():
+		_debug_log("Main: Skin selected: " + url)
 
 func _on_skin_reset() -> void:
 	NetworkManager.set_local_player_skin("")
@@ -1216,12 +1230,26 @@ func _on_race_countdown(number: int) -> void:
 	Log.debug("Main", "Received countdown: %d" % number)
 	if number > 0 and number <= 3:
 		_play_countdown_sound()
+	elif number == 0:
+		# "GO!" - play sound with delay to match visual appearance
+		# The GO text scales in over 0.22s, play sound when it's mostly visible
+		await get_tree().create_timer(0.15).timeout
+		_play_go_sound()
 
 func _play_countdown_sound() -> void:
-	## Play a short beep for countdown
+	## Play a short beep for countdown (3-2-1)
 	var player = AudioStreamPlayer.new()
 	player.stream = _COUNTDOWN_SOUND
 	player.volume_db = -5.0
+	add_child(player)
+	player.play()
+	player.finished.connect(func(): player.queue_free())
+
+func _play_go_sound() -> void:
+	## Play the "GO!" sound (more emphatic)
+	var player = AudioStreamPlayer.new()
+	player.stream = _GO_SOUND
+	player.volume_db = -3.0  # Slightly louder for emphasis
 	add_child(player)
 	player.play()
 	player.finished.connect(func(): player.queue_free())
@@ -1296,13 +1324,14 @@ func _on_network_peer_connected(peer_id: int) -> void:
 			_grant_race_control.rpc_id(peer_id)
 
 		# Sync placed paintings to late joiner so they see paintings placed
-		# before they connected.
+		# before they connected. Defer until exhibit is loaded to ensure
+		# paintings are parented correctly.
 		if _painting_controller:
 			var state: Array = _painting_controller.get_placed_paintings_state()
 			if state.size() > 0:
-				_sync_placed_paintings_to_peer.rpc_id(peer_id, state)
-		
-		# Sync stolen paintings to late joiner
+				call_deferred("_sync_placed_paintings_deferred", peer_id, state)
+
+		# Sync stolen paintings to late joiner (state only, no visual sync needed)
 		if _painting_controller:
 			var stolen_state: Dictionary = _painting_controller.get_stolen_paintings_state()
 			if not stolen_state.is_empty():
@@ -1548,6 +1577,33 @@ func _sync_placed_paintings_to_peer(state: Array) -> void:
 	## before they connected.
 	if _painting_controller:
 		_painting_controller.apply_placed_paintings_state(state, _player)
+
+
+func _sync_placed_paintings_deferred(peer_id: int, state: Array) -> void:
+	## Deferred sync for placed paintings - waits one frame to ensure exhibit is loaded
+	## This prevents paintings from being parented to the wrong node.
+	if not is_instance_valid(_painting_controller):
+		return
+	
+	# Check if exhibit is loaded (wait up to 2 seconds)
+	var max_wait: int = 40  # 40 frames at 60fps = ~0.67 seconds
+	var wait_count: int = 0
+	
+	while wait_count < max_wait:
+		# Check if museum has any exhibits loaded
+		var museum: Node = get_node_or_null("Museum")
+		if museum and museum.get_child_count() > 0:
+			# Exhibit loaded - sync now
+			_sync_placed_paintings_to_peer.rpc_id(peer_id, state)
+			return
+		
+		wait_count += 1
+		await get_tree().process_frame
+	
+	# Timeout - sync anyway (paintings will be parented to Main as fallback)
+	Log.warn("Main", "Exhibit didn't load in time for painting sync - syncing anyway")
+	_sync_placed_paintings_to_peer.rpc_id(peer_id, state)
+
 
 @rpc("authority", "call_local", "reliable")
 func _sync_wikipedia_data(article: String, data: Dictionary) -> void:

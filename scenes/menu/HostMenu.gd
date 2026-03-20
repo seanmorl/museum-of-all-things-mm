@@ -45,6 +45,7 @@ func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
 	
 	_create_ui_structure()
+	add_to_group("mouse_overlay")
 	_apply_theme()
 	# Connect to dark mode changes for theme updates
 	ThemeManager.dark_mode_changed.connect(_on_theme_changed)

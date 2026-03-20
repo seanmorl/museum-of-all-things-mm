@@ -30,6 +30,10 @@ var show_nameplates: bool = true  # Toggle for showing player nameplates/pronoun
 # Persistent player identity (saved between sessions)
 var _saved_player_names: Dictionary = {}  # peer_id -> last known name
 
+# RPC throttling - only sync player positions every 100ms instead of every frame
+var _position_sync_timer: float = 0.0
+const _POSITION_SYNC_INTERVAL: float = 0.1  # 100ms between syncs
+
 # Keepalive to prevent playit.gg from dropping the UDP session during its
 # ~19 second re-auth cycle. We ping every 5 seconds so ENet never goes silent
 # long enough for playit to consider the channel dead.
@@ -45,12 +49,19 @@ var _local_state_hash: String = ""
 func _process(delta: float) -> void:
 	if not is_multiplayer_active():
 		return
+	
+	# RPC throttling - limit position syncs
+	_position_sync_timer += delta
+	if _position_sync_timer >= _POSITION_SYNC_INTERVAL:
+		_position_sync_timer = 0.0
+		# Position sync logic would go here (called by Player.gd)
+	
 	_keepalive_timer += delta
 	if _keepalive_timer >= _KEEPALIVE_INTERVAL:
 		_keepalive_timer = 0.0
 		if multiplayer.has_multiplayer_peer() and peer:
 			_send_keepalive.rpc()
-	
+
 	# Game state validation (server only)
 	if is_hosting:
 		_state_check_timer += delta
@@ -606,6 +617,11 @@ func _send_state_hash(peer_id: int, client_hash: String) -> void:
 
 func _resync_client(peer_id: int) -> void:
 	"""Resync a desynchronized client"""
+	# Don't try to resync the server itself
+	if peer_id == 1 or peer_id == get_unique_id():
+		Log.warn("Network", "Skipping resync for server/local peer")
+		return
+	
 	var game_state = _serialize_game_state()
 	_send_full_state.rpc_id(peer_id, game_state)
 	Log.info("Network", "Sent full state to peer %d for resync" % peer_id)

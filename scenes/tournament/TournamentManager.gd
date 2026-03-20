@@ -516,7 +516,7 @@ func _build_overlay_html() -> String:
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
     background: transparent;
-    font-family: 'Segoe UI', sans-serif;
+	font-family: 'Segoe UI', sans-serif;
     color: #fff;
     padding: 12px;
   }
@@ -588,23 +588,23 @@ function fmt(t) {
 }
 function refresh() {
   fetch('/standings').then(r=>r.json()).then(d=>{
-    document.getElementById('title').textContent = d.tournament || 'Wiki Races';
-    var rnd = d.active ? 'Round ' + d.round + ' / ' + d.total_rounds : 'Wiki Races — Complete';
-    if (d.between_rounds && d.active) rnd += ' — next round soon';
-    document.getElementById('round').textContent = rnd;
-    var rows = '';
-    var cls = ['first','second','third'];
+	document.getElementById('title').textContent = d.tournament || 'Wiki Races';
+	var rnd = d.active ? 'Round ' + d.round + ' / ' + d.total_rounds : 'Wiki Races — Complete';
+	if (d.between_rounds && d.active) rnd += ' — next round soon';
+	document.getElementById('round').textContent = rnd;
+	var rows = '';
+	var cls = ['first','second','third'];
     (d.standings||[]).forEach(function(s,i){
-      var c = i < 3 ? cls[i] : '';
-      rows += '<tr class="' + c + '">' +
-        '<td class="rank">' + s.rank + '</td>' +
-        '<td>' + s.name + '</td>' +
-        '<td class="pts">' + s.points + '</td>' +
-        '<td class="pts">' + s.wins + '</td>' +
-        '<td class="time">' + fmt(s.best_time) + '</td>' +
-        '</tr>';
+	  var c = i < 3 ? cls[i] : '';
+	  rows += '<tr class="' + c + '">' +
+		'<td class="rank">' + s.rank + '</td>' +
+		'<td>' + s.name + '</td>' +
+		'<td class="pts">' + s.points + '</td>' +
+		'<td class="pts">' + s.wins + '</td>' +
+		'<td class="time">' + fmt(s.best_time) + '</td>' +
+		'</tr>';
     });
-    document.getElementById('tbody').innerHTML = rows;
+	document.getElementById('tbody').innerHTML = rows;
   }).catch(function(){});
 }
 refresh();

@@ -39,6 +39,14 @@ var _camera_v: Vector2 = Vector2.ZERO
 var _joy_right_x: int = JOY_AXIS_RIGHT_X
 var _joy_right_y: int = JOY_AXIS_RIGHT_Y
 
+# Environmental event modifiers
+var _double_jump_enabled: bool = false
+var _triple_jump_enabled: bool = false
+var _controls_inverted: bool = false
+var _gravity_modifier: float = 1.0  # 1.0 = normal, 0.3 = moon gravity
+var _jump_count: int = 0
+var _max_jumps: int = 1
+
 # Network interpolation for remote players
 var _target_position: Vector3 = Vector3.ZERO
 var _target_rotation_y: float = 0.0
@@ -56,7 +64,8 @@ var _painting_system: PlayerPaintingSystem = null
 var _pointing_system: PlayerPointingSystem = null
 var _journal_system: PlayerJournalSystem = null
 var _footprint_system: PlayerFootprintSystem = null
-var _powerup_system: PlayerPowerupSystem = null
+# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
+# var _powerup_system: PlayerPowerupSystem = null
 
 ## Void detection - teleport player back to safety if they fall too far
 var _void_check_timer: float = 0.0
@@ -141,9 +150,10 @@ func _ready() -> void:
 	add_child(_footprint_system)
 	_footstep_player.footstep_played.connect(_on_footstep_played)
 
-	_powerup_system = PlayerPowerupSystem.new()
-	_powerup_system.init(self)
-	add_child(_powerup_system)
+	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
+	# _powerup_system = PlayerPowerupSystem.new()
+	# _powerup_system.init(self)
+	# add_child(_powerup_system)
 
 
 # =============================================================================
@@ -182,15 +192,16 @@ var starting_height: float:
 var crouching_height: float:
 	get: return _crouch_system.get_crouching_height() if _crouch_system else 0.45
 
+# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
 # Powerup API (delegates to PlayerPowerupSystem)
-var has_gun: bool:
-	get: return _powerup_system.has_gun() if _powerup_system else false
-var has_trap: bool:
-	get: return _powerup_system.has_trap() if _powerup_system else false
-var has_perfect_knowledge: bool:
-	get: return _powerup_system.has_perfect_knowledge() if _powerup_system else false
-var has_magnet: bool:
-	get: return _powerup_system.has_magnet() if _powerup_system else false
+# var has_gun: bool:
+# 	get: return _powerup_system.has_gun() if _powerup_system else false
+# var has_trap: bool:
+# 	get: return _powerup_system.has_trap() if _powerup_system else false
+# var has_perfect_knowledge: bool:
+# 	get: return _powerup_system.has_perfect_knowledge() if _powerup_system else false
+# var has_magnet: bool:
+# 	get: return _powerup_system.has_magnet() if _powerup_system else false
 
 
 func pause() -> void:
@@ -223,7 +234,8 @@ func _set_joy_deadzone(value: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Mount/dismount handling - always process E key for dismount even when _enabled is false
-	if event.is_action_pressed("mount") and is_local:
+	# BUT not if the debug console is open (typing 'e' would dismount)
+	if event.is_action_pressed("mount") and is_local and not DebugConsole.is_active():
 		if _mount_system.is_mounted():
 			# Always allow dismount regardless of _enabled or mouse mode
 			print("Player: Dismount requested (E key pressed while seated)")
@@ -264,19 +276,20 @@ func _unhandled_input(event: InputEvent) -> void:
 				elif collider.get_parent() and collider.get_parent().has_method("interact"):
 					collider.get_parent().interact()
 
+	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
 	# Powerup handling - Gun fire and Trap placement
-	if event.is_action_pressed("point") and (Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED or Input.get_connected_joypads().size() > 0):
-		if _powerup_system and _powerup_system.has_gun():
-			_powerup_system.fire_gun()
-		elif _powerup_system and _powerup_system.has_trap():
-			_powerup_system.place_trap()
-		elif _powerup_system and _powerup_system.has_magnet():
-			_powerup_system.activate_magnet()
-		elif _powerup_system and _powerup_system.has_grapple():
-			_powerup_system.fire_grapple()
+	# if event.is_action_pressed("point") and (Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED or Input.get_connected_joypads().size() > 0):
+	# 	if _powerup_system and _powerup_system.has_gun():
+	# 		_powerup_system.fire_gun()
+	# 	elif _powerup_system and _powerup_system.has_trap():
+	# 		_powerup_system.place_trap()
+	# 	elif _powerup_system and _powerup_system.has_magnet():
+	# 		_powerup_system.activate_magnet()
+	# 	elif _powerup_system and _powerup_system.has_grapple():
+	# 		_powerup_system.fire_grapple()
 
 	var is_mouse: bool = event is InputEventMouseMotion
-	if is_mouse and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
+	if is_mouse and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED and _enabled:
 		var delta_x: float = -event.relative.x * _mouse_sensitivity * _mouse_sensitivity_factor
 		var delta_y: float = -event.relative.y * _mouse_sensitivity * _mouse_sensitivity_factor * (-1 if _invert_y else 1)
 
@@ -299,20 +312,23 @@ func _exit_tree() -> void:
 		SettingsEvents.set_mouse_sensitivity.disconnect(_set_mouse_sensitivity)
 	if SettingsEvents.set_joypad_deadzone.is_connected(_set_joy_deadzone):
 		SettingsEvents.set_joypad_deadzone.disconnect(_set_joy_deadzone)
+	
+	# Note: ThemeManager.reading_font_changed uses inline lambda, 
+	# no need to disconnect (Godot auto-cleans up lambdas)
 
 
 func _physics_process(delta: float) -> void:
 	# Track last valid position (above void threshold)
 	if is_local and global_position.y > VOID_Y_THRESHOLD:
 		_last_valid_position = global_position
-	
+
 	# Void detection for local player - prevent falling forever
 	if is_local and _void_check_timer >= VOID_CHECK_INTERVAL:
 		_void_check_timer = 0.0
 		if global_position.y < VOID_Y_THRESHOLD:
 			_teleport_to_safety()
 	_void_check_timer += delta
-	
+
 	# If mounted, let mount system handle position
 	if _mount_system and _mount_system.is_mounted():
 		_mount_system.process_mount(delta)
@@ -336,93 +352,113 @@ func _physics_process(delta: float) -> void:
 				_bob_time = 0.0
 				_body_mesh.position.y = _body_mesh_base_y
 
-	if not _enabled or not is_local:
-		return
+	# Apply gravity to local player (always, even when paused)
+	# Pause only blocks input, not physics - player should fall naturally
+	if is_local:
+		velocity.y += _gravity * _gravity_modifier * delta
 
-	velocity.y += _gravity * delta
+	# Process movement input only when enabled
+	if _enabled and is_local:
+		var fully_standing: bool = _crouch_system.is_fully_standing()
 
-	var fully_standing: bool = _crouch_system.is_fully_standing()
-
-	if fully_standing and Input.is_action_pressed("dash"):
-		max_speed = max_speed_dash
-	else:
-		max_speed = max_speed_walk
-
-	var speed: float = max_speed if fully_standing else _crouch_move_speed
-	var input: Vector2 = Input.get_vector("strafe_left", "strafe_right", "move_forward", "move_back")
-	var desired_velocity: Vector3 = transform.basis * Vector3(input.x, 0, input.y) * speed
-
-	velocity.x = desired_velocity.x
-	velocity.z = desired_velocity.z
-	set_up_direction(Vector3.UP)
-	set_floor_stop_on_slope_enabled(true)
-	move_and_slide()
-
-	var delta_vec: Vector2 = Vector2(-Input.get_joy_axis(0, _joy_right_x), -Input.get_joy_axis(0, _joy_right_y))
-	if delta_vec.length() > _joy_deadzone:
-		rotate_y(delta_vec.x * _joy_sensitivity)
-	
-	# Sync position to network (every frame for smooth movement)
-	if Services.network_service and Services.network_service.is_multiplayer_active():
-		Services.network_service.sync_player_position(global_position, Vector3(0, rotation.y, 0), current_room)
-		_pivot.rotate_x(delta_vec.y * _joy_sensitivity)
-		_pivot.rotation.x = clamp(_pivot.rotation.x, -PITCH_CLAMP, PITCH_CLAMP)
-
-	# Camera smoothing
-	if smooth_movement and is_local and _enabled:
-		rotation.y = lerp_angle(rotation.y, rotation.y - _camera_v.y, delta * 30.0)
-		_pivot.rotation.x = clamp(lerp_angle(_pivot.rotation.x, _pivot.rotation.x - _camera_v.x, delta * 30.0), -PITCH_CLAMP, PITCH_CLAMP)
-		_camera_v = _camera_v.lerp(Vector2.ZERO, delta * 20.0)
-		
-	if is_local and is_instance_valid(_map_camera):
-		# Camera is 10m above player, looking down with near=7 far=11
-		# This skips ceilings (2-3m above) and sees floors/walls
-		# Lock Y to floor level so jumps don't bring ceilings into the near clipping plane
-		var map_y: float = _last_valid_position.y if _last_valid_position.y > -40.0 else global_position.y
-		if is_on_floor():
-			_map_camera.global_position = Vector3(global_position.x, global_position.y + 10.0, global_position.z)
+		if fully_standing and Input.is_action_pressed("dash") and RaceManager.is_dash_enabled():
+			max_speed = max_speed_dash
 		else:
-			# Only update XZ while in the air (jumping)
-			_map_camera.global_position = Vector3(global_position.x, _map_camera.global_position.y, global_position.z)
+			max_speed = max_speed_walk
 
-	_footstep_player.set_on_floor(is_on_floor())
+		var speed: float = max_speed if fully_standing else _crouch_move_speed
+		# Apply global speed modifier from EventManager
+		speed *= RaceManager.get_global_speed_modifier()
 
-	if Input.is_action_pressed("jump") and is_on_floor():
-		velocity.y = jump_impulse
+		# Get movement direction (with inversion support)
+		var input: Vector2 = Input.get_vector("strafe_left", "strafe_right", "move_forward", "move_back")
 
-	# Apply body bob when moving
-	_update_body_bob(delta)
+		# Invert input if controls are reversed (forwards/backwards AND left/right)
+		if _controls_inverted:
+			input = -input  # Flip both axes
 
-	# Process crouch input
-	_crouch_system.process_crouch(delta)
+		var desired_velocity: Vector3 = transform.basis * Vector3(input.x, 0, input.y) * speed
 
-	# Process painting eat
-	if _painting_system:
-		_painting_system.process_eat(delta)
+		velocity.x = desired_velocity.x
+		velocity.z = desired_velocity.z
+		
+		# Process crouch input only when enabled
+		_crouch_system.process_crouch(delta)
+	else:
+		# When paused, zero out horizontal velocity (no movement input)
+		velocity.x = 0.0
+		velocity.z = 0.0
 
-	# Process pointing
-	if _pointing_system:
-		_pointing_system.process_pointing()
+	# Always call move_and_slide() for local players (even when paused)
+	# This ensures gravity is applied and player falls naturally
+	if is_local and not (_mount_system and _mount_system.is_mounted()):
+		set_up_direction(Vector3.UP)
+		set_floor_stop_on_slope_enabled(true)
+		move_and_slide()
+		
+		# Handle joystick rotation even when paused (for camera control)
+		var delta_vec: Vector2 = Vector2(-Input.get_joy_axis(0, _joy_right_x), -Input.get_joy_axis(0, _joy_right_y))
+		if delta_vec.length() > _joy_deadzone and _enabled:
+			rotate_y(delta_vec.x * _joy_sensitivity)
 
-	# Process stillness for ghost placement
-	if _footprint_system:
-		_footprint_system.process_stillness(delta)
+		# Sync position to network (every frame for smooth movement)
+		if Services.network_service and Services.network_service.is_multiplayer_active():
+			Services.network_service.sync_player_position(global_position, Vector3(0, rotation.y, 0), current_room)
+			if _enabled:
+				_pivot.rotate_x(delta_vec.y * _joy_sensitivity)
+				_pivot.rotation.x = clamp(_pivot.rotation.x, -PITCH_CLAMP, PITCH_CLAMP)
 
-	# Process powerups
-	if _powerup_system:
-		_powerup_system.process_powerups(delta)
+		# Camera smoothing (only when enabled)
+		if smooth_movement and _enabled:
+			rotation.y = lerp_angle(rotation.y, rotation.y - _camera_v.y, delta * 30.0)
+			_pivot.rotation.x = clamp(lerp_angle(_pivot.rotation.x, _pivot.rotation.x - _camera_v.x, delta * 30.0), -PITCH_CLAMP, PITCH_CLAMP)
+			_camera_v = _camera_v.lerp(Vector2.ZERO, delta * 20.0)
 
-	# Update interactable target tracking - check both forward and floor raycasts
-	var current_collider: Node = _get_interactable_collider()
-	if current_collider != _last_interactable_target:
-		_last_interactable_target = current_collider
-		interactable_target_changed.emit(current_collider)
+		# MapCamera position and configuration is now handled by MinimapController.gd
 
-	if Input.is_action_just_pressed("pin_to_journal") and _journal_system:
-		_journal_system.try_pin_item()
+		_footstep_player.set_on_floor(is_on_floor())
 
-	if Input.is_action_just_pressed("reset_skin"):
-		MultiplayerEvents.emit_skin_reset()
+		# Reset jump count when on floor
+		if is_on_floor():
+			_jump_count = 0
+
+		# Jump logic with double/triple jump support (only when enabled)
+		if _enabled and Input.is_action_just_pressed("jump"):
+			if is_on_floor():
+				# First jump (always allowed)
+				velocity.y = jump_impulse
+				_jump_count = 1
+			elif _jump_count < _max_jumps:
+				# Additional jumps (double/triple)
+				velocity.y = jump_impulse
+				_jump_count += 1
+				print("[Player] Jump %d/%d" % [_jump_count, _max_jumps])
+
+		# Process remaining systems only when enabled
+		if _enabled:
+			# Process painting eat
+			if _painting_system:
+				_painting_system.process_eat(delta)
+
+			# Process pointing
+			if _pointing_system:
+				_pointing_system.process_pointing()
+
+			# Process stillness for ghost placement
+			if _footprint_system:
+				_footprint_system.process_stillness(delta)
+
+		# Update interactable target tracking - check both forward and floor raycasts
+		var current_collider: Node = _get_interactable_collider()
+		if current_collider != _last_interactable_target:
+			_last_interactable_target = current_collider
+			interactable_target_changed.emit(current_collider)
+
+		if Input.is_action_just_pressed("pin_to_journal") and _journal_system:
+			_journal_system.try_pin_item()
+
+		if Input.is_action_just_pressed("reset_skin") and _enabled:
+			MultiplayerEvents.emit_skin_reset()
 
 
 # =============================================================================
@@ -656,9 +692,78 @@ func set_player_color(color: Color) -> void:
 			body_mat.set_shader_parameter("fallback_color", color)
 		elif body_mat is StandardMaterial3D:
 			body_mat.albedo_color = color
+			# Add outline effect for multiplayer visibility (visible through walls)
+			_add_outline_effect(body_mat, color)
 	var head_mat: Material = get_owned_head_material()
 	if head_mat and head_mat is StandardMaterial3D:
 		head_mat.albedo_color = color.lightened(0.15)
+
+
+func _add_outline_effect(base_material: StandardMaterial3D, player_color: Color) -> void:
+	## Creates an outline material using stencil buffer for multiplayer visibility
+	## This makes players visible through walls, improving multiplayer awareness
+	
+	# Check if outline already exists (avoid duplicates)
+	if _body_mesh and _body_mesh.get_surface_override_material(1):
+		return  # Outline already added
+	
+	# Create outline material using stencil buffer (Godot 4.5+ feature)
+	var outline_mat := StandardMaterial3D.new()
+	outline_mat.stencil_mode = StandardMaterial3D.STENCIL_MODE_OUTLINE
+	outline_mat.stencil_outline_thickness = 2.0
+	outline_mat.stencil_effect_color = player_color.lightened(0.2)  # Slightly brighter than player color
+	outline_mat.render_priority = 100  # Render on top of other geometry
+	outline_mat.disable_receive_shadows = true
+	outline_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Always visible, not affected by lighting
+	
+	# Apply outline to second surface (index 1)
+	if _body_mesh:
+		_body_mesh.set_surface_override_material(1, outline_mat)
+
+
+# =============================================================================
+# ENVIRONMENTAL EVENT MODIFIERS
+# =============================================================================
+
+func set_double_jump_enabled(enabled: bool) -> void:
+	_double_jump_enabled = enabled
+	_update_max_jumps()
+	print("[Player] Double jump: %s" % ["ENABLED" if enabled else "DISABLED"])
+
+func set_triple_jump_enabled(enabled: bool) -> void:
+	_triple_jump_enabled = enabled
+	_update_max_jumps()
+	print("[Player] Triple jump: %s" % ["ENABLED" if enabled else "DISABLED"])
+
+func set_controls_inverted(enabled: bool) -> void:
+	_controls_inverted = enabled
+	print("[Player] Controls: %s" % ["INVERTED" if enabled else "NORMAL"])
+
+func set_gravity_modifier(modifier: float) -> void:
+	_gravity_modifier = modifier
+	print("[Player] Gravity modifier: %.1f%% (0.3 = moon gravity!)" % (modifier * 100))
+
+func _update_max_jumps() -> void:
+	if _triple_jump_enabled:
+		_max_jumps = 3
+	elif _double_jump_enabled:
+		_max_jumps = 2
+	else:
+		_max_jumps = 1
+	_jump_count = 0  # Reset jump count when max changes
+
+func _get_movement_direction() -> Vector3:
+	var dir := Vector3.ZERO
+	var forward_input = Input.get_axis("move_back", "move_forward")
+	var right_input = Input.get_axis("strafe_left", "strafe_right")
+	
+	# Invert controls if enabled
+	if _controls_inverted:
+		forward_input = -forward_input
+		right_input = -right_input
+	
+	dir = (transform.basis * Vector3(right_input, 0, forward_input)).normalized()
+	return dir
 
 
 func apply_network_position(pos: Vector3, rot_y: float, pivot_rot_x: float, pivot_pos_y: float = DEFAULT_PIVOT_Y) -> void:

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Wiki Races Logo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #ffffff; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  svg  { width: 560px; height: 240px; }
+  .wrl-serif { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; }
+  .wrl-bg      { fill: #f4f5f8; }
+  .wrl-ring    { stroke: #1E52D4; fill: none; }
+  .wrl-grid    { stroke: #1E52D4; fill: none; opacity: 0.14; }
+  .wrl-piece-f { fill: #1E52D4; opacity: 0.10; }
+  .wrl-piece-s { stroke: #1E52D4; fill: none; opacity: 0.58; }
+  .wrl-dot     { fill: #1E52D4; }
+  .wrl-speed   { stroke: #1E52D4; fill: none; opacity: 0.60; }
+  .wrl-trophy  { fill: #C68A00; }
+  .wrl-divider { stroke: #1E52D4; opacity: 0.22; }
+  .wrl-title   { fill: #111111; }
+  .wrl-sub     { fill: #555555; }
+  .wrl-hint    { fill: #888888; }
+  @media (prefers-color-scheme: dark) {
+    body         { background: #121318; }
+    .wrl-bg      { fill: #1a1c24; }
+    .wrl-ring    { stroke: #4D8CFF; }
+    .wrl-grid    { stroke: #4D8CFF; opacity: 0.20; }
+    .wrl-piece-f { fill: #4D8CFF; opacity: 0.16; }
+    .wrl-piece-s { stroke: #4D8CFF; opacity: 0.65; }
+    .wrl-dot     { fill: #4D8CFF; }
+    .wrl-speed   { stroke: #4D8CFF; opacity: 0.65; }
+    .wrl-trophy  { fill: #FFD240; }
+    .wrl-divider { stroke: #4D8CFF; opacity: 0.28; }
+    .wrl-title   { fill: #f0f0ee; }
+    .wrl-sub     { fill: #a0a09a; }
+    .wrl-hint    { fill: #666660; }
+  }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 240">
+  <defs>
+    <clipPath id="globe-clip"><circle cx="100" cy="120" r="76"/></clipPath>
+  </defs>
+  <circle cx="100" cy="120" r="76" class="wrl-bg"/>
+  <ellipse cx="100" cy="120" rx="76" ry="19"  class="wrl-grid" stroke-width="0.7"/>
+  <ellipse cx="100" cy="120" rx="76" ry="43"  class="wrl-grid" stroke-width="0.7"/>
+  <ellipse cx="100" cy="120" rx="76" ry="64"  class="wrl-grid" stroke-width="0.7"/>
+  <ellipse cx="100" cy="120" rx="19" ry="76"  class="wrl-grid" stroke-width="0.7"/>
+  <ellipse cx="100" cy="120" rx="43" ry="76"  class="wrl-grid" stroke-width="0.7"/>
+  <line x1="100" y1="44" x2="100" y2="196"   class="wrl-grid" stroke-width="0.7"/>
+  <path d="M100,120 L100,44 A76,76 0 0,1 153.7,66.3 Z"      class="wrl-piece-f"/>
+  <path d="M100,120 L100,44 A76,76 0 0,1 153.7,66.3 Z"      class="wrl-piece-s" stroke-width="0.8"/>
+  <path d="M100,120 L153.7,66.3 A76,76 0 0,1 176,120 Z"     class="wrl-piece-f"/>
+  <path d="M100,120 L153.7,66.3 A76,76 0 0,1 176,120 Z"     class="wrl-piece-s" stroke-width="0.8"/>
+  <circle cx="127" cy="54"  r="4.5" class="wrl-piece-f"/>
+  <circle cx="127" cy="54"  r="4.5" class="wrl-piece-s" stroke-width="0.8"/>
+  <circle cx="159" cy="91"  r="4.5" class="wrl-piece-f"/>
+  <circle cx="159" cy="91"  r="4.5" class="wrl-piece-s" stroke-width="0.8"/>
+  <path d="M34,155 Q56,143 72,159 Q90,175 113,163 Q133,153 148,159"
+        class="wrl-speed" stroke-width="1.8" stroke-linecap="round"/>
+  <polygon points="144,153 152,158 144,163" class="wrl-dot" opacity="0.60"/>
+  <circle cx="100" cy="120" r="76" class="wrl-ring" stroke-width="1.5"/>
+  <circle cx="100" cy="44"  r="2.5" class="wrl-dot"/>
+  <circle cx="176" cy="120" r="2.5" class="wrl-dot"/>
+  <circle cx="100" cy="196" r="2.5" class="wrl-dot"/>
+  <circle cx="24"  cy="120" r="2.5" class="wrl-dot"/>
+  <line x1="194" y1="68" x2="194" y2="172" class="wrl-divider" stroke-width="0.8"/>
+  <text x="210" y="118"  class="wrl-serif wrl-title" font-size="52">Wiki</text>
+  <text x="210" y="170"  class="wrl-serif wrl-title" font-size="52">Races</text>
+  <text x="211" y="192"  class="wrl-serif wrl-sub"   font-size="12" letter-spacing="2.5">MUSEUM OF ALL THINGS</text>
+  <line x1="211" y1="200" x2="476" y2="200" class="wrl-divider" stroke-width="0.7"/>
+  <text x="211" y="214"  class="wrl-serif wrl-hint"  font-size="10">Multiplayer Tournament Edition</text>
+  <g transform="translate(508,90)">
+    <path d="M0,-2 Q-16,0 -17,14 Q-17,26 0,30 Q17,26 17,14 Q16,0 0,-2 Z" class="wrl-trophy" opacity="0.90"/>
+    <path d="M-17,6 Q-26,6 -25,16 Q-24,23 -17,21" stroke="#1E52D4" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.7"/>
+    <path d="M17,6 Q26,6 25,16 Q24,23 17,21"  stroke="#1E52D4" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.7"/>
+    <rect x="-3"  y="30" width="6"  height="8" class="wrl-trophy" opacity="0.80"/>
+    <rect x="-12" y="38" width="24" height="4" rx="2" class="wrl-trophy" opacity="0.80"/>
+    <text font-size="13" text-anchor="middle" dominant-baseline="central" y="15" fill="white" opacity="0.90">★</text>
+  </g>
+</svg>
+</body>
+</html>

@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[sub_resource type="BoxMesh" id="BoxMesh_skylight"]
+size = Vector3(3, 0.5, 2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_emissive"]
+emission_enabled = true
+emission = Color(1.0, 0.95, 0.9, 3.0)
+emission_energy_multiplier = 3.0
+
+[node name="Skylight" type="Node3D"]
+
+[node name="SkylightOpening" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_skylight")
+surface_material_override/0 = SubResource("StandardMaterial3D_emissive")
+
+[node name="SkylightLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, 0, 0)
+light_energy = 3.0
+light_color = Color(1.0, 0.98, 0.9)
+shadow_enabled = true

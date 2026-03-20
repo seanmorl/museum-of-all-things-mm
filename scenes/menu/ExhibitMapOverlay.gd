@@ -28,7 +28,7 @@ var _time: float = 0.0
 # Global setting for minimap door labels (can be toggled by host)
 var show_minimap_labels: bool = false
 
-# Zoom level for minimap (controlled by MinimapHUD)
+# Zoom level for minimap (controlled by MinimapController)
 var _zoom_level: float = 1.0
 
 # Font for labels in full mode

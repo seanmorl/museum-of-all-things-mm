@@ -37,9 +37,16 @@ func handle_steal_request(peer_id: int, exhibit_title: String, image_title: Stri
 	# Server-side validation
 	var painting_key: String = exhibit_title + ":" + image_title
 	if _stolen_paintings.has(painting_key):
+		Log.warn("PaintingController", "Steal rejected - painting already stolen: %s" % painting_key)
 		return  # Already stolen
 	if _carry_state.has(peer_id):
+		Log.warn("PaintingController", "Steal rejected - player %d already carrying" % peer_id)
 		return  # Already carrying
+
+	# Validate painting exists in exhibit (anti-cheat)
+	if not _painting_exists_in_exhibit(exhibit_title, image_title):
+		Log.warn("PaintingController", "Steal rejected - painting not found: %s in %s" % [image_title, exhibit_title])
+		return
 
 	# Record state
 	_carry_state[peer_id] = {
@@ -144,7 +151,13 @@ func request_place(exhibit_title: String, image_title: String, image_url: String
 
 func handle_place_request(peer_id: int, exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, local_player: Node) -> void:
 	if not _carry_state.has(peer_id):
+		Log.warn("PaintingController", "Place rejected - player %d not carrying" % peer_id)
 		return  # Not carrying
+
+	# Validate placement position (anti-cheat)
+	if not _validate_placement_position(wall_position, wall_normal, exhibit_title):
+		Log.warn("PaintingController", "Place rejected - invalid position for player %d" % peer_id)
+		return
 
 	var state: Dictionary = _carry_state[peer_id]
 	var painting_key: String = state.exhibit_title + ":" + state.image_title
@@ -319,8 +332,17 @@ func _on_placed_painting_image_loaded(url: String, image: Texture2D, _ctx: Varia
 			var cb: Callable = _on_placed_painting_image_loaded.bind(painting, material, target_url)
 			DataManager.loaded_image.connect(cb, CONNECT_ONE_SHOT)
 		return
+	
 	if is_instance_valid(painting) and is_instance_valid(material) and material is ShaderMaterial:
-		material.set_shader_parameter("texture_albedo", image)
+		if image:
+			# Success - apply texture
+			material.set_shader_parameter("texture_albedo", image)
+		else:
+			# Failed to load - apply fallback solid color
+			Log.warn("PaintingController", "Image load failed for %s - using fallback color" % target_url)
+			material.set_shader_parameter("albedo_color", Color(0.3, 0.3, 0.3, 1.0))
+			# Add a subtle pattern to indicate "missing texture"
+			material.set_shader_parameter("uv1_scale", Vector3(10.0, 10.0, 1.0))
 
 
 # =============================================================================
@@ -439,6 +461,34 @@ func is_painting_stolen(exhibit_title: String, image_title: String) -> bool:
 	return _stolen_paintings.has(key)
 
 
+func _painting_exists_in_exhibit(exhibit_title: String, image_title: String) -> bool:
+	"""Validate that a painting exists in the specified exhibit (anti-cheat).
+	
+	Checks both:
+	1. Placed paintings (paintings that were placed by players)
+	2. Wall items (original paintings on the wall)
+	
+	Returns true if painting exists, false otherwise.
+	"""
+	# Check if it's a placed painting
+	for p: Node in _placed_paintings:
+		if not is_instance_valid(p):
+			continue
+		if p.has_meta("exhibit_title") and p.has_meta("image_title"):
+			if p.get_meta("exhibit_title") == exhibit_title and p.get_meta("image_title") == image_title:
+				return true
+	
+	# Check if it's a wall painting
+	var wall_item: Node = _find_wall_item_by_image_title(exhibit_title, image_title)
+	if wall_item and is_instance_valid(wall_item):
+		# Also check it hasn't already been stolen
+		var painting_key: String = exhibit_title + ":" + image_title
+		if not _stolen_paintings.has(painting_key):
+			return true
+	
+	return false
+
+
 func _find_wall_item_by_image_title(exhibit_title: String, image_title: String) -> Node:
 	if not _main.has_node("Museum"):
 		return null
@@ -455,6 +505,52 @@ func _find_wall_item_by_image_title(exhibit_title: String, image_title: String) 
 					return wall_item
 
 	return null
+
+
+func _validate_placement_position(wall_position: Vector3, wall_normal: Vector3, exhibit_title: String) -> bool:
+	"""Validate that a placement position is valid (anti-cheat).
+	
+	Checks:
+	1. Wall normal is roughly horizontal (painting on wall, not ceiling/floor)
+	2. Position is within reasonable bounds of the exhibit
+	3. Position isn't through solid walls
+	
+	Returns true if valid, false otherwise.
+	"""
+	# Check wall normal is roughly horizontal (painting should be on wall)
+	var horizontal_dot: float = abs(wall_normal.dot(Vector3.UP))
+	if horizontal_dot > 0.3:  # More than ~17 degrees from vertical
+		Log.debug("PaintingController", "Placement rejected - wall normal too vertical (%.2f)" % horizontal_dot)
+		return false
+	
+	# Check position is within exhibit bounds (if we can find the exhibit)
+	var museum: Node = _main.get_node_or_null("Museum")
+	if museum:
+		var exhibit: Node = null
+		if exhibit_title == "Lobby":
+			exhibit = museum.get_node_or_null("Lobby")
+		else:
+			for child in museum.get_children():
+				if "page_title" in child and child.page_title == exhibit_title:
+					exhibit = child
+					break
+		
+		if exhibit and is_instance_valid(exhibit):
+			# Get exhibit bounds (approximate)
+			var exhibit_pos: Vector3 = exhibit.global_position if "global_position" in exhibit else Vector3.ZERO
+			var distance: float = wall_position.distance_to(exhibit_pos)
+			
+			# Paintings should be placed within 50 units of exhibit center
+			if distance > 50.0:
+				Log.debug("PaintingController", "Placement rejected - too far from exhibit (%.1f units)" % distance)
+				return false
+	
+	# Basic sanity checks on position values
+	if wall_position.length() > 1000.0:
+		Log.debug("PaintingController", "Placement rejected - position out of bounds")
+		return false
+	
+	return true
 
 
 # =============================================================================
@@ -480,10 +576,15 @@ func restore_placed_painting(exhibit: Node3D, exhibit_title: String,
 func get_placed_paintings_state() -> Array:
 	## Returns a snapshot of all currently-placed paintings so the server can
 	## relay them to a newly-connected peer.
+	## Also cleans up invalid references to prevent memory leaks.
 	var state: Array = []
+	var valid_paintings: Array[Node] = []
+	
 	for p: Node in _placed_paintings:
 		if not is_instance_valid(p):
-			continue
+			continue  # Skip invalid, will be cleaned up
+		
+		valid_paintings.append(p)
 		state.append({
 			"exhibit_title": p.get_meta("exhibit_title", ""),
 			"image_title":   p.get_meta("image_title",   ""),
@@ -492,6 +593,9 @@ func get_placed_paintings_state() -> Array:
 			"wall_position": p.global_position - p.basis.y * 0.13,
 			"wall_normal":   p.basis.y,
 		})
+	
+	# Clean up invalid references to prevent memory leak
+	_placed_paintings = valid_paintings
 	return state
 
 

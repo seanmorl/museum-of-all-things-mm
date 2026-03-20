@@ -15,6 +15,7 @@ var _is_open: bool = false
 
 func _ready() -> void:
 	visible = false
+	add_to_group("mouse_overlay")
 	_submit_btn.pressed.connect(_submit)
 	_close_btn.pressed.connect(close)
 	_input_field.text_submitted.connect(_on_text_submitted)

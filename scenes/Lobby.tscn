@@ -30,7 +30,6 @@
 [ext_resource type="Texture2D" uid="uid://crmsq8a4sjtb8" path="res://assets/logo/moat_logo_large.png" id="29_kkkm5"]
 [ext_resource type="PackedScene" uid="uid://crh1ugdfaifsn" path="res://scenes/items/StartLine.tscn" id="31_l2uyn"]
 [ext_resource type="PackedScene" uid="uid://rmj6s264abk4" path="res://scenes/items/SimpleLeaderboard.tscn" id="40_slb"]
-[ext_resource type="Environment" path="res://assets/textures/lobby_sky_environment.tres" id="42_skyenv"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_rlv5a"]
 size = Vector3(5, 5, 5)
@@ -359,9 +358,6 @@ If you prefer to go straight to a particular subject, you may access the search 
 
 [node name="SimpleLeaderboard" parent="." unique_id=936830918 instance=ExtResource("40_slb")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 13, 41)
-
-[node name="LobbyWorldEnvironment" type="WorldEnvironment" parent="." unique_id=999063499]
-environment = ExtResource("42_skyenv")
 
 [node name="Lobby#LobbyVoxelGI" type="VoxelGI" parent="." unique_id=1442421993]
 visible = false

@@ -72,6 +72,7 @@ func _ready() -> void:
 	set_process_unhandled_input(false)
 	_serif_font = ThemeManager.get_reading_font()
 	_resolve_colours()
+	add_to_group("mouse_overlay")
 	_build_ui()
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(func(_d):
@@ -311,12 +312,12 @@ func _build_ui() -> void:
 	var detail_inner := VBoxContainer.new()
 	detail_inner.add_theme_constant_override("separation", 8)
 	detail_inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detail_inner.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	# Don't set size_flags_vertical - let content determine height for scrolling
 	_detail_scroll.add_child(detail_inner)
 
 	_detail_content = RichTextLabel.new()
 	_detail_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_detail_content.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	# Remove size_flags_vertical so content can grow naturally
 	_detail_content.fit_content           = false   # must be false for ScrollContainer to work
 	_detail_content.scroll_active         = false   # ScrollContainer handles scrolling
 	_detail_content.bbcode_enabled        = true
@@ -339,6 +340,9 @@ func _build_ui() -> void:
 	# Tag chips
 	var tag_row_label := Label.new()
 	tag_row_label.text = "🏷 Tags"
+	if ThemeManager.get_reading_font():
+		tag_row_label.add_theme_font_override("font", ThemeManager.get_reading_font())
+	tag_row_label.add_theme_font_size_override("font_size", 14)
 	detail_inner.add_child(tag_row_label)
 
 	var tag_area := VBoxContainer.new()

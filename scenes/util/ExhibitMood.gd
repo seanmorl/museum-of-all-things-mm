@@ -6,11 +6,11 @@ extends RefCounted
 enum Mood { DEFAULT, HISTORY, SCIENCE, NATURE, ASTRO, MEDIA }
 
 const MOOD_KEYWORDS: Dictionary = {
-	Mood.HISTORY: ["history", "century", "ancient", "medieval", "war", "empire", "dynasty", "civilization", "kingdom", "revolution", "colonial"],
-	Mood.SCIENCE: ["science", "physics", "chemistry", "biology", "mathematics", "technology", "engineering", "medicine", "computer", "algorithm"],
-	Mood.NATURE: ["nature", "species", "animal", "plant", "ecology", "forest", "ocean", "wildlife", "bird", "fish", "insect", "mammal", "flora", "fauna"],
-	Mood.ASTRO: ["astronomy", "space", "planet", "star", "galaxy", "cosmos", "solar", "lunar", "orbit", "nasa", "telescope", "nebula"],
-	Mood.MEDIA: ["film", "television", "album", "song", "music", "novel", "literature", "actor", "actress", "director", "band", "soundtrack"],
+	Mood.HISTORY: ["history", "century", "ancient", "medieval", "war", "empire", "dynasty", "civilization", "kingdom", "revolution", "colonial", "heritage", "archaeology"],
+	Mood.SCIENCE: ["science", "physics", "chemistry", "biology", "mathematics", "technology", "engineering", "medicine", "computer", "algorithm", "game", "mechanics", "system", "theory", "research"],
+	Mood.NATURE: ["nature", "species", "animal", "plant", "ecology", "forest", "ocean", "wildlife", "bird", "fish", "insect", "mammal", "flora", "fauna", "environment", "habitat"],
+	Mood.ASTRO: ["astronomy", "space", "planet", "star", "galaxy", "cosmos", "solar", "lunar", "orbit", "nasa", "telescope", "nebula", "universe", "cosmic"],
+	Mood.MEDIA: ["film", "television", "album", "song", "music", "novel", "literature", "actor", "actress", "director", "band", "soundtrack", "video game", "gaming", "entertainment", "broadcast"],
 }
 
 const MOOD_FOG_COLOR: Dictionary = {
@@ -105,3 +105,14 @@ static func prefers_pool(mood: int) -> bool:
 
 static func prefers_planter(mood: int) -> bool:
 	return mood == Mood.NATURE or mood == Mood.HISTORY
+
+
+
+static func prefers_verticality(mood: int) -> bool:
+	## Returns true if this mood prefers vertical architectural features (atriums)
+	return mood == Mood.HISTORY or mood == Mood.MEDIA
+
+
+static func prefers_symmetry(mood: int) -> bool:
+	## Returns true if this mood prefers symmetrical grand halls
+	return mood == Mood.HISTORY or mood == Mood.SCIENCE

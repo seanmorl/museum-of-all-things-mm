@@ -40,6 +40,7 @@ const _GROUP_LEADERS := ["Resume", "Open", "Race", "CancelRace", "Lobby", "Setti
 
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
+	add_to_group("mouse_overlay")
 
 	# Hide the spacer Labels that cause excessive gaps between button groups.
 	# These are empty Labels used as crude spacers in the scene; we replace

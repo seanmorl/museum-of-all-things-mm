@@ -286,6 +286,7 @@ func commons_images_to_items(title: String, images: Array, extra_text: Array) ->
 				"plate": plate,
 				"title": image,
 				"text": text_clean,
+				"src": image,  # Add image URL so ImageItem can fetch it
 			})
 
 	return items

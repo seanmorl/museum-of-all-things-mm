@@ -1,0 +1,44 @@
+[gd_scene format=3 uid="uid://dse7feg4mmuhc"]
+
+[ext_resource type="Script" path="res://scenes/npc/CuteDemon.gd" id="1_demon"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.4
+height = 0.8
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+radius = 0.4
+height = 0.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_demon"]
+albedo_color = Color(0.8, 0.2, 0.2, 1)
+roughness = 0.4
+
+[node name="CuteDemon" type="CharacterBody3D" groups=["npc"]]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_demon")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("CapsuleMesh_body")
+surface_material_override/0 = SubResource("StandardMaterial3D_demon")
+
+[node name="Label3D" type="Label3D" parent="."]
+offset = Vector3(0, 1.2, 0)
+text = "✨"
+billboard = 1
+no_depth_test = true
+render_priority = 10
+font_size = 16
+outline_size = 1
+outline_modulate = Color(0, 0, 0, 1)
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="."]
+volume_db = -5
+max_distance = 15
+attenuation_filter_cutoff_hz = 5000
