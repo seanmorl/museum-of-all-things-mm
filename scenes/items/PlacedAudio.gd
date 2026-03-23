@@ -6,13 +6,20 @@ var audio_url: String = ""
 var title: String = ""
 var exhibit_title: String = ""
 var _stream: AudioStreamOggVorbis = null
-var is_playing: bool = false:
-	set(value):
-		is_playing = value
-		_update_playing_state()
-
+var _is_playing: bool = false
 var _player: AudioStreamPlayer3D = null
 var _loading: bool = false
+
+var is_playing: bool = false:
+	get:
+		return _is_playing
+	set(value):
+		if _is_playing != value:
+			_is_playing = value
+			if _is_playing:
+				play_requested.emit()
+			else:
+				stop_requested.emit()
 
 signal play_requested
 signal stop_requested
@@ -87,20 +94,16 @@ func play_audio() -> void:
 	_player.play()
 	var tween = create_tween()
 	tween.tween_property(_player, "volume_db", 0.0, 1.0).set_trans(Tween.TRANS_SINE)
-	play_requested.emit()
+	# Don't emit signal here - it's emitted by the setter via _update_playing_state
 
 func stop_audio() -> void:
 	is_playing = false
 	var tween = create_tween()
 	tween.tween_property(_player, "volume_db", -80.0, 1.5).set_trans(Tween.TRANS_SINE)
 	tween.finished.connect(_player.stop)
-	stop_requested.emit()
-
-func _update_playing_state() -> void:
-	# Visual feedback for playing state could be added here
-	pass
+	# Don't emit signal here - state change is tracked by setter
 
 func get_interaction_text() -> String:
 	if _loading or not _stream:
 		return "🔇 Loading..."
-	return "⏹ Stop" if is_playing else "▶ Play"
+	return "⏹ Stop" if _is_playing else "▶ Play"
