@@ -2,8 +2,8 @@ extends Node
 class_name PlayerPaintingSystem
 ## Handles stealing paintings and sounds off walls, carrying them, and placing them.
 
-signal steal_requested(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, is_audio: bool = false)
-signal place_requested(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, is_audio: bool = false)
+signal steal_requested(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, is_audio: bool)
+signal place_requested(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, is_audio: bool)
 signal eat_requested(exhibit_title: String, image_title: String)
 signal eat_anim_started
 signal eat_anim_cancelled
@@ -48,7 +48,6 @@ var _carry_audio_mesh_fp: MeshInstance3D = null  # Audio carry FP
 var _carry_audio_mesh_tp: MeshInstance3D = null  # Audio carry TP
 
 var _carry_material: Material = null
-var _audio_carry_material: Material = null
 
 
 func init(player: CharacterBody3D) -> void:
@@ -58,12 +57,6 @@ func init(player: CharacterBody3D) -> void:
 	# Create shared material for carry meshes
 	var base_material: Material = preload("res://assets/textures/image_item.tres")
 	_carry_material = base_material.duplicate()
-	
-	# Create material for audio carry (brass color)
-	_audio_carry_material = StandardMaterial3D.new()
-	(_audio_carry_material as StandardMaterial3D).albedo_color = Color(0.8, 0.7, 0.2, 1.0)
-	(_audio_carry_material as StandardMaterial3D).metallic = 0.8
-	(_audio_carry_material as StandardMaterial3D).roughness = 0.2
 
 	# Create first-person carry mesh (child of Camera3D)
 	_carry_mesh_fp = MeshInstance3D.new()
@@ -118,15 +111,19 @@ func init(player: CharacterBody3D) -> void:
 func _create_audio_carry_mesh() -> MeshInstance3D:
 	"""Create a small gramophone-shaped mesh for carrying audio"""
 	var mesh_container = MeshInstance3D.new()
-	
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.8, 0.7, 0.2, 1.0)
+	mat.metallic = 0.8
+	mat.roughness = 0.2
+
 	# Base (box)
 	var base_mesh = BoxMesh.new()
 	base_mesh.size = Vector3(0.15, 0.08, 0.15)
 	var base = MeshInstance3D.new()
 	base.mesh = base_mesh
-	base.material_override = _audio_carry_material
+	base.material_override = mat
 	mesh_container.add_child(base)
-	
+
 	# Horn (cone-like cylinder)
 	var horn_mesh = CylinderMesh.new()
 	horn_mesh.top_radius = 0.06
@@ -134,11 +131,11 @@ func _create_audio_carry_mesh() -> MeshInstance3D:
 	horn_mesh.height = 0.2
 	var horn = MeshInstance3D.new()
 	horn.mesh = horn_mesh
-	horn.material_override = _audio_carry_material
+	horn.material_override = mat
 	horn.position = Vector3(0, 0.08, 0.05)
 	horn.rotation_degrees = Vector3(-45, 0, 0)
 	mesh_container.add_child(horn)
-	
+
 	return mesh_container
 
 

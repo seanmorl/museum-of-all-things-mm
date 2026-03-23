@@ -494,12 +494,12 @@ func _create_placed_audio(position: Vector3, normal: Vector3, audio_url: String,
 	base_mesh.size = Vector3(0.6, 0.25, 0.6)
 	var base = MeshInstance3D.new()
 	base.name = "Base"
-	var wood_mat: Material = preload("res://assets/textures/black.tres").duplicate()
-	(wood_mat as StandardMaterial3D).albedo_color = Color(0.4, 0.25, 0.1, 1.0)
+	var wood_mat: StandardMaterial3D = preload("res://assets/textures/black.tres").duplicate() as StandardMaterial3D
+	wood_mat.albedo_color = Color(0.4, 0.25, 0.1, 1.0)
 	base.mesh = base_mesh
 	base.material_override = wood_mat
 	audio_item.add_child(base)
-	
+
 	# Create horn mesh (cylinder)
 	var horn_mesh = CylinderMesh.new()
 	horn_mesh.top_radius = 0.5
@@ -507,10 +507,10 @@ func _create_placed_audio(position: Vector3, normal: Vector3, audio_url: String,
 	horn_mesh.height = 0.75
 	var horn = MeshInstance3D.new()
 	horn.name = "Horn"
-	var brass_mat: Material = preload("res://assets/textures/black.tres").duplicate()
-	(brass_mat as StandardMaterial3D).albedo_color = Color(0.8, 0.7, 0.2, 1.0)
-	(brass_mat as StandardMaterial3D).metallic = 0.8
-	(brass_mat as StandardMaterial3D).roughness = 0.2
+	var brass_mat: StandardMaterial3D = preload("res://assets/textures/black.tres").duplicate() as StandardMaterial3D
+	brass_mat.albedo_color = Color(0.8, 0.7, 0.2, 1.0)
+	brass_mat.metallic = 0.8
+	brass_mat.roughness = 0.2
 	horn.mesh = horn_mesh
 	horn.material_override = brass_mat
 	horn.position = Vector3(0, 0.35, 0.2)
