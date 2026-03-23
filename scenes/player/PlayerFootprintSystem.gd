@@ -68,7 +68,7 @@ func process_stillness(delta: float) -> void:
 		if _stillness_timer >= GHOST_STILLNESS_TIME and not _ghost_placed_here:
 			_ghost_placed_here = true
 			var room: String = _player.current_room
-			if room != "Lobby":
+			if room != "Lobby" and NetworkManager.is_multiplayer_active():
 				TraceManager.add_ghost(room, _player.global_position, _player.rotation.y)
 	else:
 		_stillness_timer = 0.0

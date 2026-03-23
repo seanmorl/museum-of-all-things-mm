@@ -15,8 +15,10 @@ var StaticData: Resource = preload("res://assets/resources/lobby_data.tres")
 @export var min_rooms_per_exhibit: int = 2
 @export var fog_depth: float = 10.0
 @export var fog_depth_lobby: float = 20.0
-@export var ambient_light_lobby: float = 0.4
-@export var ambient_light: float = 0.2
+@export var ambient_light_lobby: float = 0.8
+@export var ambient_light: float = 0.5
+@export var ambient_light_override: float = -1.0  # Deprecated: kept for scene compatibility
+@export var ambient_light_multiplier: float = 1.0  # User brightness multiplier (1.0 = mood default)
 @export var max_teleport_distance: float = 10.0
 @export var max_exhibits_loaded: int = 2
 @export var min_room_dimension: int = 2
@@ -428,12 +430,18 @@ func _tween_fog_color(fog_color: Color, mood: int = ExhibitMood.Mood.DEFAULT) ->
 	var target_depth: float = ExhibitMood.get_fog_depth(mood)
 	_fog_tween.tween_property(environment, "fog_density", 10.0 / target_depth, 1.0)
 
-	# Ambient light
+	# Ambient light — combine mood-adjusted base with user brightness multiplier
 	var is_dark = ThemeManager.is_dark_mode
 	var target_ambient_color: Color = ExhibitMood.get_ambient_color(mood)
-	var target_ambient_energy: float = ExhibitMood.get_adjusted_ambient_energy(mood, is_dark)
+	var base_energy: float = ExhibitMood.get_adjusted_ambient_energy(mood, is_dark)
+	var target_ambient_energy: float = clamp(base_energy * ambient_light_multiplier, 0.0, 1.5)
+
 	_fog_tween.tween_property(environment, "ambient_light_color", target_ambient_color, 1.0)
 	_fog_tween.tween_property(environment, "ambient_light_energy", target_ambient_energy, 1.0)
+
+	# Boost tonemap exposure in light mode for overall brighter appearance
+	var target_exposure: float = 1.5 if not is_dark else 1.0
+	_fog_tween.tween_property(environment, "tonemap_exposure", target_exposure, 1.0)
 
 	# Per-room glow intensity — varies with mood so each exhibit feels distinct.
 	var target_glow: float = _get_glow_for_mood(mood)
@@ -455,10 +463,25 @@ func _update_lighting() -> void:
 	_tween_fog_color(ExhibitStyle.gen_fog(_current_room_title), mood)
 
 
+func set_ambient_light(value: float) -> void:
+	"""Set ambient light via brightness slider. Stores user preference as a multiplier
+	of the mood-adjusted base, so dark/light mode transitions preserve relative brightness."""
+	var mood: int = _get_exhibit_mood(_current_room_title)
+	var is_dark = ThemeManager.is_dark_mode
+	var base_energy: float = ExhibitMood.get_adjusted_ambient_energy(mood, is_dark)
+	if base_energy > 0.001:
+		ambient_light_multiplier = clamp(value / base_energy, 0.1, 5.0)
+	else:
+		ambient_light_multiplier = 1.0
+	var environment: Environment = $WorldEnvironment.environment
+	if environment:
+		environment.ambient_light_energy = clamp(value, 0.0, 1.5)
+
+
 func _on_twitch_color_requested(color: Color) -> void:
 	if not _multiplayer_sync.is_local_player(_player) and NetworkManager.is_multiplayer_active():
 		return # Only host/local player processes Twitch input for the museum state
-		
+
 	var environment: Environment = $WorldEnvironment.environment
 	if _fog_tween and _fog_tween.is_valid():
 		_fog_tween.kill()

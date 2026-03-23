@@ -497,8 +497,21 @@ func _append_page_field(title: String, field: String, values: Array) -> void:
 func _get_json(body: PackedByteArray) -> Variant:
 	var json := JSON.new()
 	var body_string := body.get_string_from_utf8()
-	json.parse(body_string)
-	return json.get_data()
+	if body_string.is_empty():
+		Log.warn("ExhibitFetcher", "Empty response body")
+		return null
+	var parse_error := json.parse(body_string)
+	if parse_error != OK:
+		Log.warn("ExhibitFetcher", "JSON parse failed: %s (body preview: %s)" % [
+			json.get_error_message(),
+			body_string.substr(0, 200)
+		])
+		return null
+	var data = json.get_data()
+	if data == null:
+		Log.warn("ExhibitFetcher", "JSON parsed but data is null (body preview: %s)" % body_string.substr(0, 200))
+		return null
+	return data
 
 func _filter_links_ns(links: Array) -> Array:
 	var agg: Array = []
@@ -552,6 +565,11 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		return true
 
 	var res = _get_json(body)
+	if res == null:
+		Log.error("ExhibitFetcher", "Failed to parse JSON response for %s" % ctx.url)
+		if ctx.url.begins_with(wikitext_endpoint):
+			wikitext_failed.emit.call_deferred(ctx.new_titles, "JSON parse error")
+		return true
 
 	if res.has("query"):
 		var query = res.query

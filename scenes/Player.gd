@@ -111,6 +111,8 @@ func _ready() -> void:
 
 	if is_local:
 		add_to_group("local_player")
+		# Ensure host player is visible to other clients in multiplayer
+		set_body_visible(true)
 
 	# Initialize subsystems
 	_crouch_system = PlayerCrouchSystem.new()
@@ -249,7 +251,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Mount/dismount/steal/place handling (E key) - only reaches here if not mounted
 	if event.is_action_pressed("mount") and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
 		if _painting_system and _painting_system.is_carrying():
-			_painting_system.try_place_painting()
+			_painting_system.try_place_item()
 		elif _painting_system and _painting_system.try_steal_target():
 			pass  # Steal initiated
 		else:
@@ -306,15 +308,43 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _exit_tree() -> void:
 	"""Clean up signal connections to prevent memory leaks"""
+	# SettingsEvents
 	if SettingsEvents.set_invert_y.is_connected(_set_invert_y):
 		SettingsEvents.set_invert_y.disconnect(_set_invert_y)
 	if SettingsEvents.set_mouse_sensitivity.is_connected(_set_mouse_sensitivity):
 		SettingsEvents.set_mouse_sensitivity.disconnect(_set_mouse_sensitivity)
 	if SettingsEvents.set_joypad_deadzone.is_connected(_set_joy_deadzone):
 		SettingsEvents.set_joypad_deadzone.disconnect(_set_joy_deadzone)
-	
-	# Note: ThemeManager.reading_font_changed uses inline lambda, 
-	# no need to disconnect (Godot auto-cleans up lambdas)
+
+	# Note: ThemeManager.reading_font_changed uses inline lambda,
+	# Godot auto-cleans up lambdas when the object is freed
+
+	# Subsystems - disconnect before cleanup
+	if _mount_system:
+		if _mount_system.mount_requested.is_connected(_on_mount_requested):
+			_mount_system.mount_requested.disconnect(_on_mount_requested)
+		if _mount_system.dismount_requested.is_connected(_on_dismount_requested):
+			_mount_system.dismount_requested.disconnect(_on_dismount_requested)
+
+	if _painting_system:
+		if _painting_system.steal_requested.is_connected(_on_steal_requested):
+			_painting_system.steal_requested.disconnect(_on_steal_requested)
+		if _painting_system.place_requested.is_connected(_on_place_requested):
+			_painting_system.place_requested.disconnect(_on_place_requested)
+		if _painting_system.eat_requested.is_connected(_on_eat_requested):
+			_painting_system.eat_requested.disconnect(_on_eat_requested)
+		if _painting_system.eat_anim_started.is_connected(_on_eat_anim_started):
+			_painting_system.eat_anim_started.disconnect(_on_eat_anim_started)
+		if _painting_system.eat_anim_cancelled.is_connected(_on_eat_anim_cancelled):
+			_painting_system.eat_anim_cancelled.disconnect(_on_eat_anim_cancelled)
+
+	if _pointing_system:
+		if _pointing_system.reaction_fired.is_connected(_on_reaction_fired):
+			_pointing_system.reaction_fired.disconnect(_on_reaction_fired)
+
+	if _footstep_player:
+		if _footstep_player.footstep_played.is_connected(_on_footstep_played):
+			_footstep_player.footstep_played.disconnect(_on_footstep_played)
 
 
 func _physics_process(delta: float) -> void:
@@ -823,16 +853,16 @@ func _update_crouch_body() -> void:
 # PAINTING SYSTEM DELEGATION
 # =============================================================================
 
-func _on_steal_requested(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2) -> void:
+func _on_steal_requested(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, is_audio: bool = false) -> void:
 	var main_node: Node = get_tree().current_scene
 	if main_node and main_node.has_method("_request_steal_painting"):
-		main_node._request_steal_painting(exhibit_title, image_title, image_url, image_size)
+		main_node._request_steal_painting(exhibit_title, image_title, image_url, image_size, is_audio)
 
 
-func _on_place_requested(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2) -> void:
+func _on_place_requested(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, is_audio: bool = false) -> void:
 	var main_node: Node = get_tree().current_scene
 	if main_node and main_node.has_method("_request_place_painting"):
-		main_node._request_place_painting(exhibit_title, image_title, image_url, wall_position, wall_normal, image_size)
+		main_node._request_place_painting(exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, is_audio)
 
 
 func _on_eat_requested(exhibit_title: String, image_title: String) -> void:

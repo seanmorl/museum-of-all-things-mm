@@ -54,3 +54,10 @@ PHASE_2_COMPLETE.md
 PHASE_3_COMPLETE.md
 PHASE_3_PLAN.md
 TOURNAMENT_MODE_PLAN.md
+
+# Piper TTS bundle (build artifact - generate before export)
+# Run: python tools/build_piper_bundle_for_release.py
+piper_bundle/
+
+# But keep a .gitignore in piper_bundle for cache
+!piper_bundle/cache/.gitkeep

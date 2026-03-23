@@ -10,6 +10,7 @@ var _exhibits: Dictionary = {}
 var _exhibit_hist: Array = []
 var _used_exhibit_heights: Dictionary = {}
 var _loading_exhibits: Dictionary = {}  # Track in-flight fetches to prevent duplicates
+var _pending_items_results: Dictionary = {}  # title -> Dictionary result (per-title items_complete)
 var _logged_slot_cap: bool = false
 
 var _starting_height: int = 40
@@ -26,6 +27,7 @@ var _max_room_dimension: int = 5
 var TiledExhibitGenerator: PackedScene = preload("res://scenes/TiledExhibitGenerator.tscn")
 var WallItem: PackedScene = preload("res://scenes/items/WallItem.tscn")
 var GramophoneItem: PackedScene = preload("res://scenes/items/Gramophone.tscn")
+var SoundItem: PackedScene = preload("res://scenes/items/SoundItem.tscn")
 
 
 func init(museum: Node3D, config: Dictionary) -> void:
@@ -35,6 +37,8 @@ func init(museum: Node3D, config: Dictionary) -> void:
 	_max_exhibits_loaded = config.get("max_exhibits_loaded", 2)
 	_min_room_dimension = config.get("min_room_dimension", 2)
 	_max_room_dimension = config.get("max_room_dimension", 5)
+	if not ItemProcessor.items_complete.is_connected(_on_items_complete):
+		ItemProcessor.items_complete.connect(_on_items_complete)
 
 
 func get_exhibits() -> Dictionary:
@@ -256,10 +260,11 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	_museum._queue_item_front(context.title, ExhibitFetcher.fetch_images.bind(image_titles, null))
 	_museum._queue_item(context.title, item_queue)
 
-	# Spawn persistent ghost silhouettes from previous visits
-	var ghosts: Array = TraceManager.get_ghosts(context.title)
-	for ghost_data: Dictionary in ghosts:
-		GhostSilhouette.spawn_from_data(new_exhibit, ghost_data)
+	# Spawn persistent ghost silhouettes from previous visits (multiplayer only)
+	if NetworkManager.is_multiplayer_active():
+		var ghosts: Array = TraceManager.get_ghosts(context.title)
+		for ghost_data: Dictionary in ghosts:
+			GhostSilhouette.spawn_from_data(new_exhibit, ghost_data)
 
 	# Restore persistently placed paintings for this exhibit
 	var placed_paintings: Array = TraceManager.get_placed_paintings(context.title)
@@ -368,16 +373,24 @@ func _show_error_to_player(message: String) -> void:
 	Log.error("ExhibitLoader", message)
 
 
+func _on_items_complete(data: Dictionary) -> void:
+	"""Dispatcher: store result keyed by title for per-title waiting"""
+	var title: String = data.get("title", "")
+	_pending_items_results[title] = data
+
 func _wait_for_items_complete(expected_title: String) -> Dictionary:
-	"""Wait for ItemProcessor.items_complete signal with matching title"""
-	while true:
-		var data: Dictionary = await ItemProcessor.items_complete
-		if data.title == expected_title:
-			return data
-		# Wrong title, keep waiting
-	
-	# This line is never reached, but satisfies Godot's return check
-	return {}
+	"""Wait for ItemProcessor.items_complete with matching title.
+	Uses per-title result map to avoid race conditions with concurrent loads."""
+	var timeout_ms := 60000
+	var start_time := Time.get_ticks_msec()
+	while not _pending_items_results.has(expected_title):
+		if Time.get_ticks_msec() - start_time > timeout_ms:
+			Log.error("ExhibitLoader", "Timeout waiting for items_complete: %s" % expected_title)
+			return {}
+		await get_tree().process_frame
+	var result: Dictionary = _pending_items_results[expected_title]
+	_pending_items_results.erase(expected_title)
+	return result
 
 
 func _on_secret_room_fetch_complete(context: Dictionary) -> void:
@@ -455,10 +468,10 @@ func _add_item(exhibit: Node3D, item_data: Dictionary) -> void:
 	var t: String = item_data.get("type", "") as String
 	var item: Node3D
 	if t == "audio":
-		item = GramophoneItem.instantiate()
+		item = SoundItem.instantiate()
 	else:
 		item = WallItem.instantiate()
-	
+
 	item.position = GridUtils.grid_to_world(slot[0]) - slot[1] * 0.01
 	item.rotation.y = GridUtils.vec_to_rot(slot[1])
 
@@ -478,6 +491,12 @@ func _init_item(exhibit: Node3D, item: Node3D, data: Dictionary) -> void:
 			else:
 				Log.warn("ExhibitLoader", "No audio URL for '%s' - get_res=%s" % [data.get("title", ""), "YES" if get_res else "NO"])
 			item.init(exhibit.title, data.get("text", ""), media_url)
+			
+			# Check if this audio should be stolen (missing)
+			var main: Node = _museum.get_parent()
+			if main and main.has_method("check_audio_stolen"):
+				if main.check_audio_stolen(exhibit.title, data.get("title", "")):
+					item.set_stolen(true)
 		else:
 			item.init(data)
 

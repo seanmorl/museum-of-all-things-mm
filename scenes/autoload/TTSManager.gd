@@ -1,56 +1,91 @@
 extends Node
-## Manages Text-To-Speech (TTS) narration for exhibits.
-## Interfaces with Godot's built-in DisplayServer TTS capabilities.
+## TTSManager — Simple TTS using Godot's DisplayServer.
+##
+## Uses Godot's built-in TTS API. Works offline with system voices.
+##
+## Relevant SettingsManager("audio") keys:
+##   tts_enabled : bool   — master on/off switch
+##   tts_voice   : String — voice ID from DisplayServer
 
 signal narration_started
 signal narration_stopped
 
 var _is_narrating: bool = false
-var _current_voice: String = ""
+var _voice_id: String = ""
+
 
 func _ready() -> void:
-	# Find a suitable English voice if available
-	var voices = DisplayServer.tts_get_voices()
-	if voices == null or voices.size() == 0:
-		return
-	for voice in voices:
-		if voice.language.begins_with("en"):
-			_current_voice = voice.id
-			break
-	if _current_voice == "" and voices.size() > 0:
-		_current_voice = voices[0].id
+	_find_voice()
+	print("[TTSManager] Ready — using system TTS")
 
-## Speaks the given text using the system TTS engine.
-## If currently narrating, it interrupts the previous text.
+
+func _find_voice() -> void:
+	"""Find an English voice from system TTS"""
+	var voices = DisplayServer.tts_get_voices()
+	if voices == null or voices.is_empty():
+		push_warning("[TTSManager] No TTS voices available")
+		return
+	
+	# Prefer English voices
+	for v in voices:
+		if v.language.begins_with("en"):
+			_voice_id = v.id
+			print("[TTSManager] Using voice: ", v.name, " (", v.language, ")")
+			return
+	
+	# Fall back to first available
+	if not voices.is_empty():
+		_voice_id = voices[0].id
+
+
+# ── Public API ─────────────────────────────────────────────────────────────────
+
 func narrate(text: String) -> void:
 	stop()
+	var settings = _get_settings()
+	if not settings.get("tts_enabled", true) or text.is_empty():
+		return
 	
-	var audio_settings = SettingsManager.get_settings("audio")
-	if audio_settings != null and audio_settings.has("tts_enabled") and not audio_settings.tts_enabled:
-		return
-		
-	if text.is_empty():
-		return
-		
-	# TTS engine requires audio features enabled or it will fail silently on some OS
-	# DisplayServer.tts_speak handles the OS-level hook
-	DisplayServer.tts_speak(text, _current_voice)
+	DisplayServer.tts_speak(text, _voice_id)
 	_is_narrating = true
 	narration_started.emit()
 
-## Stops any ongoing narration.
-func stop() -> void:
-	if _is_narrating:
-		DisplayServer.tts_stop()
-		_is_narrating = false
-		narration_stopped.emit()
 
-## Toggles narration for the given text
+func stop() -> void:
+	if not _is_narrating:
+		return
+	
+	DisplayServer.tts_stop()
+	_is_narrating = false
+	narration_stopped.emit()
+
+
 func toggle_narration(text: String) -> void:
 	if _is_narrating:
 		stop()
 	else:
 		narrate(text)
 
+
 func is_narrating() -> bool:
 	return _is_narrating
+
+
+func set_voice(voice_id: String) -> void:
+	_voice_id = voice_id
+
+
+func set_speed(speed: float) -> void:
+	"""Note: DisplayServer doesn't support speed control"""
+	pass
+
+
+func get_voices() -> Array:
+	return DisplayServer.tts_get_voices()
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+func _get_settings() -> Dictionary:
+	var s = SettingsManager.get_settings("audio")
+	return s if s is Dictionary else {}

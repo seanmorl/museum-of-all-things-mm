@@ -77,7 +77,7 @@ func sync_player_position(position: Vector3, rotation: Vector3, room: String) ->
 	"""Send player position to server (called by local player)."""
 	if not is_multiplayer_active():
 		return
-	
+
 	if is_server():
 		# Server updates locally
 		_on_player_position_updated(_local_peer_id, position, rotation, room)
@@ -85,7 +85,7 @@ func sync_player_position(position: Vector3, rotation: Vector3, room: String) ->
 		# Client sends to server
 		_sync_player_position.rpc_id(1, _local_peer_id, position, rotation, room)
 
-@rpc("any_peer", "call_local", "reliable")
+@rpc("any_peer", "call_local", "unreliable_ordered")
 func _sync_player_position(peer_id: int, position: Vector3, rotation: Vector3, room: String) -> void:
 	"""Receive player position update (server only)."""
 	if is_server():
@@ -97,11 +97,11 @@ func _on_player_position_updated(peer_id: int, position: Vector3, rotation: Vect
 	for other_peer in _connected_peers:
 		if other_peer != peer_id:
 			_broadcast_player_position.rpc_id(other_peer, peer_id, position, rotation, room)
-	
+
 	# Update local player list
 	EventBus.publish_player_moved(peer_id, room, position)
 
-@rpc("authority", "call_local", "reliable")
+@rpc("authority", "call_local", "unreliable_ordered")
 func _broadcast_player_position(peer_id: int, position: Vector3, rotation: Vector3, room: String) -> void:
 	"""Receive broadcasted player position (clients only)."""
 	# Could update a player ghost/marker here

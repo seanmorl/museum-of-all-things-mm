@@ -3,5 +3,6 @@
 [ext_resource type="Script" path="res://scenes/ui/DebugConsole.gd" id="1_script"]
 
 [node name="DebugConsole" type="CanvasLayer" unique_id=1000000002]
+groups = ["debug_console"]
 layer = 999
 script = ExtResource("1_script")

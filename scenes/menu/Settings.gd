@@ -30,23 +30,30 @@ func _ready() -> void:
 
 func _apply_theme() -> void:
 	## Apply ThemeManager colors to the settings panel and tab bar.
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = ThemeManager.bg_color
-	bg.border_color = ThemeManager.border_color
-	bg.border_width_bottom = 1
-	for corner in ["top_left", "top_right", "bottom_left", "bottom_right"]:
-		bg.set("corner_radius_" + corner, 8)
-	bg.shadow_color = Color(0, 0, 0, 0.30 if ThemeManager.is_dark_mode else 0.10)
-	bg.shadow_size = 14
-	bg.shadow_offset = Vector2(0, 5)
+	var dark := ThemeManager.is_dark_mode
+	
+	# Create panel style using centralized helper
+	var bg := UIStyle.create_panel_style(
+		ThemeManager.bg_color,
+		ThemeManager.border_color,
+		dark,
+		UIStyle.CORNER_RADIUS_PANEL,
+		UIStyle.PANEL_PADDING
+	)
+	# Adjust for settings-specific padding
+	bg.content_margin_left = 20
+	bg.content_margin_right = 20
+	bg.content_margin_top = 16
+	bg.content_margin_bottom = 16
+	
 	var panel := get_node_or_null("ScrollContainer/MarginContainer/Panel")
 	if panel:
 		panel.add_theme_stylebox_override("panel", bg)
-	
+
 	# Fallback for ScrollContainer itself if no Panel is found
 	if not panel and get_node_or_null("ScrollContainer") is ScrollContainer:
 		get_node("ScrollContainer").add_theme_stylebox_override("panel", bg)
-	
+
 	if _tab_bar:
 		_tab_bar.add_theme_color_override("font_selected_color", ThemeManager.text_color)
 		_tab_bar.add_theme_color_override("font_unselected_color", ThemeManager.subtext_color)
@@ -54,47 +61,30 @@ func _apply_theme() -> void:
 		if _serif_font:
 			_tab_bar.add_theme_font_override("font", _serif_font)
 		_tab_bar.add_theme_font_size_override("font_size", 14)
-		
-		# Ensure tab bar itself has no white background
-		var tab_bg := StyleBoxEmpty.new()
-		_tab_bar.add_theme_stylebox_override("tab_unselected", tab_bg)
-		_tab_bar.add_theme_stylebox_override("tab_selected", tab_bg)
+
+		# Use centralized tab styles
+		var tab_styles := UIStyle.create_tab_style(
+			ThemeManager.text_color,
+			ThemeManager.subtext_color,
+			UIStyle.get_accent_color(dark),
+			dark,
+			_serif_font
+		)
+		_tab_bar.add_theme_stylebox_override("tab_selected", tab_styles.selected)
+		_tab_bar.add_theme_stylebox_override("tab_unselected", tab_styles.unselected)
+		_tab_bar.add_theme_stylebox_override("tab_hovered", tab_styles.hovered)
 		_tab_bar.add_theme_constant_override("h_separation", 45)
 		_tab_bar.clip_tabs = false
-		
-		var hover_style := StyleBoxFlat.new()
-		hover_style.bg_color = Color(1, 1, 1, 0.05) if ThemeManager.is_dark_mode else Color(0, 0, 0, 0.05)
-		hover_style.set_corner_radius_all(4)
-		hover_style.content_margin_left = 12
-		hover_style.content_margin_right = 12
-		_tab_bar.add_theme_stylebox_override("tab_hovered", hover_style)
-		
-		# Add a subtle indicator for the selected tab
-		var selected_style := StyleBoxFlat.new()
-		selected_style.bg_color = Color(0, 0, 0, 0)
-		selected_style.border_color = Color(0.3, 0.5, 0.9) # blue underline
-		selected_style.border_width_bottom = 2
-		selected_style.content_margin_left = 12
-		selected_style.content_margin_right = 12
-		_tab_bar.add_theme_stylebox_override("tab_selected", selected_style)
-		
-		var unselected_style := StyleBoxEmpty.new()
-		unselected_style.content_margin_left = 12
-		unselected_style.content_margin_right = 12
-		_tab_bar.add_theme_stylebox_override("tab_unselected", unselected_style)
 
 	# Style the Back button
 	var back_btn := get_node_or_null("ScrollContainer/MarginContainer/VBoxContainer/HBoxContainer/BackButton") as Button
 	if back_btn:
 		_style_top_button(back_btn)
 
-	# Style separators
+	# Style separators using centralized helper
 	var h_sep := get_node_or_null("ScrollContainer/MarginContainer/VBoxContainer/HSeparator") as HSeparator
 	if h_sep:
-		var sep_style := StyleBoxLine.new()
-		sep_style.color = ThemeManager.border_color
-		sep_style.thickness = 1
-		h_sep.add_theme_stylebox_override("separator", sep_style)
+		h_sep.add_theme_stylebox_override("separator", UIStyle.create_divider_style(ThemeManager.border_color))
 
 	_theme_control_tree(_vbox)
 	for scene in _tab_scenes:
@@ -152,31 +142,34 @@ func _theme_control_tree(node: Node) -> void:
 
 
 func _style_top_button(btn: Button) -> void:
-	## Styles smaller utility buttons like 'Back' or 'Restore' 
+	## Styles smaller utility buttons like 'Back' or 'Restore'
 	if not btn: return
 	var dark := ThemeManager.is_dark_mode
-	btn.add_theme_color_override("font_color", ThemeManager.text_color)
-	btn.add_theme_color_override("font_hover_color", ThemeManager.text_color)
-	btn.add_theme_color_override("font_pressed_color", ThemeManager.text_color)
-	btn.add_theme_font_size_override("font_size", 14)
+	
+	# Apply font
 	if _serif_font:
 		btn.add_theme_font_override("font", _serif_font)
-
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0,0,0,0)
-	normal.border_color = ThemeManager.border_color
-	normal.border_width_left = 1; normal.border_width_right = 1
-	normal.border_width_top = 1; normal.border_width_bottom = 1
-	normal.set_corner_radius_all(4)
-	normal.content_margin_left = 12; normal.content_margin_right = 12
-	normal.content_margin_top = 4; normal.content_margin_bottom = 4
+	btn.add_theme_font_size_override("font_size", 14)
 	
+	# Apply font colors
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		btn.add_theme_color_override(state, ThemeManager.text_color)
+	
+	# Use centralized button style helper with border
+	var normal := UIStyle.create_button_style(
+		Color.TRANSPARENT,
+		ThemeManager.border_color,
+		UIStyle.CORNER_RADIUS_SMALL,
+		8.0
+	)
+	normal.content_margin_top = 4
+	normal.content_margin_bottom = 4
 	btn.add_theme_stylebox_override("normal", normal)
-	
+
 	var hover := normal.duplicate() as StyleBoxFlat
 	hover.bg_color = Color(1,1,1,0.05) if dark else Color(0,0,0,0.05)
 	btn.add_theme_stylebox_override("hover", hover)
-	
+
 	var pressed := normal.duplicate() as StyleBoxFlat
 	pressed.bg_color = Color(1,1,1,0.1) if dark else Color(0,0,0,0.1)
 	btn.add_theme_stylebox_override("pressed", pressed)
@@ -184,28 +177,27 @@ func _style_top_button(btn: Button) -> void:
 
 func _style_line_edit(edit: LineEdit) -> void:
 	var dark := ThemeManager.is_dark_mode
+	
+	# Apply font
 	if _serif_font:
 		edit.add_theme_font_override("font", _serif_font)
 	edit.add_theme_font_size_override("font_size", 14)
 
+	# Apply colors
 	edit.add_theme_color_override("font_color", ThemeManager.text_color)
 	edit.add_theme_color_override("font_placeholder_color", ThemeManager.subtext_color)
-
-	var sn := StyleBoxFlat.new()
-	sn.bg_color = Color(0, 0, 0, 0.2) if dark else Color(1, 1, 1, 0.8)
-	sn.border_color = ThemeManager.border_color
-	sn.border_width_left = 1; sn.border_width_right = 1
-	sn.border_width_top = 1; sn.border_width_bottom = 1
-	sn.set_corner_radius_all(4)
-	sn.content_margin_left = 8; sn.content_margin_right = 8
-	sn.content_margin_top = 4; sn.content_margin_bottom = 4
-	edit.add_theme_stylebox_override("normal", sn)
-
-	var sf := sn.duplicate() as StyleBoxFlat
-	sf.border_color = ThemeManager.text_color
-	sf.border_width_left = 2; sf.border_width_right = 2
-	sf.border_width_top = 2; sf.border_width_bottom = 2
-	edit.add_theme_stylebox_override("focus", sf)
+	
+	# Use centralized input style helper
+	var styles := UIStyle.create_input_style(
+		Color.TRANSPARENT,
+		ThemeManager.border_color,
+		ThemeManager.text_color,
+		ThemeManager.subtext_color,
+		dark,
+		_serif_font
+	)
+	edit.add_theme_stylebox_override("normal", styles.normal)
+	edit.add_theme_stylebox_override("focus", styles.focus)
 
 func _on_visibility_changed() -> void:
 	if visible:
@@ -213,7 +205,7 @@ func _on_visibility_changed() -> void:
 		for scene in _tab_scenes:
 			if scene:
 				scene.visible = false
-		
+
 		_apply_theme()
 		_tab_bar.set_current_tab(0)
 		_on_tab_bar_tab_changed(0) # Explicitly show first tab
@@ -224,9 +216,9 @@ func _on_visibility_changed() -> void:
 			scroll.position.y = 10.0
 			var tw: Tween = scroll.create_tween()
 			tw.set_parallel(true)
-			tw.tween_property(scroll, "modulate:a", 1.0, 0.30)
-			tw.tween_property(scroll, "position:y", 0.0, 0.30) \
-				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_property(scroll, "modulate:a", 1.0, UIStyle.FADE_DURATION)
+			tw.tween_property(scroll, "position:y", 0.0, UIStyle.SLIDE_DURATION) \
+				.set_trans(UIStyle.TRANS_BOUNCE).set_ease(UIStyle.EASE_BOUNCE)
 
 func _input(event: InputEvent) -> void:
 	if visible and event.is_action_pressed("ui_cancel"):
@@ -237,7 +229,7 @@ func _on_tab_bar_tab_changed(tab: int) -> void:
 	var prev_scene: Control = _tab_scenes[_current_tab] if _current_tab < _tab_scenes.size() else null
 	_current_tab = tab
 	var next_scene: Control = _tab_scenes[tab] if tab < _tab_scenes.size() else null
-	
+
 	for i in range(_tab_scenes.size()):
 		if _tab_scenes[i] != null and _tab_scenes[i] != next_scene:
 			_tab_scenes[i].visible = false
@@ -250,9 +242,9 @@ func _on_tab_bar_tab_changed(tab: int) -> void:
 	next_scene.position.y = 8.0
 	var tw: Tween = next_scene.create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(next_scene, "modulate:a", 1.0, 0.18)
-	tw.tween_property(next_scene, "position:y", 0.0, 0.18) \
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(next_scene, "modulate:a", 1.0, UIStyle.FADE_QUICK)
+	tw.tween_property(next_scene, "position:y", 0.0, UIStyle.FADE_QUICK) \
+		.set_trans(UIStyle.TRANS_EXIT).set_ease(UIStyle.EASE_EXIT)
 	_theme_control_tree(next_scene)
 
 func _build_multiplayer_settings() -> Control:

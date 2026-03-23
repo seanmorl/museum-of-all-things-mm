@@ -146,9 +146,20 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Enable Text-to-Speech (TTS)"
 
+[node name="TTSVoiceLabel" type="Label" parent="VolumeOptions" unique_id=1000000001]
+unique_name_in_owner = true
+layout_mode = 2
+text = "TTS Voice"
+
+[node name="TTSVoice" type="OptionButton" parent="VolumeOptions" unique_id=1000000002]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
 [connection signal="visibility_changed" from="." to="." method="_on_visibility_changed"]
 [connection signal="value_changed" from="VolumeOptions/HBoxContainer/GlobalVolume" to="." method="_on_global_volume_changed"]
 [connection signal="value_changed" from="VolumeOptions/HBoxContainer2/SoundVolume" to="." method="_on_sound_volume_changed"]
 [connection signal="value_changed" from="VolumeOptions/HBoxContainer3/AmbienceVolume" to="." method="_on_ambience_volume_changed"]
 [connection signal="value_changed" from="VolumeOptions/HBoxContainer4/MusicVolume" to="." method="_on_music_volume_changed"]
 [connection signal="toggled" from="VolumeOptions/TTSButton" to="." method="_on_tts_button_toggled"]
+[connection signal="item_selected" from="VolumeOptions/TTSVoice" to="." method="_on_tts_voice_item_selected"]

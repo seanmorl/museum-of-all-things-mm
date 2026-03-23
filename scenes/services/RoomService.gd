@@ -28,12 +28,12 @@ func initialize(museum: Node, exhibit_loader: Node) -> void:
 func generate_room(title: String) -> RoomData:
 	"""Generate a room on the server. Returns RoomData for broadcasting."""
 	print("RoomService: Generating room '", title, "'")
-	
+
 	var data = RoomData.create(title, hash(title))
-	
+
 	# Store in cache
 	_room_cache[title] = data
-	
+
 	room_generated.emit(data)
 	return data
 
@@ -49,10 +49,10 @@ func broadcast_room(data: RoomData) -> void:
 	"""Broadcast room data to all clients via RPC."""
 	if not NetworkManager.is_multiplayer_active():
 		return
-	
+
 	print("RoomService: Broadcasting room '", data.title, "' to all clients")
 	_sync_room_data.rpc(data.to_var())
-	
+
 	# Load locally on server (don't wait for RPC)
 	load_room_from_data(data)
 
@@ -61,7 +61,7 @@ func _sync_room_data(data_var: Variant) -> void:
 	"""RPC handler - clients receive room data from server."""
 	var data = RoomData.from_var(data_var)
 	print("RoomService: Received room data for '", data.title, "'")
-	
+
 	load_room_from_data(data)
 
 # --- Client: Load Room from Data ---
@@ -71,23 +71,23 @@ func load_room_from_data(data: RoomData) -> void:
 	if data.title in _loading_rooms:
 		print("RoomService: Room '", data.title, "' already loading")
 		return
-	
+
 	# Check if museum is initialized
 	if not _museum:
 		print("RoomService: ERROR - Museum not initialized!")
 		return
-	
+
 	if _museum.has_exhibit(data.title):
 		print("RoomService: Room '", data.title, "' already loaded")
 		room_loaded.emit(data.title)
 		return
-	
+
 	_loading_rooms[data.title] = true
 	room_sync_started.emit(data.title)
-	
+
 	# Store room data in cache for exhibit loader to use
 	_room_cache[data.title] = data
-	
+
 	# Trigger exhibit loading
 	# The exhibit loader will check _room_cache for pre-loaded data
 	if _exhibit_loader and _exhibit_loader.has_method("load_exhibit_from_room_data"):

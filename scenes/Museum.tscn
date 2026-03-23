@@ -15,14 +15,16 @@ sky_material = SubResource("ShaderMaterial_rjqla")
 
 [sub_resource type="Environment" id="Environment_g30yg"]
 sky = SubResource("Sky_xbixb")
-ambient_light_source = 2
 ambient_light_color = Color(1, 1, 1, 1)
-ambient_light_energy = 0.4
+ambient_light_energy = 3.0
 ssr_enabled = true
 ssr_max_steps = 256
 ssr_fade_in = 0.522331
 ssr_depth_tolerance = 128.0
 ssao_enabled = true
+sdfgi_enabled = false
+sdfgi_cascades = 8
+sdfgi_min_cell_size = 3.5370116
 glow_bloom = 0.02
 glow_blend_mode = 0
 fog_enabled = true

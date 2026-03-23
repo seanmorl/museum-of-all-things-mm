@@ -41,11 +41,12 @@ func _ready() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load("user://ui_settings.cfg") == OK:
 		is_dark_mode = cfg.get_value("ui", "dark_mode", false)
-	
+		disco_mode = cfg.get_value("ui", "disco_mode", false)
+
 	var acc = SettingsManager.get_settings("accessibility")
 	if acc and acc.has("reading_font"):
 		current_font_index = acc.reading_font
-		
+
 	_update_palette()
 
 
@@ -58,7 +59,7 @@ func set_dark_mode(enabled: bool) -> void:
 		return
 	is_dark_mode = enabled
 	_update_palette()
-	_save_preference(is_dark_mode)
+	_save_preference("dark_mode", enabled)
 	dark_mode_changed.emit(enabled)
 
 
@@ -84,6 +85,7 @@ func set_reading_font(index: int) -> void:
 func set_disco_mode(enabled: bool) -> void:
 	disco_mode = enabled
 	disco_mode_changed.emit(enabled)
+	_save_preference("disco_mode", enabled)
 
 
 func _update_palette() -> void:
@@ -169,7 +171,15 @@ func update_popup_style(popup: PopupMenu) -> void:
 	popup.add_theme_font_size_override("title_font_size", 14)
 
 
-func _save_preference(enabled: bool) -> void:
+func _save_preference(key: String, value: Variant) -> void:
 	var cfg := ConfigFile.new()
-	cfg.set_value("ui", "dark_mode", enabled)
+	cfg.load("user://ui_settings.cfg")
+	cfg.set_value("ui", key, value)
+	cfg.save("user://ui_settings.cfg")
+
+
+func _save_preference_glass(enabled: bool) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load("user://ui_settings.cfg")
+	cfg.set_value("ui", "glassmorphic_ui", enabled)
 	cfg.save("user://ui_settings.cfg")

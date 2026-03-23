@@ -30,7 +30,7 @@ var image_name_re: RegEx = RegEx.new()
 var image_field_re: RegEx = RegEx.new()
 var exclude_image_re: RegEx = RegEx.new()
 
-var max_len_soft: int = 1000
+var max_len_soft: int = 10000  # Increased from 1000 to allow full article text
 var text_item_fmt: String = "[color=black][b][font_size=48]%s[/font_size][/b]\n\n%s"
 var section_fmt: String = "[p][b][font_size=36]%s[/font_size][/b][/p]\n\n"
 var p_fmt: String = "[p]%s[/p]\n\n"

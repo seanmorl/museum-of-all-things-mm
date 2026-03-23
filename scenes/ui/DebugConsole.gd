@@ -11,8 +11,22 @@ var _history: Array[String] = []
 var _history_index: int = -1
 var _toggle_cooldown: bool = false
 
-func is_active() -> bool:
+## Static method safe for export builds
+static func is_active() -> bool:
+	# In export builds, always return false (console is disabled)
+	if not OS.is_debug_build():
+		return false
+	# In debug builds, try to get the instance and check if visible
+	var console = Engine.get_main_loop().current_scene.get_node_or_null("DebugConsole")
+	if console == null:
+		console = Engine.get_main_loop().root.get_node_or_null("DebugConsole")
+	if console == null or not console.has_method("is_console_visible"):
+		return false
+	return console.is_console_visible()
+
+func is_console_visible() -> bool:
 	return _console_visible
+
 const HEIGHT: float = 450.0
 
 var _bg_overlay: ColorRect = null
@@ -27,7 +41,10 @@ var _commands: Dictionary = {}
 func _ready() -> void:
 	# Only activate in debug builds
 	if not OS.is_debug_build():
-		queue_free()
+		# Don't queue_free - just hide and disable
+		# This prevents crashes when other scripts call DebugConsole.is_active()
+		visible = false
+		process_mode = PROCESS_MODE_DISABLED
 		return
 
 	_build_console()
@@ -381,29 +398,37 @@ func _register_commands() -> void:
 
 
 func _process(_delta: float) -> void:
+	# Only process in debug builds
+	if not OS.is_debug_build():
+		return
+		
 	# Toggle console with ~ or F12 (with cooldown to prevent spam)
 	if not _toggle_cooldown:
 		if Input.is_key_pressed(KEY_QUOTELEFT) or Input.is_key_pressed(KEY_F12):
 			_toggle_cooldown = true
 			toggle_console()
 			return
-	
+
 	# Cooldown prevents rapid toggle
 	if _toggle_cooldown and not Input.is_key_pressed(KEY_QUOTELEFT) and not Input.is_key_pressed(KEY_F12):
 		_toggle_cooldown = false
-	
+
 	# Update stats if visible and on stats tab
 	if _console_visible and _tab_container and _tab_container.current_tab == 2:
 		_update_stats()
 
 
 func toggle_console() -> void:
+	# Only work in debug builds
+	if not OS.is_debug_build():
+		return
+		
 	_console_visible = not _console_visible
-	
+
 	if _tween:
 		_tween.kill()
 	_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	
+
 	var player = get_tree().get_first_node_in_group("local_player")
 	
 	if _console_visible:
@@ -451,6 +476,10 @@ func toggle_console() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# Only process input in debug builds
+	if not OS.is_debug_build():
+		return
+		
 	# Block all game input when console is open, BUT only if it's not and event for the LineEdit
 	if _console_visible:
 		if event is InputEventKey:
@@ -459,11 +488,11 @@ func _input(event: InputEvent) -> void:
 				toggle_console()
 				get_viewport().set_input_as_handled()
 				return
-		
+
 		# If the LineEdit has focus, let it handle the input
 		if _input_line.has_focus():
 			return
-			
+
 		get_viewport().set_input_as_handled()
 
 

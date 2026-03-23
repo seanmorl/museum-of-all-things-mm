@@ -20,12 +20,12 @@ func interact() -> void:
 
 func _apply_accessibility() -> void:
 	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
-	
+
 	# Handle Reading Font
 	var font := ThemeManager.get_reading_font()
 	if font:
 		$Label.font = font
-		
+
 	# Handle High Contrast
 	var hc: bool = acc.get("high_contrast_text", false)
 	if hc:
@@ -39,7 +39,7 @@ func _apply_accessibility() -> void:
 	else:
 		$Label.modulate = Color(1, 1, 1, 1)
 		$Label.outline_size = 0
-		
+
 	var scale_factor: float = acc.get("exhibit_text_size", 1.0)
 	$Label.font_size = int(60 * scale_factor) # Default label3d font size is usually 32-60, maybe assume base relative to scale
 

@@ -1,14 +1,16 @@
 extends Node
 class_name PaintingController
-## Handles painting steal/place/eat request processing and RPC synchronization across peers.
+## Handles painting and audio steal/place request processing and RPC synchronization across peers.
 
 var _main: Node = null
 var _multiplayer_controller: MultiplayerController = null
 
 # Server state
-var _carry_state: Dictionary = {}      # peer_id -> { exhibit_title, image_title, image_url, image_size }
+var _carry_state: Dictionary = {}      # peer_id -> { exhibit_title, image_title, image_url, image_size, is_audio }
 var _stolen_paintings: Dictionary = {}  # "exhibit_title:image_title" -> peer_id
+var _stolen_audio: Dictionary = {}      # "exhibit_title:audio_title" -> peer_id
 var _placed_paintings: Array[Node] = []  # Tracked placed painting nodes
+var _placed_audio: Array[Node] = []      # Tracked placed audio nodes
 
 
 func init(main: Node, multiplayer_controller: MultiplayerController) -> void:
@@ -20,7 +22,11 @@ func init(main: Node, multiplayer_controller: MultiplayerController) -> void:
 # STEAL
 # =============================================================================
 
-func request_steal(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, local_player: Node) -> void:
+func request_steal(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, local_player: Node, is_audio: bool = false) -> void:
+	if is_audio:
+		request_steal_audio(exhibit_title, image_title, image_url, local_player)
+		return
+	
 	if not _multiplayer_controller.is_multiplayer_game() or not NetworkManager.is_multiplayer_active():
 		# Singleplayer — execute directly
 		_execute_steal_local(exhibit_title, image_title, image_url, image_size, local_player)
@@ -31,6 +37,18 @@ func request_steal(exhibit_title: String, image_title: String, image_url: String
 		handle_steal_request(peer_id, exhibit_title, image_title, image_url, image_size, local_player)
 	else:
 		_main._request_steal_painting_rpc.rpc_id(1, peer_id, exhibit_title, image_title, image_url, image_size)
+
+
+func request_steal_audio(exhibit_title: String, audio_title: String, audio_url: String, local_player: Node) -> void:
+	if not _multiplayer_controller.is_multiplayer_game() or not NetworkManager.is_multiplayer_active():
+		_execute_steal_audio_local(exhibit_title, audio_title, audio_url, local_player)
+		return
+
+	var peer_id: int = NetworkManager.get_unique_id()
+	if NetworkManager.is_server():
+		handle_steal_audio_request(peer_id, exhibit_title, audio_title, audio_url, local_player)
+	else:
+		_main._request_steal_audio_rpc.rpc_id(1, peer_id, exhibit_title, audio_title, audio_url)
 
 
 func handle_steal_request(peer_id: int, exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, local_player: Node) -> void:
@@ -53,7 +71,8 @@ func handle_steal_request(peer_id: int, exhibit_title: String, image_title: Stri
 		"exhibit_title": exhibit_title,
 		"image_title": image_title,
 		"image_url": image_url,
-		"image_size": image_size
+		"image_size": image_size,
+		"is_audio": false
 	}
 	_stolen_paintings[painting_key] = peer_id
 
@@ -64,10 +83,54 @@ func handle_steal_request(peer_id: int, exhibit_title: String, image_title: Stri
 	_main._execute_steal_sync.rpc(peer_id, exhibit_title, image_title, image_url, image_size)
 
 
+func handle_steal_audio_request(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String, local_player: Node) -> void:
+	# Server-side validation
+	var audio_key: String = exhibit_title + ":" + audio_title
+	if _stolen_audio.has(audio_key):
+		Log.warn("PaintingController", "Audio steal rejected - already stolen: %s" % audio_key)
+		return
+	if _carry_state.has(peer_id):
+		Log.warn("PaintingController", "Audio steal rejected - player %d already carrying" % peer_id)
+		return
+
+	# Validate audio exists in exhibit (anti-cheat)
+	if not _audio_exists_in_exhibit(exhibit_title, audio_title):
+		Log.warn("PaintingController", "Audio steal rejected - not found: %s in %s" % [audio_title, exhibit_title])
+		return
+
+	# Record state
+	_carry_state[peer_id] = {
+		"exhibit_title": exhibit_title,
+		"image_title": audio_title,
+		"image_url": audio_url,
+		"image_size": Vector2(1, 1),
+		"is_audio": true
+	}
+	_stolen_audio[audio_key] = peer_id
+
+	# Execute on server
+	_apply_steal_audio(peer_id, exhibit_title, audio_title, audio_url, local_player)
+
+	# Broadcast to all clients
+	_main._execute_steal_audio_sync.rpc(peer_id, exhibit_title, audio_title, audio_url)
+
+
 func execute_steal_sync(peer_id: int, exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, local_player: Node) -> void:
 	if NetworkManager.is_server():
 		return  # Already done
 	_apply_steal(peer_id, exhibit_title, image_title, image_url, image_size, local_player)
+
+
+func execute_steal_audio_sync(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String, local_player: Node) -> void:
+	if NetworkManager.is_server():
+		return
+	_apply_steal_audio(peer_id, exhibit_title, audio_title, audio_url, local_player)
+
+
+func execute_place_audio_sync(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String, position: Vector3, normal: Vector3, local_player: Node) -> void:
+	if NetworkManager.is_server():
+		return
+	_apply_place_audio(peer_id, exhibit_title, audio_title, audio_url, position, normal, local_player)
 
 
 func _apply_steal(peer_id: int, exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, local_player: Node) -> void:
@@ -133,11 +196,58 @@ func _execute_steal_local(exhibit_title: String, image_title: String, image_url:
 		local_player._painting_system.execute_steal(texture, image_url, image_title, exhibit_title, image_size)
 
 
+func _apply_steal_audio(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String, local_player: Node) -> void:
+	# Check for a placed audio first, then fall back to SoundItem
+	var placed: Node = _find_and_remove_placed_audio(audio_title)
+	if placed:
+		placed.queue_free()
+	else:
+		var sound_item: Node = _find_sound_item_by_audio_title(exhibit_title, audio_title)
+		if sound_item:
+			sound_item.set_stolen(true)
+
+	# Apply carry visual to the player
+	var player: Node = _multiplayer_controller.get_player_by_peer_id(peer_id, local_player)
+	if not is_instance_valid(player):
+		return
+
+	if "_painting_system" in player and player._painting_system:
+		player._painting_system.execute_steal(null, audio_url, audio_title, exhibit_title, Vector2(1, 1), true)
+
+
+func _execute_steal_audio_local(exhibit_title: String, audio_title: String, audio_url: String, local_player: Node) -> void:
+	# Singleplayer path
+	var audio_key: String = exhibit_title + ":" + audio_title
+	_stolen_audio[audio_key] = 0
+	_carry_state[0] = {
+		"exhibit_title": exhibit_title,
+		"image_title": audio_title,
+		"image_url": audio_url,
+		"image_size": Vector2(1, 1),
+		"is_audio": true
+	}
+
+	var placed: Node = _find_and_remove_placed_audio(audio_title)
+	if placed:
+		placed.queue_free()
+	else:
+		var sound_item: Node = _find_sound_item_by_audio_title(exhibit_title, audio_title)
+		if sound_item:
+			sound_item.set_stolen(true)
+
+	if "_painting_system" in local_player and local_player._painting_system:
+		local_player._painting_system.execute_steal(null, audio_url, audio_title, exhibit_title, Vector2(1, 1), true)
+
+
 # =============================================================================
 # PLACE
 # =============================================================================
 
-func request_place(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, local_player: Node) -> void:
+func request_place(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, local_player: Node, is_audio: bool = false) -> void:
+	if is_audio:
+		request_place_audio(exhibit_title, image_title, image_url, wall_position, wall_normal, local_player)
+		return
+	
 	if not _multiplayer_controller.is_multiplayer_game() or not NetworkManager.is_multiplayer_active():
 		_execute_place_local(exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, local_player)
 		return
@@ -147,6 +257,18 @@ func request_place(exhibit_title: String, image_title: String, image_url: String
 		handle_place_request(peer_id, exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, local_player)
 	else:
 		_main._request_place_painting_rpc.rpc_id(1, peer_id, exhibit_title, image_title, image_url, wall_position, wall_normal, image_size)
+
+
+func request_place_audio(exhibit_title: String, audio_title: String, audio_url: String, position: Vector3, normal: Vector3, local_player: Node) -> void:
+	if not _multiplayer_controller.is_multiplayer_game() or not NetworkManager.is_multiplayer_active():
+		_execute_place_audio_local(exhibit_title, audio_title, audio_url, position, normal, local_player)
+		return
+
+	var peer_id: int = NetworkManager.get_unique_id()
+	if NetworkManager.is_server():
+		handle_place_audio_request(peer_id, exhibit_title, audio_title, audio_url, position, normal, local_player)
+	else:
+		_main._request_place_audio_rpc.rpc_id(1, peer_id, exhibit_title, audio_title, audio_url, position, normal)
 
 
 func handle_place_request(peer_id: int, exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, local_player: Node) -> void:
@@ -166,6 +288,20 @@ func handle_place_request(peer_id: int, exhibit_title: String, image_title: Stri
 
 	_apply_place(peer_id, exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, local_player)
 	_main._execute_place_sync.rpc(peer_id, exhibit_title, image_title, image_url, wall_position, wall_normal, image_size)
+
+
+func handle_place_audio_request(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String, position: Vector3, normal: Vector3, local_player: Node) -> void:
+	if not _carry_state.has(peer_id):
+		Log.warn("PaintingController", "Audio place rejected - player %d not carrying" % peer_id)
+		return
+
+	var state: Dictionary = _carry_state[peer_id]
+	var audio_key: String = state.exhibit_title + ":" + state.image_title
+	_stolen_audio.erase(audio_key)
+	_carry_state.erase(peer_id)
+
+	_apply_place_audio(peer_id, exhibit_title, audio_title, audio_url, position, normal, local_player)
+	_main._execute_place_audio_sync.rpc(peer_id, exhibit_title, audio_title, audio_url, position, normal)
 
 
 func execute_place_sync(peer_id: int, exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, local_player: Node) -> void:
@@ -214,6 +350,41 @@ func _execute_place_local(exhibit_title: String, image_title: String, image_url:
 			return
 
 	_create_placed_painting(wall_position, wall_normal, image_size, texture, exhibit_title, image_title, image_url)
+
+
+func _execute_place_audio_local(exhibit_title: String, audio_title: String, audio_url: String, position: Vector3, normal: Vector3, local_player: Node) -> void:
+	if _carry_state.has(0):
+		var state: Dictionary = _carry_state[0]
+		var audio_key: String = state.exhibit_title + ":" + state.image_title
+		_stolen_audio.erase(audio_key)
+		_carry_state.erase(0)
+
+	if "_painting_system" in local_player and local_player._painting_system:
+		local_player._painting_system.execute_drop()
+
+	# Snap back to original position if placing nearby
+	var original_sound: Node = _find_sound_item_by_audio_title(exhibit_title, audio_title)
+	if original_sound and is_instance_valid(original_sound):
+		if original_sound.global_position.distance_to(position) < 2.0:
+			original_sound.set_stolen(false)
+			return
+
+	_create_placed_audio(position, normal, audio_url, exhibit_title, audio_title)
+
+
+func _apply_place_audio(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String, position: Vector3, normal: Vector3, local_player: Node) -> void:
+	var player: Node = _multiplayer_controller.get_player_by_peer_id(peer_id, local_player)
+	if is_instance_valid(player) and "_painting_system" in player and player._painting_system:
+		player._painting_system.execute_drop()
+
+	# Snap back to original position if placing nearby
+	var original_sound: Node = _find_sound_item_by_audio_title(exhibit_title, audio_title)
+	if original_sound and is_instance_valid(original_sound):
+		if original_sound.global_position.distance_to(position) < 2.0:
+			original_sound.set_stolen(false)
+			return
+
+	_create_placed_audio(position, normal, audio_url, exhibit_title, audio_title)
 
 
 func _create_placed_painting(wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, texture: Texture2D, exhibit_title: String, image_title: String, image_url: String) -> void:
@@ -311,6 +482,79 @@ func _create_placed_painting(wall_position: Vector3, wall_normal: Vector3, image
 	# Position off the wall — use global_position so world-space coords work
 	# regardless of where the parent node's origin is.
 	painting.global_position = wall_position + wall_normal * 0.13
+
+
+func _create_placed_audio(position: Vector3, normal: Vector3, audio_url: String, exhibit_title: String, audio_title: String) -> void:
+	# Create a small gramophone visual for the placed audio
+	var audio_item: MeshInstance3D = MeshInstance3D.new()
+	audio_item.name = "PlacedAudio"
+	
+	# Create base mesh (box)
+	var base_mesh = BoxMesh.new()
+	base_mesh.size = Vector3(0.6, 0.25, 0.6)
+	var base = MeshInstance3D.new()
+	base.name = "Base"
+	var wood_mat: Material = preload("res://assets/textures/black.tres").duplicate()
+	(wood_mat as StandardMaterial3D).albedo_color = Color(0.4, 0.25, 0.1, 1.0)
+	base.mesh = base_mesh
+	base.material_override = wood_mat
+	audio_item.add_child(base)
+	
+	# Create horn mesh (cylinder)
+	var horn_mesh = CylinderMesh.new()
+	horn_mesh.top_radius = 0.5
+	horn_mesh.bottom_radius = 0.03
+	horn_mesh.height = 0.75
+	var horn = MeshInstance3D.new()
+	horn.name = "Horn"
+	var brass_mat: Material = preload("res://assets/textures/black.tres").duplicate()
+	(brass_mat as StandardMaterial3D).albedo_color = Color(0.8, 0.7, 0.2, 1.0)
+	(brass_mat as StandardMaterial3D).metallic = 0.8
+	(brass_mat as StandardMaterial3D).roughness = 0.2
+	horn.mesh = horn_mesh
+	horn.material_override = brass_mat
+	horn.position = Vector3(0, 0.35, 0.2)
+	horn.rotation_degrees = Vector3(-45, 0, 0)
+	audio_item.add_child(horn)
+	
+	# Store metadata for re-stealing
+	audio_item.set_meta("is_placed_audio", true)
+	audio_item.set_meta("exhibit_title", exhibit_title)
+	audio_item.set_meta("audio_title", audio_title)
+	audio_item.set_meta("audio_url", audio_url)
+	
+	# Add collision body so raycast can hit it
+	var body: StaticBody3D = StaticBody3D.new()
+	body.collision_layer = 1048576
+	body.collision_mask = 0
+	var shape: CollisionShape3D = CollisionShape3D.new()
+	var box: BoxShape3D = BoxShape3D.new()
+	box.size = Vector3(0.7, 0.8, 0.7)
+	shape.shape = box
+	body.add_child(shape)
+	audio_item.add_child(body)
+	
+	# Parent to the exhibit node
+	var parent_node: Node = _get_exhibit_node(exhibit_title)
+	if not is_instance_valid(parent_node):
+		parent_node = _main
+	
+	parent_node.add_child(audio_item)
+	_placed_audio.append(audio_item)
+	
+	# Orient based on normal (for floor placement, normal should be UP)
+	var y_axis: Vector3 = normal
+	var x_axis: Vector3
+	if abs(normal.dot(Vector3.UP)) > 0.9:
+		# Horizontal surface (floor/table) - use forward direction
+		x_axis = Vector3.FORWARD
+	else:
+		x_axis = Vector3.UP.cross(normal).normalized()
+	var z_axis: Vector3 = x_axis.cross(y_axis)
+	audio_item.basis = Basis(x_axis, y_axis, z_axis)
+	
+	# Position slightly above the surface
+	audio_item.global_position = position + normal * 0.4
 
 
 func _on_carry_image_loaded(url: String, image: Texture2D, _ctx: Variant, player: Node, target_url: String) -> void:
@@ -445,6 +689,61 @@ func _find_and_remove_placed_painting(image_title: String) -> Node:
 	return null
 
 
+func _find_and_remove_placed_audio(audio_title: String) -> Node:
+	for i: int in range(_placed_audio.size() - 1, -1, -1):
+		var p: Node = _placed_audio[i]
+		if not is_instance_valid(p):
+			_placed_audio.remove_at(i)
+			continue
+		if p.has_meta("audio_title") and p.get_meta("audio_title") == audio_title:
+			_placed_audio.remove_at(i)
+			return p
+	return null
+
+
+func _find_sound_item_by_audio_title(exhibit_title: String, audio_title: String) -> Node:
+	if not _main.has_node("Museum"):
+		return null
+
+	var museum: Node = _main.get_node("Museum")
+
+	# Search through exhibit's children for SoundItems
+	for child: Node in museum.get_children():
+		for sound_item: Node in child.get_children():
+			if sound_item.has_method("init") and "audio_url" in sound_item and "title" in sound_item:
+				if sound_item.title == audio_title:
+					return sound_item
+
+	return null
+
+
+func _audio_exists_in_exhibit(exhibit_title: String, audio_title: String) -> bool:
+	"""Validate that an audio item exists in the specified exhibit (anti-cheat).
+
+	Checks both:
+	1. Placed audio (audio that was placed by players)
+	2. Sound items (original audio in the exhibit)
+
+	Returns true if audio exists, false otherwise.
+	"""
+	# Check if it's a placed audio
+	for p: Node in _placed_audio:
+		if not is_instance_valid(p):
+			continue
+		if p.has_meta("exhibit_title") and p.has_meta("audio_title"):
+			if p.get_meta("exhibit_title") == exhibit_title and p.get_meta("audio_title") == audio_title:
+				return true
+
+	# Check if it's a sound item
+	var sound_item: Node = _find_sound_item_by_audio_title(exhibit_title, audio_title)
+	if sound_item and is_instance_valid(sound_item):
+		var audio_key: String = exhibit_title + ":" + audio_title
+		if not _stolen_audio.has(audio_key):
+			return true
+
+	return false
+
+
 func _get_exhibit_node(exhibit_title: String) -> Node:
 	## Returns the 3D exhibit node for a given title, or null if not found/loaded.
 	if not _main.has_node("Museum"):
@@ -459,6 +758,12 @@ func is_painting_stolen(exhibit_title: String, image_title: String) -> bool:
 	## Checks the server-synced state to see if a painting should be missing.
 	var key: String = exhibit_title + ":" + image_title
 	return _stolen_paintings.has(key)
+
+
+func is_audio_stolen(exhibit_title: String, audio_title: String) -> bool:
+	## Checks the server-synced state to see if an audio should be missing.
+	var key: String = exhibit_title + ":" + audio_title
+	return _stolen_audio.has(key)
 
 
 func _painting_exists_in_exhibit(exhibit_title: String, image_title: String) -> bool:

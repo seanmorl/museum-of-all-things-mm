@@ -44,6 +44,7 @@ const _KEEPALIVE_INTERVAL: float = 5.0
 var _state_check_timer: float = 0.0
 const _STATE_CHECK_INTERVAL: float = 10.0  # Check every 10 seconds
 var _local_state_hash: String = ""
+var _last_migration_time: int = 0  # Rate limiting for host migration
 
 
 func _process(delta: float) -> void:
@@ -313,6 +314,15 @@ func get_player_room(peer_id: int) -> String:
 
 @rpc("any_peer", "call_local", "reliable")
 func _broadcast_player_room(peer_id: int, room: String) -> void:
+	# Validate sender identity — peer_id must match the actual sender
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != peer_id:
+		Log.warn("Network", "Rejected spoofed room update: sender=%d claimed=%d" % [sender_id, peer_id])
+		return
+	# Sanitize room name length
+	if room.length() > 256:
+		room = room.substr(0, 256)
+
 	if player_info.has(peer_id):
 		player_info[peer_id].current_room = room
 	player_room_changed.emit(peer_id, room)
@@ -343,6 +353,19 @@ func set_local_player_skin(skin_url: String) -> void:
 
 @rpc("any_peer", "call_local", "reliable")
 func _broadcast_player_info(peer_id: int, player_name: String, color_html: String, skin_url: String = "", pronouns: String = "") -> void:
+	# Validate sender identity — peer_id must match the actual sender
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != peer_id:
+		Log.warn("Network", "Rejected spoofed player info: sender=%d claimed=%d" % [sender_id, peer_id])
+		return
+	# Sanitize inputs
+	if player_name.length() > 32:
+		player_name = player_name.substr(0, 32)
+	if pronouns.length() > 32:
+		pronouns = pronouns.substr(0, 32)
+	if color_html.length() > 8:
+		color_html = "3380ccff"
+
 	var current_room: String = "Lobby"
 	if player_info.has(peer_id) and player_info[peer_id].has("current_room"):
 		current_room = player_info[peer_id].current_room
@@ -363,6 +386,17 @@ func _request_player_info(from_peer: int) -> void:
 
 @rpc("any_peer", "reliable")
 func _receive_player_info(peer_id: int, player_name: String, color_html: String, skin_url: String = "", pronouns: String = "") -> void:
+	# Validate sender identity — peer_id must match the actual sender
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != peer_id:
+		Log.warn("Network", "Rejected spoofed player info receive: sender=%d claimed=%d" % [sender_id, peer_id])
+		return
+	# Sanitize inputs
+	if player_name.length() > 32:
+		player_name = player_name.substr(0, 32)
+	if pronouns.length() > 32:
+		pronouns = pronouns.substr(0, 32)
+
 	var current_room: String = "Lobby"
 	if player_info.has(peer_id) and player_info[peer_id].has("current_room"):
 		current_room = player_info[peer_id].current_room
@@ -459,16 +493,11 @@ func _on_connection_failed() -> void:
 
 func _on_server_disconnected() -> void:
 	Log.info("Network", "Server disconnected")
-	
-	# If we're a client, try to migrate to a new host
-	if not is_hosting and not is_dedicated_server:
-		var connected_peers = _get_connected_peers()
-		if not connected_peers.is_empty():
-			Log.info("Network", "Attempting host migration...")
-			_elect_and_migrate_host(connected_peers)
-			return
-	
-	# Normal cleanup if no migration possible
+
+	# Clients should NOT attempt self-migration — this is insecure.
+	# Host migration is only initiated by the server via _request_host_migration.
+	# When the server disconnects, clients just clean up.
+
 	peer = null
 	multiplayer.multiplayer_peer = null
 	player_info.clear()
@@ -511,18 +540,35 @@ func _cleanup_connection() -> void:
 func _request_host_migration() -> void:
 	"""Called by clients to request becoming the new host"""
 	if not is_hosting:
-		return  # Only current host can transfer
-	
+		return  # Only current host processes migration requests
+
 	var requesting_peer = multiplayer.get_remote_sender_id()
+
+	# Validate: only accept migration requests from the elected peer (lowest ID)
+	var connected_peers = _get_connected_peers()
+	if connected_peers.is_empty():
+		return
+	var expected_host = connected_peers[0]  # lowest ID = longest connected
+	if requesting_peer != expected_host:
+		Log.warn("Network", "Rejected host migration from non-elected peer %d (expected %d)" % [requesting_peer, expected_host])
+		return
+
+	# Rate limiting: reject if last migration was < 30 seconds ago
+	var now := Time.get_ticks_msec()
+	if now - _last_migration_time < 30000:
+		Log.warn("Network", "Host migration rate limited (last was %d ms ago)" % (now - _last_migration_time))
+		return
+	_last_migration_time = now
+
 	Log.info("Network", "Transferring host to peer %d" % requesting_peer)
-	
+
 	# Transfer all game state to new host
 	var game_state = _serialize_game_state()
 	_transfer_host_state.rpc_id(requesting_peer, game_state)
-	
+
 	# Make them the new host
 	_make_peer_host.rpc_id(requesting_peer)
-	
+
 	# We become a client now
 	is_hosting = false
 

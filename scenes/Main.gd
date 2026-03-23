@@ -39,13 +39,14 @@ var _host_menu: CanvasLayer = null
 @onready var _server_console_overlay: Control = %ServerConsoleOverlay
 @onready var _map_overlay: Control = %ExhibitMapOverlay
 var _minimap_controller: Control = null
+var _race_status_hud: Control = null
 
-# ── Tournament nodes (created in _ready) ──────────────────────────────────────
+# â”€â”€ Tournament nodes (created in _ready) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 var _tournament_setup_menu:    Control = null
 var _tournament_hud:           Control = null
 var _tournament_victory_screen: Control = null
 @onready var _trivia_overlay: TriviaOverlay = %TriviaOverlay
-# ── Powerup HUD archived v0.5.0 - replaced with Environmental Events
+# â”€â”€ Powerup HUD archived v0.5.0 - replaced with Environmental Events
 # @onready var _powerup_hud: Control = %PowerupHUD
 @onready var _guestbook_overlay: GuestbookOverlay = %GuestbookOverlay
 @onready var _prompt_hud: Control = %PromptHUD
@@ -128,14 +129,14 @@ func _initialize_room_service() -> void:
 		if exhibit_loader:
 			Services.room_service.initialize(_museum, exhibit_loader)
 			print("Main: RoomService initialized with museum and exhibit loader")
-	
+
 	# Initialize exhibit service
 	if Services.exhibit_service and _museum:
 		var exhibit_loader = _museum.get_node_or_null("ExhibitLoader")
 		if exhibit_loader:
 			Services.exhibit_service.initialize(_museum, exhibit_loader)
 			print("Main: ExhibitService initialized")
-	
+
 	# Also initialize network service
 	if Services.network_service:
 		Services.network_service.initialize()
@@ -169,13 +170,13 @@ func _initialize_room_service() -> void:
 				main_menu_node.connect(sig, func():
 					if _daily_challenge_card and _daily_challenge_card.has_method("animate_out"):
 						_daily_challenge_card.animate_out())
-	# Quit goes through UIEvents — animate card out alongside menu transition
+	# Quit goes through UIEvents â€” animate card out alongside menu transition
 	UIEvents.quit_requested.connect(func():
 		if _daily_challenge_card and _daily_challenge_card.has_method("animate_out"):
 			_daily_challenge_card.animate_out())
 	
 	# Connect Settings resume signal to show MainMenu.
-	# Guard with is_connected — the scene inspector may already wire this.
+	# Guard with is_connected â€” the scene inspector may already wire this.
 	var settings_node := _menu_layer.get_node_or_null("Settings")
 	if settings_node and settings_node.has_signal("resume") \
 			and not settings_node.resume.is_connected(_on_settings_back):
@@ -207,7 +208,7 @@ func _initialize_room_service() -> void:
 	add_child(_chat_hud)
 	_chat_hud.init(_chat_system)
 
-	# ── Tournament mode ────────────────────────────────────────────────────────
+	# â”€â”€ Tournament mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	_spawn_tournament_nodes()
 
 	_trivia_manager = TriviaManager.new()
@@ -247,7 +248,7 @@ func _initialize_room_service() -> void:
 	if _daily_challenge_manager.has_signal("challenge_completed"):
 		_daily_challenge_manager.challenge_completed.connect(_on_challenge_completed_for_leaderboard)
 
-	# Lobby card — member-var CanvasLayer so it stays alive after _ready() returns
+	# Lobby card â€” member-var CanvasLayer so it stays alive after _ready() returns
 	_daily_challenge_card_layer = CanvasLayer.new()
 	_daily_challenge_card_layer.name = "DailyChallengeCardLayer"
 	_daily_challenge_card_layer.layer = 100  # guaranteed above all menus regardless of MenuLayer's layer
@@ -255,7 +256,7 @@ func _initialize_room_service() -> void:
 	_daily_challenge_card = load("res://scenes/ui/DailyChallengeCard.gd").new()
 	_daily_challenge_card.name = "DailyChallengeCard"
 	_daily_challenge_card_layer.add_child(_daily_challenge_card)
-	# Pre-fetch today's target right away — don't wait for game start
+	# Pre-fetch today's target right away â€” don't wait for game start
 	_daily_challenge_manager.start_challenge()
 	# Show card on main menu immediately (no player yet)
 	if _daily_challenge_card.has_method("init_for_main_menu"):
@@ -277,7 +278,7 @@ func _initialize_room_service() -> void:
 		InputMap.action_add_event("toggle_trivia", ev_t)
 
 	# Register powerup HUD toggle (P) at runtime
-	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
+	# â”€â”€ ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
 	# if not InputMap.has_action("toggle_powerups"):
 	# 	InputMap.add_action("toggle_powerups")
 	# 	var ev_p := InputEventKey.new()
@@ -313,7 +314,7 @@ func _initialize_room_service() -> void:
 	add_child(_host_menu)
 	_host_menu.init(self)
 
-	# Register spectator keybind (F) — multiplayer only
+	# Register spectator keybind (F) â€” multiplayer only
 	if not InputMap.has_action("toggle_spectator"):
 		InputMap.add_action("toggle_spectator")
 		var ev_s := InputEventKey.new()
@@ -361,11 +362,17 @@ func _initialize_room_service() -> void:
 	_minimap_controller.name = "MinimapController"
 	add_child(_minimap_controller)
 	_minimap_controller.init(_player)
+
+	# Race Status HUD â€” bottom-left, R key toggles during a race
+	# (Tab is already used for the player-list hold overlay)
+	_race_status_hud = load("res://scenes/ui/RaceStatusHUD.gd").new()
+	_race_status_hud.name = "RaceStatusHUD"
+	add_child(_race_status_hud)
 	
 	GraphicsManager.change_post_processing.connect(_change_post_processing)
 	GraphicsManager.init()
 	
-	# ✅ FIX: Connect pause menu signals. Guard each with is_connected so we
+	# âœ… FIX: Connect pause menu signals. Guard each with is_connected so we
 	# don't double-connect if the scene file already wired them in the inspector.
 	if not _pause_menu.resume.is_connected(_start_game):
 		_pause_menu.resume.connect(_start_game)
@@ -441,7 +448,7 @@ func _recreate_player() -> void:
 		_minimap_controller.init(_player)
 	if _prompt_hud and _prompt_hud.has_method("init"):
 		_prompt_hud.init(_player)
-	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
+	# â”€â”€ ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
 	# if _powerup_hud and _powerup_hud.has_method("init"):
 	# 	_powerup_hud.init(_player)
 
@@ -473,7 +480,8 @@ func _change_post_processing(post_processing: String) -> void:
 
 func _update_world_light_intensity() -> void:
 	if _world_light:
-		_world_light.light_energy = 0.05 if ThemeManager.is_dark_mode else 0.35
+		# Much brighter in light mode to differentiate from dark mode
+		_world_light.light_energy = 0.08 if ThemeManager.is_dark_mode else 1.2
 
 func _start_game() -> void:
 	if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
@@ -496,7 +504,7 @@ func _start_game() -> void:
 		_museum.init(_player)
 		# Spawn the physical noticeboard in the lobby
 		_spawn_daily_challenge_board()
-	# Re-init lobby card for solo play only — never show in multiplayer
+	# Re-init lobby card for solo play only â€” never show in multiplayer
 	if _daily_challenge_card and _daily_challenge_card.has_method("init"):
 		if not _multiplayer_controller.is_multiplayer_game():
 			_daily_challenge_card.init(_daily_challenge_manager, _daily_challenge_hud, _player, _daily_challenge_leaderboard, _start_game, _menu_layer)
@@ -505,8 +513,15 @@ func _start_game() -> void:
 
 func _pause_game() -> void:
 	_player.pause()
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+	if _minimap_controller and _minimap_controller.has_method("set_hidden"):
+		_minimap_controller.set_hidden()
+
 	if game_started:
-		if _menu_layer.visible:
+		# Check if pause menu is already visible
+		var pause_menu_visible := _pause_menu and _pause_menu.visible
+		if pause_menu_visible:
 			return
 		_menu_controller.open_pause_menu()
 	else:
@@ -526,7 +541,7 @@ func _use_terminal() -> void:
 	# Block terminal access during daily challenge to prevent cheating
 	if _daily_challenge_manager and _daily_challenge_manager.is_active():
 		if _chat_system:
-			_chat_system._show_system_message("⚠ Terminal disabled during Daily Challenge")
+			_chat_system._show_system_message("âš  Terminal disabled during Daily Challenge")
 		return
 	if _minimap_controller and _minimap_controller.has_method("set_hidden"):
 		_minimap_controller.set_hidden()
@@ -570,7 +585,7 @@ func _start_ui_dedicated_host() -> void:
 	_multiplayer_controller.set_server_mode(true)
 	_multiplayer_controller.set_multiplayer_game(true)
 	
-	# Signals are already connected in _ready() — no reconnection needed
+	# Signals are already connected in _ready() â€” no reconnection needed
 	
 	var error: Error = NetworkManager.host_game(_multiplayer_controller.get_server_port(), true)
 	if error != OK:
@@ -598,7 +613,7 @@ func _start_ui_dedicated_host() -> void:
 		
 		var lbl := Label.new()
 		lbl.name = "HostStatusLabel"
-		lbl.text = "Hosting on port %d — waiting for players..." % _multiplayer_controller.get_server_port()
+		lbl.text = "Hosting on port %d â€” waiting for players..." % _multiplayer_controller.get_server_port()
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.add_theme_color_override("font_color", Color(0.4, 0.7, 0.4))
 		container.add_child(lbl)
@@ -662,34 +677,49 @@ func _on_settings_back() -> void:
 # =============================================================================
 
 func _input(event: InputEvent) -> void:
+	# TEST: F10 = Play PCM test audio (for Piper TTS development)
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F10:
+		_test_pcm_playback()
+		return
+	
 	if Input.is_action_pressed("toggle_fullscreen"):
 		UIEvents.fullscreen_toggled.emit(not GraphicsManager.fullscreen)
 
-	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
+	# â”€â”€ ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
 	# DEBUG: F10 = spawn powerup near player (multiplayer only)
 	# if event is InputEventKey and event.pressed and event.keycode == KEY_F10:
 	# 	if NetworkManager.is_multiplayer_active():
 	# 		PowerupManager.debug_spawn_powerup_near_player()
 
-	if not game_started:
-		return
-	
 	# Don't process game inputs while the chat input or debug console is open
 	var chat_open: bool = _chat_hud != null and _chat_hud.is_input_open()
 	var console_open: bool = DebugConsole.is_active()
-	
+
 	if not chat_open and not console_open:
 		if Input.is_action_just_pressed("ui_accept"):
 			UIEvents.emit_ui_accept_pressed()
-		
-		if Input.is_action_just_pressed("ui_cancel") and _menu_layer.visible:
-			UIEvents.emit_ui_cancel_pressed()
-		
+
+		# ESC opens pause menu if closed, closes menus if open
+		if Input.is_action_just_pressed("ui_cancel"):
+			# Check if pause menu is specifically the one visible
+			var pause_menu_visible := _pause_menu and _pause_menu.visible
+			if pause_menu_visible:
+				# Pause menu is open, so ESC should close it
+				UIEvents.emit_ui_cancel_pressed()
+			elif _menu_layer.visible:
+				# Another menu is open (settings, terminal, etc.) â€” let it handle ESC
+				UIEvents.emit_ui_cancel_pressed()
+			elif game_started:
+				_pause_game()  # Open pause menu
+			else:
+				_menu_controller.open_main_menu()  # Open main menu if not in game
+			get_viewport().set_input_as_handled()
+
 		if Input.is_action_just_pressed("show_fps"):
 			_fps_label.visible = not _fps_label.visible
-		
+
 		if Input.is_action_just_pressed("toggle_server_console"):
-			if _multiplayer_controller.is_multiplayer_game():
+			if _multiplayer_controller and _multiplayer_controller.is_multiplayer_game():
 				_server_console_overlay.toggle()
 		
 		# Guard journal/map/etc behind menu check
@@ -706,7 +736,7 @@ func _input(event: InputEvent) -> void:
 			if event.is_action_pressed("toggle_map"):
 				_cycle_minimap()
 
-			# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
+			# â”€â”€ ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
 			# if event.is_action_pressed("toggle_powerups"):
 			# 	if _powerup_hud and _powerup_hud.has_method("toggle"):
 			# 		_powerup_hud.toggle()
@@ -728,7 +758,7 @@ func _input(event: InputEvent) -> void:
 						_player.pause()
 
 			if event.is_action_pressed("toggle_spectator"):
-				if _spectator_controller and _multiplayer_controller.is_multiplayer_game():
+				if _spectator_controller and _multiplayer_controller and _multiplayer_controller.is_multiplayer_game():
 					if _spectator_controller.is_spectating():
 						_spectator_controller.exit_spectator_mode()
 					elif _multiplayer_controller.get_network_players().size() > 0:
@@ -742,29 +772,22 @@ func _input(event: InputEvent) -> void:
 				if _host_menu and NetworkManager.is_server() and not overlay_open:
 					_host_menu.toggle()
 
-		# UI scale keyboard shortcuts — work in any state
-		if event.is_action_pressed("ui_scale_in"):
+		# UI scale keyboard shortcuts â€” work in any state
+		if InputMap.has_action("ui_scale_in") and event.is_action_pressed("ui_scale_in"):
 			_adjust_ui_scale(0.1)
 			get_viewport().set_input_as_handled()
-		if event.is_action_pressed("ui_scale_out"):
+		if InputMap.has_action("ui_scale_out") and event.is_action_pressed("ui_scale_out"):
 			_adjust_ui_scale(-0.1)
 			get_viewport().set_input_as_handled()
-		if event.is_action_pressed("ui_scale_reset"):
+		if InputMap.has_action("ui_scale_reset") and event.is_action_pressed("ui_scale_reset"):
 			_adjust_ui_scale(0.0)
 			get_viewport().set_input_as_handled()
 
-		# Screenshot — F12, works in any game state
-		if event.is_action_pressed("take_screenshot"):
+		# Screenshot â€” F12, works in any game state
+		if InputMap.has_action("take_screenshot") and event.is_action_pressed("take_screenshot"):
 			_take_screenshot()
 			get_viewport().set_input_as_handled()
 		
-		if event.is_action_pressed("pause"):
-			if _minimap_controller and _minimap_controller.has_method("set_hidden"):
-				_minimap_controller.set_hidden()
-			_pause_game()
-		
-		if event.is_action_pressed("free_pointer"):
-			Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 		if event.is_action_pressed("click") and not _menu_layer.visible:
 			if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
@@ -776,7 +799,7 @@ func _input(event: InputEvent) -> void:
 					Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 		
 		# Tab key for player list overlay
-		if _multiplayer_controller.is_multiplayer_game() and not _menu_layer.visible and not console_open:
+		if _multiplayer_controller and _multiplayer_controller.is_multiplayer_game() and not _menu_layer.visible and not console_open:
 			if event.is_action_pressed("show_player_list"):
 				player_list_overlay.visible = true
 			elif event.is_action_released("show_player_list"):
@@ -788,7 +811,11 @@ func _process(delta: float) -> void:
 		if _fps_update_timer <= 0.0:
 			_fps_update_timer = 0.5
 			_fps_label.text = str(Engine.get_frames_per_second())
-	
+
+	# Guard: _multiplayer_controller might not be initialized yet
+	if not _multiplayer_controller:
+		return
+
 	# Broadcast local player position to other players
 	if _multiplayer_controller.process_position_sync(delta, _player):
 		var pivot_rot_x: float = _player_pivot.rotation.x if _player_pivot else 0.0
@@ -953,7 +980,7 @@ func _request_race_start() -> void:
 
 ## Collects random articles for the vote pool. Winner = race target.
 var _race_candidates: Array = []
-var _race_start_article: String = ""  ## random article — where the lobby door opens
+var _race_start_article: String = ""  ## random article â€” where the lobby door opens
 var _race_fetches_pending: int = 0
 var _race_retry_count: int = 0
 const MAX_RACE_RETRIES: int = 10
@@ -964,12 +991,12 @@ func _on_random_article_complete(title: Variant, context: Variant) -> void:
 	if title == null or title == " ":
 		_race_retry_count += 1
 		if _race_retry_count > MAX_RACE_RETRIES:
-			Log.error("Main", "Too many fetch failures — giving up and launching with what we have")
+			Log.error("Main", "Too many fetch failures â€” giving up and launching with what we have")
 			_race_retry_count = 0
 			if _race_candidates.size() > 0:
 				_launch_vote()
 			return
-		Log.error("Main", "Failed to fetch random article for race — retrying (%d/%d)" % [_race_retry_count, MAX_RACE_RETRIES])
+		Log.error("Main", "Failed to fetch random article for race â€” retrying (%d/%d)" % [_race_retry_count, MAX_RACE_RETRIES])
 		var role: String = context.get("race_role", "candidate")
 		if role == "start":
 			_fetch_race_start_article()
@@ -982,7 +1009,7 @@ func _on_random_article_complete(title: Variant, context: Variant) -> void:
 	if role == "candidate":
 		# Deduplicate
 		if title in _race_candidates:
-			_debug_log("Main: Duplicate candidate '%s' — retrying" % title)
+			_debug_log("Main: Duplicate candidate '%s' â€” retrying" % title)
 			_fetch_one_candidate()
 			return
 		_race_candidates.append(title)
@@ -1009,7 +1036,7 @@ func _fetch_one_candidate() -> void:
 		ExhibitFetcher.fetch_random_target({"race": true, "race_role": "candidate"}, RaceManager.get_difficulty())
 
 func _fetch_race_start_article() -> void:
-	## Fetches a completely random article as the starting point — ignores difficulty.
+	## Fetches a completely random article as the starting point â€” ignores difficulty.
 	ExhibitFetcher.fetch_random({"race": true, "race_role": "start"})
 
 func _fetch_race_candidates() -> void:
@@ -1027,7 +1054,7 @@ func _fetch_race_candidates() -> void:
 			ExhibitFetcher.fetch_random_target({"race": true, "race_role": "candidate"}, RaceManager.get_difficulty())
 
 func _on_vote_cancelled() -> void:
-	## Host cancelled the vote — clear pending fetch state and return all players to pause menu.
+	## Host cancelled the vote â€” clear pending fetch state and return all players to pause menu.
 	_race_candidates.clear()
 	_race_start_article = ""
 	_race_fetches_pending = 0
@@ -1035,14 +1062,14 @@ func _on_vote_cancelled() -> void:
 
 func _spawn_tournament_nodes() -> void:
 	## Creates and wires all tournament UI nodes. Called once from _ready.
-	## Nodes live on a dedicated CanvasLayer (layer 95) — above the game HUDs
+	## Nodes live on a dedicated CanvasLayer (layer 95) â€” above the game HUDs
 	## but below LoadingScreen (100) and RaceCountdown (110).
 	var t_layer := CanvasLayer.new()
 	t_layer.name   = "TournamentLayer"
 	t_layer.layer  = 95
 	add_child(t_layer)
 
-	# Tournament HUD — live standings panel, always visible during a tournament
+	# Tournament HUD â€” live standings panel, always visible during a tournament
 	var t_hud_script := load("res://scenes/tournament/TournamentHUD.gd")
 	if t_hud_script:
 		_tournament_hud = Control.new()
@@ -1051,7 +1078,7 @@ func _spawn_tournament_nodes() -> void:
 		_tournament_hud.name = "TournamentHUD"
 		t_layer.add_child(_tournament_hud)
 
-	# Tournament Victory Screen — champion announcement
+	# Tournament Victory Screen â€” champion announcement
 	var t_vic_script := load("res://scenes/tournament/TournamentVictoryScreen.gd")
 	if t_vic_script:
 		_tournament_victory_screen = Control.new()
@@ -1060,7 +1087,7 @@ func _spawn_tournament_nodes() -> void:
 		_tournament_victory_screen.name = "TournamentVictoryScreen"
 		t_layer.add_child(_tournament_victory_screen)
 
-	# Tournament Setup Menu — host-only config panel, shown from MultiplayerMenu
+	# Tournament Setup Menu â€” host-only config panel, shown from MultiplayerMenu
 	var t_setup_script := load("res://scenes/tournament/TournamentSetupMenu.gd")
 	if t_setup_script:
 		_tournament_setup_menu = Control.new()
@@ -1076,7 +1103,7 @@ func _spawn_tournament_nodes() -> void:
 				pass  # TournamentManager.host_start_tournament already calls _start_next_round
 			)
 
-	# Wire TournamentManager → MultiplayerMenu so the lobby can show setup
+	# Wire TournamentManager â†’ MultiplayerMenu so the lobby can show setup
 	var mp_menu := _menu_layer.get_node_or_null("MultiplayerMenu")
 	if mp_menu and mp_menu.has_signal("open_tournament_setup"):
 		mp_menu.open_tournament_setup.connect(_on_open_tournament_setup)
@@ -1128,7 +1155,7 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 	_debug_log("Main: Race started, sending all players to '%s'" % start_article)
 	_debug_log("Main: Target article is '%s'" % target_article)
 
-	# In dedicated host mode there is no local player — just sync to clients and return
+	# In dedicated host mode there is no local player â€” just sync to clients and return
 	if _is_ui_dedicated_host:
 		if start_article != "" and NetworkManager.is_server():
 			print("Main: Dedicated host - calling _sync_race_start_article.rpc and local")
@@ -1274,7 +1301,7 @@ func _play_victory_sound() -> void:
 
 func _start_dedicated_server() -> void:
 	Log.info("Main", "Starting dedicated server on port %d..." % _multiplayer_controller.get_server_port())
-	# Signals are already connected in _ready() — no reconnection needed
+	# Signals are already connected in _ready() â€” no reconnection needed
 	
 	var error: Error = NetworkManager.host_game(_multiplayer_controller.get_server_port(), true)
 	if error != OK:
@@ -1298,20 +1325,20 @@ func _start_multiplayer_game() -> void:
 				_multiplayer_controller.spawn_network_player(peer_id)
 
 func _on_network_peer_connected(peer_id: int) -> void:
-	# Set timeout unconditionally — must happen regardless of game state.
+	# Set timeout unconditionally â€” must happen regardless of game state.
 	if NetworkManager.peer:
 		var enet_peer := NetworkManager.peer.get_peer(peer_id)
 		if enet_peer:
 			enet_peer.set_timeout(32, 20000, 60000)
 	
 	Log.debug("Main", "_on_network_peer_connected - peer_id=%d, game_started=%s, is_multiplayer_game=%s" % [
-		peer_id, str(game_started), str(_multiplayer_controller.is_multiplayer_game())
+		peer_id, str(game_started), str(_multiplayer_controller != null and _multiplayer_controller.is_multiplayer_game())
 	])
-	
-	if _multiplayer_controller.is_multiplayer_game() and game_started:
+
+	if _multiplayer_controller and _multiplayer_controller.is_multiplayer_game() and game_started:
 		print("Main: Spawning network player for peer %d (game started)" % peer_id)
 		_multiplayer_controller.spawn_network_player(peer_id)
-	elif _multiplayer_controller.is_multiplayer_game() and not game_started:
+	elif _multiplayer_controller and _multiplayer_controller.is_multiplayer_game() and not game_started:
 		# Game hasn't started yet, but we should still track the player
 		print("Main: Peer %d connected but game hasn't started yet" % peer_id)
 
@@ -1397,11 +1424,11 @@ func _request_dismount() -> void:
 # PAINTING SYSTEM
 # =============================================================================
 
-func _request_steal_painting(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2) -> void:
-	_painting_controller.request_steal(exhibit_title, image_title, image_url, image_size, _player)
+func _request_steal_painting(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, is_audio: bool = false) -> void:
+	_painting_controller.request_steal(exhibit_title, image_title, image_url, image_size, _player, is_audio)
 
-func _request_place_painting(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2) -> void:
-	_painting_controller.request_place(exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, _player)
+func _request_place_painting(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, is_audio: bool = false) -> void:
+	_painting_controller.request_place(exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, _player, is_audio)
 
 func restore_placed_painting(exhibit: Node3D, exhibit_title: String,
 	image_title: String, image_url: String,
@@ -1415,6 +1442,13 @@ func check_painting_stolen(exhibit_title: String, image_title: String) -> bool:
 	## Called by ExhibitLoader/WallItem to see if a painting was previously stolen.
 	if _painting_controller:
 		return _painting_controller.is_painting_stolen(exhibit_title, image_title)
+	return false
+
+
+func check_audio_stolen(exhibit_title: String, audio_title: String) -> bool:
+	## Called by ExhibitLoader/SoundItem to see if an audio was previously stolen.
+	if _painting_controller:
+		return _painting_controller.is_audio_stolen(exhibit_title, audio_title)
 	return false
 
 func _request_eat_painting(exhibit_title: String, image_title: String) -> void:
@@ -1542,6 +1576,16 @@ func _request_place_painting_rpc(peer_id: int, exhibit_title: String, image_titl
 		_painting_controller.handle_place_request(peer_id, exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, _player)
 
 @rpc("any_peer", "call_remote", "reliable")
+func _request_steal_audio_rpc(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String) -> void:
+	if NetworkManager.is_server():
+		_painting_controller.handle_steal_audio_request(peer_id, exhibit_title, audio_title, audio_url, _player)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_place_audio_rpc(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String, position: Vector3, normal: Vector3) -> void:
+	if NetworkManager.is_server():
+		_painting_controller.handle_place_audio_request(peer_id, exhibit_title, audio_title, audio_url, position, normal, _player)
+
+@rpc("any_peer", "call_remote", "reliable")
 func _request_eat_painting_rpc(peer_id: int, exhibit_title: String, image_title: String) -> void:
 	if NetworkManager.is_server():
 		_painting_controller.handle_eat_request(peer_id, exhibit_title, image_title, _player)
@@ -1551,8 +1595,16 @@ func _execute_steal_sync(peer_id: int, exhibit_title: String, image_title: Strin
 	_painting_controller.execute_steal_sync(peer_id, exhibit_title, image_title, image_url, image_size, _player)
 
 @rpc("authority", "call_local", "reliable")
+func _execute_steal_audio_sync(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String) -> void:
+	_painting_controller.execute_steal_audio_sync(peer_id, exhibit_title, audio_title, audio_url, _player)
+
+@rpc("authority", "call_local", "reliable")
 func _execute_place_sync(peer_id: int, exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2) -> void:
 	_painting_controller.execute_place_sync(peer_id, exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, _player)
+
+@rpc("authority", "call_local", "reliable")
+func _execute_place_audio_sync(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String, position: Vector3, normal: Vector3) -> void:
+	_painting_controller.execute_place_audio_sync(peer_id, exhibit_title, audio_title, audio_url, position, normal, _player)
 
 @rpc("authority", "call_local", "reliable")
 func _execute_eat_sync(peer_id: int) -> void:
@@ -1839,7 +1891,7 @@ func _grant_race_control() -> void:
 # =============================================================================
 
 func _on_daily_challenge_started() -> void:
-	## Player confirmed they want to race — load start article and go.
+	## Player confirmed they want to race â€” load start article and go.
 	game_started = true
 	_menu_controller.close_menus()
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
@@ -1879,7 +1931,7 @@ func _show_system_message(message: String) -> void:
 func _show_error_message(message: String) -> void:
 	"""Display an error message to the player via chat/prompt system."""
 	if _chat_system and _chat_system.has_method("_show_system_message"):
-		_chat_system._show_system_message("⚠️ " + message)
+		_chat_system._show_system_message("âš ï¸ " + message)
 	if _prompt_hud and _prompt_hud.has_method("show_message"):
 		_prompt_hud.show_message(message)
 		call_deferred("_show_daily_challenge_results")
@@ -1896,7 +1948,7 @@ func _show_daily_challenge_results() -> void:
 # =============================================================================
 
 func _on_spectator_exited() -> void:
-	## SpectatorController dismissed itself — restore normal play.
+	## SpectatorController dismissed itself â€” restore normal play.
 	_start_game()
 
 func _on_challenge_completed_for_leaderboard(time_seconds: float, _is_best: bool) -> void:
@@ -1919,7 +1971,7 @@ func _spawn_daily_challenge_board() -> void:
 		return
 	_daily_challenge_board = board_script.new()
 	_daily_challenge_board.name = "DailyChallengeBoard"
-	# Position it near the spawn — adjust these to suit your lobby layout
+	# Position it near the spawn â€” adjust these to suit your lobby layout
 	_daily_challenge_board.board_position  = Vector3(2.5, 0.0, -2.0)
 	_daily_challenge_board.board_rotation_y = -30.0
 	_museum.add_child(_daily_challenge_board)
@@ -1994,7 +2046,7 @@ func _show_screenshot_toast(filename: String, full_os_path: String) -> void:
 
 	# Toast label at bottom-centre
 	var toast := Label.new()
-	toast.text = "📷 Saved: %s" % filename
+	toast.text = "ðŸ“· Saved: %s" % filename
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	toast.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -2014,7 +2066,65 @@ func _show_screenshot_toast(filename: String, full_os_path: String) -> void:
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_property(toast, "modulate:a", 0.0, 1.8) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(0.8)
-	tw.chain().tween_callback(func():
-		if is_instance_valid(flash): flash.queue_free()
-		if is_instance_valid(toast): toast.queue_free()
-	)
+
+
+# =============================================================================
+# PIPER TTS TESTING
+# =============================================================================
+
+func _test_pcm_playback() -> void:
+	"""Test playing Piper TTS audio - Press F10 to test"""
+	print("[Piper Test] F10 pressed - testing WAV playback...")
+	
+	# Try loading the WAV file we generated earlier
+	var file_path = "user://piper_voices/test_output.wav"
+	var absolute_path = ProjectSettings.globalize_path(file_path)
+	
+	if not FileAccess.file_exists(absolute_path):
+		print("[Piper Test] ERROR: WAV file not found at: ", absolute_path)
+		return
+	
+	# Read raw WAV data
+	var file = FileAccess.open(absolute_path, FileAccess.READ)
+	var wav_data = file.get_buffer(file.get_length())
+	file.close()
+	
+	print("[Piper Test] Loaded %d bytes of WAV data" % wav_data.size())
+	
+	# WAV header is 44 bytes - skip it to get raw PCM
+	if wav_data.size() < 44:
+		print("[Piper Test] ERROR: File too small for WAV")
+		return
+	
+	# Extract raw PCM (skip 44-byte WAV header)
+	var pcm_data = wav_data.slice(44)
+	print("[Piper Test] Extracted %d bytes of PCM data" % pcm_data.size())
+	
+	# Read WAV header to get format info
+	# Sample rate is at bytes 24-27 (little-endian)
+	var sample_rate = wav_data[24] | (wav_data[25] << 8) | (wav_data[26] << 16) | (wav_data[27] << 24)
+	print("[Piper Test] Sample rate: %d Hz" % sample_rate)
+	
+	# Create AudioStreamWAV and set data directly
+	var stream = AudioStreamWAV.new()
+	stream.data = pcm_data
+	stream.mix_rate = sample_rate
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.stereo = false  # Piper outputs mono
+	
+	print("[Piper Test] AudioStreamWAV configured")
+	
+	# Create player
+	var player = AudioStreamPlayer.new()
+	player.stream = stream
+	player.volume_db = -20  # 10% volume (safe!)
+	add_child(player)
+	
+	player.play()
+	print("[Piper Test] Playback started")
+	print("[Piper Test] Listen for clear speech (no static)")
+	
+	# Cleanup after playback
+	await player.finished
+	print("[Piper Test] Playback finished")
+	player.queue_free()

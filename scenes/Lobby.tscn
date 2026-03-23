@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://u4b0awts0vdi"]
 
 [ext_resource type="MeshLibrary" uid="uid://b887fn6f3qg14" path="res://assets/3d_tiles/mesh_library.tres" id="1_3jgkl"]
-[ext_resource type="Script" uid="uid://dmep55064the2" path="res://scenes/Lobby.gd" id="1_rlemg"]
+[ext_resource type="Script" uid="uid://ckj8oxof0wmy7" path="res://scenes/Lobby.gd" id="1_rlemg"]
 [ext_resource type="PackedScene" uid="uid://c84fe50xnlbgc" path="res://scenes/items/HangingLamp.tscn" id="4_mxxac"]
 [ext_resource type="PackedScene" uid="uid://bvk8hcw5x5lmc" path="res://scenes/items/LobbyPlaque.tscn" id="9_puy6x"]
 [ext_resource type="Material" uid="uid://bbso1uvsrdw6f" path="res://assets/textures/lobby_plaque_technology.tres" id="10_6bi3p"]
@@ -28,6 +28,7 @@
 [ext_resource type="PackedScene" uid="uid://c5wpeqr3s3lw4" path="res://scenes/items/Sign.tscn" id="28_v471r"]
 [ext_resource type="PackedScene" uid="uid://brfwcf0et4c42" path="res://scenes/items/LobbyInfo.tscn" id="29_fj722"]
 [ext_resource type="Texture2D" uid="uid://crmsq8a4sjtb8" path="res://assets/logo/moat_logo_large.png" id="29_kkkm5"]
+[ext_resource type="VoxelGIData" uid="uid://d11x7e5108t5m" path="res://scenes/Lobby.Lobby#LobbyVoxelGI_data.res" id="30_l2uyn"]
 [ext_resource type="PackedScene" uid="uid://crh1ugdfaifsn" path="res://scenes/items/StartLine.tscn" id="31_l2uyn"]
 [ext_resource type="PackedScene" uid="uid://rmj6s264abk4" path="res://scenes/items/SimpleLeaderboard.tscn" id="40_slb"]
 
@@ -361,6 +362,7 @@ transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 13, 41)
 
 [node name="Lobby#LobbyVoxelGI" type="VoxelGI" parent="." unique_id=1442421993]
 visible = false
+data = ExtResource("30_l2uyn")
 
 [node name="StartLine" parent="." unique_id=2087091294 instance=ExtResource("31_l2uyn")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.04863262, 4.0601463, 23.289772)

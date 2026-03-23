@@ -65,9 +65,6 @@ var _secret_item_slots: Array = []
 
 func _ready() -> void:
 	pass
-	# Note: VoxelGI is for STATIC content only (baked in editor)
-	# For procedural exhibits, we rely on SDFGI (real-time GI) which is enabled in GraphicsManager
-	# SDFGI is enabled globally and works for dynamic/procedural geometry
 
 
 func _rand_dim() -> int:

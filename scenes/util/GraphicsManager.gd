@@ -49,14 +49,13 @@ var shadow_quality: int = 2
 
 ## ── Global Illumination ────────────────────────────────────────────────────────
 ## SDFGI (Signed Distance Field Global Illumination) — forward+ renderer only.
-## DISABLED - causes pitch black without proper lighting setup
-## Use ambient light + directional lights instead for procedural content
-var sdfgi_enabled:          bool  = false  # DISABLED - breaks lighting
+## Disabled - using ambient light + SSAO for consistent procedural lighting
+var sdfgi_enabled:          bool  = false
 var sdfgi_use_occlusion:    bool  = false
 var sdfgi_read_sky_light:   bool  = true
 var sdfgi_bounces:          int   = 2   # 0..4 (higher = more bounces, slower)
-var sdfgi_cascade_count:    int   = 6   # Environment.SDFGI_CASCADES_6 / _8
-var sdfgi_min_cell_size:    float = 0.5  # Larger = less precise but faster
+var sdfgi_cascade_count:    int   = 8   # Environment.SDFGI_CASCADES_6 / _8
+var sdfgi_min_cell_size:    float = 3.5  # Larger = less precise but faster
 
 ## ── Depth of Field ─────────────────────────────────────────────────────────────
 var dof_enabled: bool = false
@@ -88,7 +87,9 @@ var contrast:   float = 1.0   # 0.5 … 2.0 multiplier
 var reduce_motion: bool = false
 
 ## ── VoxelGI Settings ─────────────────────────────────────────────────────────
-var voxelgi_enabled: bool = true
+## DISABLED - VoxelGI baking causes lag spikes during exhibit generation
+## Use ambient light + SSAO instead for consistent performance
+var voxelgi_enabled: bool = false  # Disabled for performance
 var voxelgi_quality: int = 2  # 0=Low, 1=Medium, 2=High, 3=Ultra
 var voxelgi_voxel_size: float = 0.8
 var voxelgi_max_distance: float = 20.0
@@ -501,7 +502,7 @@ func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 	for field in [
 		"ssr_enabled", "ssr_max_steps", "ssr_fade_in", "ssr_fade_out",
 		"ssr_depth_tolerance",
-		"fog_enabled", "volumetric_fog_enabled", "ssil_enabled", "ambient_light_energy",
+		"fog_enabled", "volumetric_fog_enabled", "ssil_enabled",
 		"ssao_enabled", "ssao_radius", "ssao_intensity", "ssao_power", "ssao_detail",
 		"glow_enabled", "glow_intensity", "glow_bloom",
 		"tonemap_mode", "tonemap_exposure", "tonemap_white"]:
@@ -577,7 +578,7 @@ func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 		set_fsr_quality(s.get("fsr_quality", default.get("fsr_quality", 5)))
 	else:
 		set_render_scale(s.get("render_scale", default.get("render_scale", 1.0)))
-	
+
 
 func _create_settings_obj() -> Dictionary:
 	var e: Environment = _env.environment
@@ -601,8 +602,7 @@ func _create_settings_obj() -> Dictionary:
 		"anisotropy_level": anisotropy_level,
 		# Shadows
 		"shadow_quality": shadow_quality,
-		# Lighting
-		"ambient_light_energy": e.ambient_light_energy,
+		# Lighting (ambient_light_energy excluded — controlled by mood system)
 		"ssil_enabled": e.ssil_enabled,
 		"fog_enabled": e.fog_enabled,
 		# SSR

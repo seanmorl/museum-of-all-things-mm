@@ -192,24 +192,15 @@ func _apply_theme() -> void:
 	var dark := ThemeManager.is_dark_mode
 
 	if _pause_panel:
-		if not _panel_style:
-			var orig = _pause_panel.get_theme_stylebox("panel")
-			_panel_style = orig.duplicate() if orig is StyleBoxFlat else StyleBoxFlat.new()
-			_pause_panel.add_theme_stylebox_override("panel", _panel_style)
-
-		_panel_style.bg_color     = ThemeManager.bg_color
-		_panel_style.border_color = ThemeManager.border_color
-		for side in [0, 1, 2, 3]:
-			_panel_style.set("border_width_" + ["left", "right", "top", "bottom"][side], 1)
-		for corner in ["top_left", "top_right", "bottom_left", "bottom_right"]:
-			_panel_style.set("corner_radius_" + corner, 10)
-		_panel_style.shadow_color  = Color(0, 0, 0, 0.35 if dark else 0.12)
-		_panel_style.shadow_size   = 16
-		_panel_style.shadow_offset = Vector2(0, 6)
-		_panel_style.content_margin_left   = 30
-		_panel_style.content_margin_right  = 30
-		_panel_style.content_margin_top    = 24
-		_panel_style.content_margin_bottom = 24
+		# Use centralized panel style helper
+		_panel_style = UIStyle.create_panel_style(
+			ThemeManager.bg_color,
+			ThemeManager.border_color,
+			dark,
+			UIStyle.CORNER_RADIUS_PANEL,
+			UIStyle.PANEL_PADDING
+		)
+		_pause_panel.add_theme_stylebox_override("panel", _panel_style)
 
 	if vbox:
 		var title = vbox.get_node_or_null("Title")
@@ -242,28 +233,19 @@ func _apply_theme() -> void:
 	bg.visible = (_quit_container.visible if _quit_container else false)
 
 	# ── Quit confirmation dialog ──────────────────────────────────────────────
-	# After _ready reparents _quit_container to self, its children are at
-	# "QuitContainer/QuitPanel/..." relative to self.
 	var quit_panel: PanelContainer = null
 	if _quit_container:
 		quit_panel = _quit_container.get_node_or_null("QuitPanel") as PanelContainer
 	if quit_panel:
-		if not _quit_panel_style:
-			_quit_panel_style = StyleBoxFlat.new()
-			quit_panel.add_theme_stylebox_override("panel", _quit_panel_style)
-
-		_quit_panel_style.bg_color     = ThemeManager.bg_color
-		_quit_panel_style.bg_color.a   = 1.0  # always opaque
-		_quit_panel_style.border_color = ThemeManager.border_color
-		_quit_panel_style.set_border_width_all(1)
-		_quit_panel_style.set_corner_radius_all(12)
-		_quit_panel_style.shadow_color  = Color(0, 0, 0, 0.35 if dark else 0.12)
-		_quit_panel_style.shadow_size   = 16
-		_quit_panel_style.shadow_offset = Vector2(0, 6)
-		_quit_panel_style.content_margin_left   = 35
-		_quit_panel_style.content_margin_right  = 35
-		_quit_panel_style.content_margin_top    = 25
-		_quit_panel_style.content_margin_bottom = 25
+		# Use centralized panel style
+		_quit_panel_style = UIStyle.create_panel_style(
+			ThemeManager.bg_color,
+			ThemeManager.border_color,
+			dark,
+			UIStyle.CORNER_RADIUS_PANEL,
+			UIStyle.PANEL_PADDING
+		)
+		quit_panel.add_theme_stylebox_override("panel", _quit_panel_style)
 
 		var quit_content := quit_panel.get_node_or_null("QuitContent")
 		if quit_content:
@@ -296,42 +278,24 @@ func _on_dark_mode_changed(dark: bool) -> void:
 
 func _style_button(btn: Button) -> void:
 	var dark := ThemeManager.is_dark_mode
+	
+	# Apply font
 	if _serif_font:
 		btn.add_theme_font_override("font", _serif_font)
 	btn.add_theme_font_size_override("font_size", 17)
+	
+	# Apply font colors
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		btn.add_theme_color_override(state, ThemeManager.text_color)
 	btn.add_theme_color_override("font_disabled_color", ThemeManager.subtext_color)
 
-	var sn := StyleBoxFlat.new()
-	sn.bg_color          = Color(0, 0, 0, 0)
-	sn.content_margin_left   = 16
-	sn.content_margin_right  = 16
-	sn.content_margin_top    = 10
-	sn.content_margin_bottom = 10
-	btn.add_theme_stylebox_override("normal", sn)
-
-	var sh := StyleBoxFlat.new()
-	sh.bg_color = Color(1, 1, 1, 0.06) if dark else Color(ThemeManager.border_color, 0.5)
-	sh.set_corner_radius_all(5)
-	sh.content_margin_left   = 16
-	sh.content_margin_right  = 16
-	sh.content_margin_top    = 10
-	sh.content_margin_bottom = 10
-	btn.add_theme_stylebox_override("hover", sh)
-
-	var sp := sh.duplicate() as StyleBoxFlat
-	sp.bg_color = Color(1, 1, 1, 0.12) if dark else Color(ThemeManager.border_color, 0.85)
-	btn.add_theme_stylebox_override("pressed", sp)
-
-	var sf := sh.duplicate() as StyleBoxFlat
-	sf.border_color      = ThemeManager.text_color
-	sf.border_width_left = 2
-	btn.add_theme_stylebox_override("focus", sf)
-	
-	var sd := sn.duplicate() as StyleBoxFlat
-	sd.bg_color = Color(1, 1, 1, 0.02) if dark else Color(0, 0, 0, 0.02)
-	btn.add_theme_stylebox_override("disabled", sd)
+	# Create and apply state styles using centralized helper
+	var states := UIStyle.create_button_states(dark, false, false)
+	btn.add_theme_stylebox_override("normal", states.normal)
+	btn.add_theme_stylebox_override("hover", states.hover)
+	btn.add_theme_stylebox_override("pressed", states.pressed)
+	btn.add_theme_stylebox_override("focus", states.focus)
+	btn.add_theme_stylebox_override("disabled", states.disabled)
 
 # ── Animations ────────────────────────────────────────────────────────────────
 
@@ -340,9 +304,10 @@ func _animate_in() -> void:
 		_panel.modulate.a = 0.0
 		_panel.position.y = 14.0
 		var tw := create_tween().set_parallel(true)
-		tw.tween_property(_panel, "modulate:a", 1.0, 0.40).set_delay(0.10)
-		tw.tween_property(_panel, "position:y", 0.0, 0.40) \
-			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(0.10)
+		tw.tween_property(_panel, "modulate:a", 1.0, UIStyle.FADE_DURATION).set_delay(0.10)
+		tw.tween_property(_panel, "position:y", 0.0, UIStyle.SLIDE_DURATION) \
+			.set_trans(UIStyle.TRANS_BOUNCE).set_ease(UIStyle.EASE_BOUNCE).set_delay(0.10)
+
 
 func _animate_out(then: Callable) -> void:
 	if _closing:
@@ -350,9 +315,9 @@ func _animate_out(then: Callable) -> void:
 	_closing = true
 	if _panel:
 		var tw := create_tween().set_parallel(true)
-		tw.tween_property(_panel, "modulate:a", 0.0, 0.16)
-		tw.tween_property(_panel, "position:y", 10.0, 0.16) \
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_property(_panel, "modulate:a", 0.0, UIStyle.FADE_QUICK)
+		tw.tween_property(_panel, "position:y", 10.0, UIStyle.FADE_QUICK) \
+			.set_trans(UIStyle.TRANS_EXIT).set_ease(UIStyle.EASE_EXIT)
 		tw.chain().tween_callback(func():
 			_closing = false
 			then.call()

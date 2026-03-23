@@ -1,9 +1,9 @@
 extends Node
 class_name PlayerPaintingSystem
-## Handles stealing paintings off walls, carrying them, placing them, and eating them.
+## Handles stealing paintings and sounds off walls, carrying them, and placing them.
 
-signal steal_requested(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2)
-signal place_requested(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2)
+signal steal_requested(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, is_audio: bool = false)
+signal place_requested(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, is_audio: bool = false)
 signal eat_requested(exhibit_title: String, image_title: String)
 signal eat_anim_started
 signal eat_anim_cancelled
@@ -11,6 +11,8 @@ signal eat_anim_cancelled
 const EAT_DURATION: float = 1.0
 const CARRY_FP_POSITION: Vector3 = Vector3(0.4, -0.3, -0.6)
 const CARRY_TP_POSITION: Vector3 = Vector3(0.0, 0.1, -0.5)
+const CARRY_AUDIO_FP_POSITION: Vector3 = Vector3(0.35, -0.25, -0.5)
+const CARRY_AUDIO_TP_POSITION: Vector3 = Vector3(0.0, 0.15, -0.4)
 const EAT_FP_TARGET: Vector3 = Vector3(0.0, -0.3, 0.5)
 const EAT_TP_TARGET: Vector3 = Vector3(0.0, 0.1, 0.0)
 const EAT_ROTATE_FRACTION: float = 0.3  # First 30% of eat is the rotation phase
@@ -23,11 +25,16 @@ var _raycast: RayCast3D = null
 
 # Carry state
 var _is_carrying: bool = false
+var _is_carrying_audio: bool = false
 var _carried_texture: Texture2D = null
 var _carried_image_url: String = ""
 var _carried_image_title: String = ""
 var _carried_exhibit_title: String = ""
 var _carried_image_size: Vector2 = Vector2.ZERO
+var _carried_audio_stream: AudioStreamOggVorbis = null
+var _carried_audio_url: String = ""
+var _carried_audio_title: String = ""
+var _carried_audio_exhibit_title: String = ""
 
 # Eat state
 var _eat_progress: float = 0.0
@@ -37,8 +44,11 @@ var _eat_tween: Tween = null
 # Carry meshes
 var _carry_mesh_fp: MeshInstance3D = null  # First-person, child of Camera3D
 var _carry_mesh_tp: MeshInstance3D = null  # Third-person, child of Pivot
+var _carry_audio_mesh_fp: MeshInstance3D = null  # Audio carry FP
+var _carry_audio_mesh_tp: MeshInstance3D = null  # Audio carry TP
 
 var _carry_material: Material = null
+var _audio_carry_material: Material = null
 
 
 func init(player: CharacterBody3D) -> void:
@@ -48,6 +58,12 @@ func init(player: CharacterBody3D) -> void:
 	# Create shared material for carry meshes
 	var base_material: Material = preload("res://assets/textures/image_item.tres")
 	_carry_material = base_material.duplicate()
+	
+	# Create material for audio carry (brass color)
+	_audio_carry_material = StandardMaterial3D.new()
+	(_audio_carry_material as StandardMaterial3D).albedo_color = Color(0.8, 0.7, 0.2, 1.0)
+	(_audio_carry_material as StandardMaterial3D).metallic = 0.8
+	(_audio_carry_material as StandardMaterial3D).roughness = 0.2
 
 	# Create first-person carry mesh (child of Camera3D)
 	_carry_mesh_fp = MeshInstance3D.new()
@@ -75,12 +91,55 @@ func init(player: CharacterBody3D) -> void:
 	_carry_mesh_tp.visible = false
 	_carry_mesh_tp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	player.get_node("Pivot").add_child(_carry_mesh_tp)
+	
+	# Create first-person audio carry mesh (gramophone icon)
+	_carry_audio_mesh_fp = _create_audio_carry_mesh()
+	_carry_audio_mesh_fp.name = "CarryAudioFP"
+	_carry_audio_mesh_fp.position = CARRY_AUDIO_FP_POSITION
+	_carry_audio_mesh_fp.visible = false
+	player.get_node("Pivot/Camera3D").add_child(_carry_audio_mesh_fp)
+	
+	# Create third-person audio carry mesh
+	_carry_audio_mesh_tp = _create_audio_carry_mesh()
+	_carry_audio_mesh_tp.name = "CarryAudioTP"
+	_carry_audio_mesh_tp.position = CARRY_AUDIO_TP_POSITION
+	_carry_audio_mesh_tp.visible = false
+	player.get_node("Pivot").add_child(_carry_audio_mesh_tp)
 
 	# For local player: hide TP mesh. For network player: hide FP mesh.
 	if player.is_local:
 		_carry_mesh_tp.visible = false
+		_carry_audio_mesh_tp.visible = false
 	else:
 		_carry_mesh_fp.visible = false
+		_carry_audio_mesh_fp.visible = false
+
+
+func _create_audio_carry_mesh() -> MeshInstance3D:
+	"""Create a small gramophone-shaped mesh for carrying audio"""
+	var mesh_container = MeshInstance3D.new()
+	
+	# Base (box)
+	var base_mesh = BoxMesh.new()
+	base_mesh.size = Vector3(0.15, 0.08, 0.15)
+	var base = MeshInstance3D.new()
+	base.mesh = base_mesh
+	base.material_override = _audio_carry_material
+	mesh_container.add_child(base)
+	
+	# Horn (cone-like cylinder)
+	var horn_mesh = CylinderMesh.new()
+	horn_mesh.top_radius = 0.06
+	horn_mesh.bottom_radius = 0.02
+	horn_mesh.height = 0.2
+	var horn = MeshInstance3D.new()
+	horn.mesh = horn_mesh
+	horn.material_override = _audio_carry_material
+	horn.position = Vector3(0, 0.08, 0.05)
+	horn.rotation_degrees = Vector3(-45, 0, 0)
+	mesh_container.add_child(horn)
+	
+	return mesh_container
 
 
 func is_carrying() -> bool:
@@ -90,21 +149,21 @@ func is_carrying() -> bool:
 func try_steal_target() -> bool:
 	if not _raycast:
 		return false
-	
+
 	# Use manual raycast in camera forward direction (RayCast3D node is unreliable)
 	var space_state = _player.get_world_3d().direct_space_state
 	if not space_state:
 		return false
-	
+
 	var cam = _raycast.get_parent()  # Camera3D
 	var from = cam.global_position
 	var forward = -cam.global_transform.basis.z  # Camera's actual forward direction
 	var to = from + forward * 15.0  # 15 units forward
-	
+
 	var query = PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = 1572866  # Layer 1 + 20 + 21 (Static + PlayerBody + ImageItem)
 	var result = space_state.intersect_ray(query)
-	
+
 	if not result:
 		return false
 
@@ -119,10 +178,32 @@ func try_steal_target() -> bool:
 		var title: String = placed.get_meta("image_title")
 		var exhibit: String = placed.get_meta("exhibit_title")
 		var size: Vector2 = placed.get_meta("image_size")
-		steal_requested.emit(exhibit, title, url, size)
+		steal_requested.emit(exhibit, title, url, size, false)
+		return true
+	
+	# Check for placed audio items
+	var placed_audio: Node = _find_placed_audio(collider)
+	if placed_audio:
+		var url: String = placed_audio.get_meta("audio_url")
+		var title: String = placed_audio.get_meta("audio_title")
+		var exhibit: String = placed_audio.get_meta("exhibit_title")
+		steal_requested.emit(exhibit, title, url, Vector2(1, 1), true)
 		return true
 
-	# Walk up from collider to find ImageItem
+	# Walk up from collider to find SoundItem (audio)
+	var sound_item: Node = _find_sound_item(collider)
+	if sound_item:
+		# Check that audio is loaded
+		if not sound_item._stream:
+			return false
+		# Walk up to find exhibit parent
+		var exhibit_title: String = _find_exhibit_title(sound_item)
+		if exhibit_title == "":
+			return false
+		steal_requested.emit(exhibit_title, sound_item.title, sound_item.audio_url, Vector2(1, 1), true)
+		return true
+
+	# Walk up from collider to find ImageItem (pictures)
 	var image_item: Node = _find_image_item(collider)
 	if not image_item:
 		return false
@@ -142,11 +223,11 @@ func try_steal_target() -> bool:
 		return false
 
 	var image_size: Vector2 = image_item.get_image_size()
-	steal_requested.emit(exhibit_title, image_item.title, image_item.image_url, image_size)
+	steal_requested.emit(exhibit_title, image_item.title, image_item.image_url, image_size, false)
 	return true
 
 
-func try_place_painting() -> bool:
+func try_place_item() -> bool:
 	if not _is_carrying:
 		return false
 
@@ -154,7 +235,7 @@ func try_place_painting() -> bool:
 	if not camera:
 		return false
 
-	# Raycast from camera forward to find a wall
+	# Raycast from camera forward to find a surface
 	var space_state: PhysicsDirectSpaceState3D = _player.get_world_3d().direct_space_state
 	var from: Vector3 = camera.global_position
 	var to: Vector3 = from + (-camera.global_transform.basis.z) * PLACE_RAY_LENGTH
@@ -166,16 +247,29 @@ func try_place_painting() -> bool:
 	if result.is_empty():
 		return false
 
-	# Check that we hit a roughly vertical surface (wall, not floor/ceiling)
 	var normal: Vector3 = result.normal
-	if abs(normal.y) > 0.5:
-		return false  # Too horizontal — it's a floor or ceiling
-
-	place_requested.emit(_carried_exhibit_title, _carried_image_title, _carried_image_url, result.position, normal, _carried_image_size)
+	
+	if _is_carrying_audio:
+		# Audio items are placed on horizontal surfaces (floor, table)
+		if abs(normal.y) < 0.7:
+			return false  # Too vertical — need a horizontal surface
+		place_requested.emit(_carried_audio_exhibit_title, _carried_audio_title, 
+			_carried_audio_url, result.position, normal, Vector2(1, 1), true)
+	else:
+		# Paintings are placed on vertical surfaces (walls)
+		if abs(normal.y) > 0.5:
+			return false  # Too horizontal — it's a floor or ceiling
+		place_requested.emit(_carried_exhibit_title, _carried_image_title, 
+			_carried_image_url, result.position, normal, _carried_image_size, false)
+	
 	return true
 
 
-func execute_steal(texture: Texture2D, url: String, title: String, exhibit_title: String, size: Vector2) -> void:
+func execute_steal(texture: Texture2D, url: String, title: String, exhibit_title: String, size: Vector2, is_audio: bool = false) -> void:
+	if is_audio:
+		execute_steal_audio(url, title, exhibit_title)
+		return
+	
 	_is_carrying = true
 	_carried_texture = texture
 	_carried_image_url = url
@@ -209,13 +303,38 @@ func execute_steal(texture: Texture2D, url: String, title: String, exhibit_title
 		_carry_mesh_tp.visible = true
 
 
+func execute_steal_audio(url: String, title: String, exhibit_title: String) -> void:
+	_is_carrying = true
+	_is_carrying_audio = true
+	_carried_audio_url = url
+	_carried_audio_title = title
+	_carried_audio_exhibit_title = exhibit_title
+
+	# Show audio carry mesh
+	if _player.is_local:
+		_carry_audio_mesh_fp.visible = true
+		_carry_audio_mesh_fp.position = CARRY_AUDIO_FP_POSITION
+		_carry_audio_mesh_fp.scale = Vector3.ONE
+		# Tween in from below
+		var tween: Tween = _player.create_tween()
+		_carry_audio_mesh_fp.position.y = CARRY_AUDIO_FP_POSITION.y - 0.3
+		tween.tween_property(_carry_audio_mesh_fp, "position:y", CARRY_AUDIO_FP_POSITION.y, 0.2)
+	else:
+		_carry_audio_mesh_tp.visible = true
+
+
 func execute_drop() -> void:
 	_is_carrying = false
+	_is_carrying_audio = false
 	_carried_texture = null
 	_carried_image_url = ""
 	_carried_image_title = ""
 	_carried_exhibit_title = ""
 	_carried_image_size = Vector2.ZERO
+	_carried_audio_stream = null
+	_carried_audio_url = ""
+	_carried_audio_title = ""
+	_carried_audio_exhibit_title = ""
 	_eat_progress = 0.0
 	_eating = false
 	if _eat_tween and _eat_tween.is_valid():
@@ -223,10 +342,14 @@ func execute_drop() -> void:
 	_eat_tween = null
 	_carry_mesh_fp.visible = false
 	_carry_mesh_tp.visible = false
+	_carry_audio_mesh_fp.visible = false
+	_carry_audio_mesh_tp.visible = false
 	_carry_mesh_fp.position = CARRY_FP_POSITION
 	_carry_mesh_fp.rotation_degrees = CARRY_ROTATION
 	_carry_mesh_tp.position = CARRY_TP_POSITION
 	_carry_mesh_tp.rotation_degrees = CARRY_ROTATION
+	_carry_audio_mesh_fp.position = CARRY_AUDIO_FP_POSITION
+	_carry_audio_mesh_tp.position = CARRY_AUDIO_TP_POSITION
 
 
 func process_eat(delta: float) -> void:
@@ -368,3 +491,45 @@ func _find_exhibit_title(node: Node) -> String:
 				return title
 
 	return ""
+
+
+func _find_sound_item(node: Node) -> Node:
+	# Check if this node is a SoundItem (has audio_url property and _stream)
+	if "audio_url" in node and "_stream" in node:
+		return node
+	# Check parent
+	var parent: Node = node.get_parent()
+	if parent and "audio_url" in parent and "_stream" in parent:
+		return parent
+	# Check grandparent (InteractionBody -> SoundItem)
+	if parent:
+		var grandparent: Node = parent.get_parent()
+		if grandparent and "audio_url" in grandparent and "_stream" in grandparent:
+			return grandparent
+	return null
+
+
+func _find_placed_audio(collider: Node) -> Node:
+	# Walk up from collider to find a placed audio node
+	var current: Node = collider
+	while current:
+		if current.has_meta("is_placed_audio"):
+			return current
+		current = current.get_parent()
+	return null
+
+
+func is_carrying_audio() -> bool:
+	return _is_carrying_audio
+
+
+func get_carried_audio_url() -> String:
+	return _carried_audio_url
+
+
+func get_carried_audio_title() -> String:
+	return _carried_audio_title
+
+
+func get_carried_audio_exhibit_title() -> String:
+	return _carried_audio_exhibit_title

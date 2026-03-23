@@ -14,9 +14,9 @@ func init(text: String) -> void:
 	_trim_retries = 0
 	var label: RichTextLabel = $SubViewport/Control/RichTextLabel
 	var t: String = TextUtils.strip_markup(text)
-	
+
 	t = _apply_accessibility(t, label)
-	
+
 	label.text = t
 	# Disable auto-render; _center_vertically will trigger it once positioning is done
 	$SubViewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
@@ -29,7 +29,7 @@ func interact() -> void:
 
 func _apply_accessibility(text_content: String, label: RichTextLabel) -> String:
 	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
-	
+
 	# Handle High Contrast
 	var hc: bool = acc.get("high_contrast_text", false)
 	if hc:
@@ -57,7 +57,7 @@ func _apply_accessibility(text_content: String, label: RichTextLabel) -> String:
 	var acc_settings = SettingsManager.get_settings("accessibility")
 	if acc_settings and acc_settings.get("reading_font", 0) == 1:
 		font_size = 14 # OpenDyslexic is natively larger
-	
+
 	if font:
 		label.add_theme_font_override("normal_font", font)
 		label.add_theme_font_override("bold_font", font)
@@ -72,7 +72,7 @@ func _apply_accessibility(text_content: String, label: RichTextLabel) -> String:
 	label.add_theme_font_size_override("italics_font_size", int(font_size * scale_factor))
 	label.add_theme_font_size_override("bold_italics_font_size", int(font_size * scale_factor))
 	label.add_theme_font_size_override("mono_font_size", int(font_size * scale_factor))
-	
+
 	return text_content
 
 

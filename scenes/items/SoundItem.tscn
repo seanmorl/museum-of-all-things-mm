@@ -1,0 +1,55 @@
+[gd_scene format=3 uid="uid://sounditem123456"]
+
+[ext_resource type="Script" path="res://scenes/items/SoundItem.gd" id="1_script"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_base"]
+size = Vector3(0.6, 0.25, 0.6)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_horn"]
+top_radius = 0.5
+bottom_radius = 0.03
+height = 0.75
+radial_segments = 16
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wood"]
+albedo_color = Color(0.4, 0.25, 0.1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_brass"]
+albedo_color = Color(0.8, 0.7, 0.2, 1)
+metallic = 0.8
+roughness = 0.2
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_interaction"]
+size = Vector3(0.7, 0.8, 0.7)
+
+[node name="SoundItem" type="MeshInstance3D" groups=["render_distance", "ExhibitItem"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+visibility_range_end = 34.0
+visibility_range_end_margin = 1.0
+visibility_range_fade_mode = 1
+script = ExtResource("1_script")
+
+[node name="BaseMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+mesh = SubResource("BoxMesh_base")
+surface_material_override/0 = SubResource("StandardMaterial3D_wood")
+
+[node name="HornMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.866025, 0.433013, 0.25, -0.5, 0.75, 0.433013, 0, -0.5, 0.866025, 0.25, 0.6, 0.4)
+mesh = SubResource("CylinderMesh_horn")
+surface_material_override/0 = SubResource("StandardMaterial3D_brass")
+
+[node name="AudioPlayer" type="AudioStreamPlayer3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+max_distance = 180.0
+attenuation = 0.25
+bus = &"Sound"
+
+[node name="InteractionBody" type="StaticBody3D" parent="."]
+collision_layer = 1048576
+collision_mask = 1
+monitorable = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="InteractionBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+shape = SubResource("BoxShape3D_interaction")

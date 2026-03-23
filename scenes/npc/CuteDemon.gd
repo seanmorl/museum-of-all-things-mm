@@ -63,6 +63,7 @@ func _setup_appearance() -> void:
 		material.albedo_color = Color(0.8, 0.2, 0.2)  # Cute red
 		material.roughness = 0.4
 		_mesh.material_override = material
+		_mesh.layers = 4194304  # Layer 22 (matches NPC collision layer)
 	
 	# Add tiny horns if we have a more complex model
 	# (This would require a proper 3D model, but the red capsule is cute enough!)
@@ -71,16 +72,16 @@ func _setup_appearance() -> void:
 func _process(delta: float) -> void:
 	if not is_inside_tree():
 		return
-	
+
 	# Despawn timer
 	_despawn_timer -= delta
 	if _despawn_timer <= 0:
 		_fade_out()
 		return
-	
+
 	# Look at nearest player
 	_look_at_player()
-	
+
 	# Share facts periodically
 	if not _has_spoken:
 		_chat_timer += delta

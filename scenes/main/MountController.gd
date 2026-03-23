@@ -80,7 +80,7 @@ func handle_mount_request(rider_peer_id: int, mount_peer_id: int, local_player: 
 	if rider.is_mounted:
 		print("  INVALID: rider already mounted")
 		return  # Rider is already mounted
-	if "in_hall" in rider and rider.in_hall:
+	if "in_h" in rider and rider.in_hall:
 		print("  INVALID: rider in hallway")
 		return  # Can't mount in a hallway
 
@@ -101,7 +101,7 @@ func handle_mount_request(rider_peer_id: int, mount_peer_id: int, local_player: 
 func handle_dismount_request(rider_peer_id: int, local_player: Node) -> void:
 	# Server-side validation and execution
 	print("MountController.handle_dismount_request() rider_peer_id=", rider_peer_id)
-	
+
 	# Check if rider is actually mounted (for player mounts)
 	if not _mount_state.has(rider_peer_id) or _mount_state[rider_peer_id] == -1:
 		# Not in mount state - check if mounted on a static seat (bench)

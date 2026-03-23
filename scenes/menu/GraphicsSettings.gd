@@ -56,6 +56,7 @@ var _resolution_option: OptionButton = null
 @onready var shadow_quality_option: OptionButton = %ShadowQualityOption
 
 var _loaded_settings: bool = false
+var _loading_settings: bool = false  # Suppresses slider signal handlers during load
 
 ## ── SSR (Screen-Space Reflections) runtime nodes
 var _ssr_roughness_check: CheckBox = null
@@ -757,6 +758,7 @@ func _connect_new_signals() -> void:
 # =============================================================================
 func _load_settings() -> void:
 	_loaded_settings = true
+	_loading_settings = true
 	var e = GraphicsManager.get_env()
 	
 	render_distance.value = GraphicsManager.render_distance_multiplier
@@ -825,6 +827,7 @@ func _load_settings() -> void:
 		_reduce_motion_check.button_pressed = GraphicsManager.reduce_motion
 
 	_update_scaling()
+	_loading_settings = false
 
 
 func _on_resume_pressed() -> void:
@@ -936,7 +939,16 @@ func _on_shadow_quality_option_item_selected(index: int) -> void:
 
 func _on_ambient_light_value_changed(value: float) -> void:
 	ambient_light_value.text = "%.2f" % value
-	GraphicsManager.get_env().ambient_light_energy = value
+	if _loading_settings:
+		return  # Don't propagate slider changes during settings load
+	var env = GraphicsManager.get_env()
+	if env:
+		env.ambient_light_energy = value
+
+	# Also update Museum if it exists (for procedural rooms)
+	var museum = get_tree().get_first_node_in_group("museum")
+	if museum and museum.has_method("set_ambient_light"):
+		museum.set_ambient_light(value)
 
 
 func _on_enable_ssil_toggled(button_pressed: bool) -> void:

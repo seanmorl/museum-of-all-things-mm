@@ -12,7 +12,6 @@ var _panel_style: StyleBoxFlat = null
 var _button_container: VBoxContainer = null
 var _patch_notes_popup: Control = null
 var _patch_notes_panel: PanelContainer = null
-
 # Original positions for repeatable entrance animation
 var _vbox_orig_pos: Vector2 = Vector2.ZERO
 var _logo_orig_y: float = 0.0
@@ -33,20 +32,24 @@ func _ready() -> void:
 	_build_patch_notes_popup()
 	_apply_theme()
 
-	ThemeManager.dark_mode_changed.connect(func(_d):
-		_update_dark_mode_text()
-		_apply_theme()
-	)
-	ThemeManager.reading_font_changed.connect(func(f):
-		_serif_font = f
-		_apply_theme()
-	)
+	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
+	ThemeManager.reading_font_changed.connect(_on_reading_font_changed)
 
 	if Platform.is_web():
 		var q = _button_container.get_node_or_null("Quit") if _button_container else null
 		if q: q.visible = false
 
 	call_deferred("_entrance_animation")
+
+
+func _on_dark_mode_changed(_d: bool) -> void:
+	_update_dark_mode_text()
+	_apply_theme()
+
+
+func _on_reading_font_changed(f: Font) -> void:
+	_serif_font = f
+	_apply_theme()
 
 # ── Registry ──────────────────────────────────────────────────────────────────
 
@@ -99,8 +102,8 @@ func _build_menu() -> void:
 	panel.add_child(scroll)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_left", int(UIStyle.MARGIN_LARGE))
+	margin.add_theme_constant_override("margin_right", int(UIStyle.MARGIN_LARGE))
 	margin.add_theme_constant_override("margin_top", 6)
 	margin.add_theme_constant_override("margin_bottom", 6)
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -108,7 +111,7 @@ func _build_menu() -> void:
 
 	_button_container = VBoxContainer.new()
 	_button_container.name = "ButtonContainer"
-	_button_container.add_theme_constant_override("separation", 2)
+	_button_container.add_theme_constant_override("separation", int(UIStyle.SPACING_TIGHT))
 	_button_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(_button_container)
 
@@ -126,7 +129,7 @@ func _build_menu() -> void:
 func _build_section(label_text: String) -> void:
 	if _button_container.get_child_count() > 0:
 		var spacer := Control.new()
-		spacer.custom_minimum_size = Vector2(0, 4)
+		spacer.custom_minimum_size = Vector2(0, UIStyle.SPACING_STANDARD)
 		_button_container.add_child(spacer)
 
 	var hdr := Label.new()
@@ -166,7 +169,6 @@ func _build_button(item: Dictionary) -> void:
 # ── Hover ─────────────────────────────────────────────────────────────────────
 
 func _wire_hover(btn: Button) -> void:
-	btn.set_meta("_htw", null)  # initialize so get_meta never fails
 	btn.mouse_entered.connect(_hover_in.bind(btn))
 	btn.mouse_exited.connect(_hover_out.bind(btn))
 	btn.focus_entered.connect(_hover_in.bind(btn))
@@ -175,24 +177,12 @@ func _wire_hover(btn: Button) -> void:
 
 func _hover_in(btn: Button) -> void:
 	if not is_instance_valid(btn): return
-	if btn.has_meta("_htw"):
-		var old = btn.get_meta("_htw")
-		if old is Tween and old.is_valid(): old.kill()
-	var tw := create_tween().set_parallel(true)
-	btn.set_meta("_htw", tw)
-	tw.tween_property(btn, "position:x", 6.0, 0.15) \
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	UIStyle.animate_hover_enter(btn)
 
 
 func _hover_out(btn: Button) -> void:
 	if not is_instance_valid(btn): return
-	if btn.has_meta("_htw"):
-		var old = btn.get_meta("_htw")
-		if old is Tween and old.is_valid(): old.kill()
-	var tw := create_tween().set_parallel(true)
-	btn.set_meta("_htw", tw)
-	tw.tween_property(btn, "position:x", 0.0, 0.18) \
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	UIStyle.animate_hover_exit(btn)
 
 
 # ── Style ─────────────────────────────────────────────────────────────────────
@@ -200,46 +190,25 @@ func _hover_out(btn: Button) -> void:
 func _style_button(btn: Button, primary: bool = false) -> void:
 	btn.set_meta("_primary", primary)
 	var dark := ThemeManager.is_dark_mode
+	
+	# Apply font
 	if _serif_font:
 		btn.add_theme_font_override("font", _serif_font)
 	btn.add_theme_font_size_override("font_size", 17)
+	
+	# Apply font colors
+	var text_color := ThemeManager.text_color
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
-		btn.add_theme_color_override(state, ThemeManager.text_color)
+		btn.add_theme_color_override(state, text_color)
 	btn.add_theme_color_override("font_disabled_color", ThemeManager.subtext_color)
-
-	var sn := StyleBoxFlat.new()
-	sn.bg_color = Color(0, 0, 0, 0)
-	sn.content_margin_left = 14; sn.content_margin_right = 14
-	sn.content_margin_top = 8; sn.content_margin_bottom = 8
-	for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
-		sn.set("corner_radius_" + c, 8)
-	btn.add_theme_stylebox_override("normal", sn)
-
-	var sh := sn.duplicate() as StyleBoxFlat
-	sh.bg_color = Color(1, 1, 1, 0.07) if dark else Color(0.15, 0.35, 0.85, 0.07)
-	btn.add_theme_stylebox_override("hover", sh)
-
-	var sp := sn.duplicate() as StyleBoxFlat
-	sp.bg_color = Color(1, 1, 1, 0.14) if dark else Color(0.15, 0.35, 0.85, 0.14)
-	btn.add_theme_stylebox_override("pressed", sp)
-
-	var sf := sh.duplicate() as StyleBoxFlat
-	sf.border_color = ThemeManager.text_color if dark else Color(0.15, 0.35, 0.85, 0.8)
-	for s in ["left", "right", "top", "bottom"]:
-		sf.set("border_width_" + s, 2)
-	btn.add_theme_stylebox_override("focus", sf)
-
-	if primary:
-		var pn := sn.duplicate() as StyleBoxFlat
-		pn.bg_color = Color(0.15, 0.35, 0.85, 0.10) if dark else Color(0.15, 0.35, 0.85, 0.06)
-		pn.border_color = Color(0.15, 0.35, 0.85, 0.35)
-		for s in ["left", "right", "top", "bottom"]:
-			pn.set("border_width_" + s, 1)
-		btn.add_theme_stylebox_override("normal", pn)
-		var ph := pn.duplicate() as StyleBoxFlat
-		ph.bg_color = Color(0.15, 0.35, 0.85, 0.20) if dark else Color(0.15, 0.35, 0.85, 0.14)
-		ph.border_color = Color(0.15, 0.35, 0.85, 0.60)
-		btn.add_theme_stylebox_override("hover", ph)
+	
+	# Create and apply state styles
+	var states := UIStyle.create_button_states(dark, primary, true)
+	btn.add_theme_stylebox_override("normal", states.normal)
+	btn.add_theme_stylebox_override("hover", states.hover)
+	btn.add_theme_stylebox_override("pressed", states.pressed)
+	btn.add_theme_stylebox_override("focus", states.focus)
+	btn.add_theme_stylebox_override("disabled", states.disabled)
 
 
 func _apply_theme() -> void:
@@ -251,15 +220,16 @@ func _apply_theme() -> void:
 			var orig := panel.get_theme_stylebox("panel") as StyleBoxFlat
 			_panel_style = orig.duplicate() if orig else StyleBoxFlat.new()
 			panel.add_theme_stylebox_override("panel", _panel_style)
-		_panel_style.bg_color = ThemeManager.bg_color
-		_panel_style.border_color = ThemeManager.border_color
-		for s in [0, 1, 2, 3]:
-			_panel_style.set("border_width_" + ["left", "right", "top", "bottom"][s], 1)
-		for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
-			_panel_style.set("corner_radius_" + c, 12)
-		_panel_style.shadow_color = Color(0, 0, 0, 0.30 if dark else 0.10)
-		_panel_style.shadow_size = 16
-		_panel_style.shadow_offset = Vector2(0, 6)
+		
+		# Use centralized panel style
+		_panel_style = UIStyle.create_panel_style(
+			ThemeManager.bg_color,
+			ThemeManager.border_color,
+			dark,
+			UIStyle.CORNER_RADIUS_PANEL,
+			UIStyle.PANEL_PADDING
+		)
+		panel.add_theme_stylebox_override("panel", _panel_style)
 
 	if _button_container:
 		for child in _button_container.get_children():
@@ -330,20 +300,21 @@ func _build_patch_notes_popup() -> void:
 	_patch_notes_panel.z_index = 1
 	_patch_notes_popup.add_child(_patch_notes_panel)
 
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = ThemeManager.bg_color; ps.border_color = ThemeManager.border_color
-	for s in ["left", "right", "top", "bottom"]: ps.set("border_width_" + s, 1)
-	for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
-		ps.set("corner_radius_" + c, 12)
-	ps.shadow_color = Color(0, 0, 0, 0.30); ps.shadow_size = 16
-	ps.shadow_offset = Vector2(0, 6)
+	# Use centralized panel style
+	var ps := UIStyle.create_panel_style(
+		ThemeManager.bg_color,
+		ThemeManager.border_color,
+		ThemeManager.is_dark_mode,
+		UIStyle.CORNER_RADIUS_PANEL,
+		UIStyle.PANEL_PADDING
+	)
 	_patch_notes_panel.add_theme_stylebox_override("panel", ps)
 
 	var mg := MarginContainer.new()
-	mg.add_theme_constant_override("margin_left", 24)
-	mg.add_theme_constant_override("margin_right", 24)
-	mg.add_theme_constant_override("margin_top", 20)
-	mg.add_theme_constant_override("margin_bottom", 20)
+	mg.add_theme_constant_override("margin_left", int(UIStyle.MARGIN_LARGE))
+	mg.add_theme_constant_override("margin_right", int(UIStyle.MARGIN_LARGE))
+	mg.add_theme_constant_override("margin_top", int(UIStyle.MARGIN_LARGE) - 4)
+	mg.add_theme_constant_override("margin_bottom", int(UIStyle.MARGIN_LARGE))
 	_patch_notes_panel.add_child(mg)
 
 	var scroll := ScrollContainer.new()
@@ -353,7 +324,7 @@ func _build_patch_notes_popup() -> void:
 	mg.add_child(scroll)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
+	vbox.add_theme_constant_override("separation", int(UIStyle.SPACING_LOOSE))
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(vbox)
 
@@ -413,18 +384,18 @@ func _show_patch_notes() -> void:
 			_patch_notes_panel.modulate.a = 0.0
 			_patch_notes_panel.position.y = 14.0
 			var tw := create_tween().set_parallel(true)
-			tw.tween_property(_patch_notes_panel, "modulate:a", 1.0, 0.35).set_delay(0.05)
-			tw.tween_property(_patch_notes_panel, "position:y", 0.0, 0.35) \
-				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(0.05)
+			tw.tween_property(_patch_notes_panel, "modulate:a", 1.0, UIStyle.FADE_DURATION).set_delay(0.05)
+			tw.tween_property(_patch_notes_panel, "position:y", 0.0, UIStyle.SLIDE_DURATION) \
+				.set_trans(UIStyle.TRANS_BOUNCE).set_ease(UIStyle.EASE_BOUNCE).set_delay(0.05)
 
 func _hide_patch_notes() -> void:
 	if not _patch_notes_panel:
 		if _patch_notes_popup: _patch_notes_popup.visible = false
 		return
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_patch_notes_panel, "modulate:a", 0.0, 0.16)
-	tw.tween_property(_patch_notes_panel, "position:y", 10.0, 0.16) \
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(_patch_notes_panel, "modulate:a", 0.0, UIStyle.FADE_QUICK)
+	tw.tween_property(_patch_notes_panel, "position:y", 10.0, UIStyle.FADE_QUICK) \
+		.set_trans(UIStyle.TRANS_EXIT).set_ease(UIStyle.EASE_EXIT)
 	tw.chain().tween_callback(func(): _patch_notes_popup.visible = false)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -476,9 +447,9 @@ func _entrance_animation() -> void:
 		panel.modulate.a = 0.0
 		panel.position.y = _panel_orig_y + 10.0
 		var ptw := create_tween().set_parallel(true)
-		ptw.tween_property(panel, "modulate:a", 1.0, 0.45).set_delay(0.65)
-		ptw.tween_property(panel, "position:y", _panel_orig_y, 0.45) \
-			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT).set_delay(0.65)
+		ptw.tween_property(panel, "modulate:a", 1.0, UIStyle.ENTRANCE_DURATION).set_delay(0.65)
+		ptw.tween_property(panel, "position:y", _panel_orig_y, UIStyle.ENTRANCE_DURATION) \
+			.set_trans(UIStyle.TRANS_STANDARD).set_ease(UIStyle.EASE_STANDARD).set_delay(0.65)
 
 	# Button stagger
 	if _button_container:
@@ -487,8 +458,8 @@ func _entrance_animation() -> void:
 			if child is Button:
 				child.modulate.a = 0.0
 				var btw := create_tween()
-				btw.tween_property(child, "modulate:a", 1.0, 0.32).set_delay(delay)
-				delay += 0.04
+				btw.tween_property(child, "modulate:a", 1.0, UIStyle.FADE_DURATION).set_delay(delay)
+				delay += UIStyle.STAGGER_DELAY
 
 	_start_fade_in()
 
@@ -507,9 +478,9 @@ func _animate_out(then: Callable) -> void:
 	var vbox := get_node_or_null("MarginContainer/CenterContainer/VBoxContainer") as Control
 	if vbox:
 		var tw := create_tween().set_parallel(true)
-		tw.tween_property(vbox, "modulate:a", 0.0, 0.16)
-		tw.tween_property(vbox, "position:y", _vbox_orig_pos.y + 10.0, 0.16) \
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_property(vbox, "modulate:a", 0.0, UIStyle.FADE_QUICK)
+		tw.tween_property(vbox, "position:y", _vbox_orig_pos.y + 10.0, UIStyle.FADE_QUICK) \
+			.set_trans(UIStyle.TRANS_EXIT).set_ease(UIStyle.EASE_EXIT)
 		tw.chain().tween_callback(then)
 	else:
 		then.call()

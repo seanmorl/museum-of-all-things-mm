@@ -32,7 +32,7 @@ smooth_movement = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
 
 [node name="Camera3D" type="Camera3D" parent="Pivot" unique_id=1956912596]
-cull_mask = 1048063
+cull_mask = 3145215
 far = 2000.0
 
 [node name="RayCast3D" type="RayCast3D" parent="Pivot/Camera3D" unique_id=197620397]

@@ -94,9 +94,11 @@ static func get_ambient_energy(mood: int) -> float:
 static func get_adjusted_ambient_energy(mood: int, is_dark_mode: bool) -> float:
 	var base = get_ambient_energy(mood)
 	if is_dark_mode:
-		# Dim even further in dark mode (approx 15% of normal, lower floor)
-		return clamp(base * 0.15, 0.02, 0.12)
-	return base
+		# Dim in dark mode but keep it visible (40% of normal, with reasonable floor)
+		return clamp(base * 0.4, 0.08, 0.25)
+	else:
+		# Very bright in light mode (400% of normal for clear visibility)
+		return clamp(base * 4.0, 0.5, 2.0)
 
 
 static func prefers_pool(mood: int) -> bool:
