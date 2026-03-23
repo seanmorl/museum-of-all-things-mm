@@ -11,6 +11,7 @@ var _stolen_paintings: Dictionary = {}  # "exhibit_title:image_title" -> peer_id
 var _stolen_audio: Dictionary = {}      # "exhibit_title:audio_title" -> peer_id
 var _placed_paintings: Array[Node] = []  # Tracked placed painting nodes
 var _placed_audio: Array[Node] = []      # Tracked placed audio nodes
+var _placed_audio_state: Dictionary = {}  # "exhibit_title:audio_title" -> { is_playing: bool, position: Vector3, normal: Vector3 }
 
 
 func init(main: Node, multiplayer_controller: MultiplayerController) -> void:
@@ -200,6 +201,11 @@ func _apply_steal_audio(peer_id: int, exhibit_title: String, audio_title: String
 	# Check for a placed audio first, then fall back to SoundItem
 	var placed: Node = _find_and_remove_placed_audio(audio_title)
 	if placed:
+		# Stop playback and clean up state
+		if placed.has_method("stop_audio"):
+			placed.stop_audio()
+		var audio_key: String = exhibit_title + ":" + audio_title
+		_placed_audio_state.erase(audio_key)
 		placed.queue_free()
 	else:
 		var sound_item: Node = _find_sound_item_by_audio_title(exhibit_title, audio_title)
@@ -485,37 +491,12 @@ func _create_placed_painting(wall_position: Vector3, wall_normal: Vector3, image
 
 
 func _create_placed_audio(position: Vector3, normal: Vector3, audio_url: String, exhibit_title: String, audio_title: String) -> void:
-	# Create a small gramophone visual for the placed audio
-	var audio_item: MeshInstance3D = MeshInstance3D.new()
-	audio_item.name = "PlacedAudio"
+	# Load the PlacedAudio scene
+	var PlacedAudioScene: PackedScene = preload("res://scenes/items/PlacedAudio.tscn")
+	var audio_item: PlacedAudio = PlacedAudioScene.instantiate()
 	
-	# Create base mesh (box)
-	var base_mesh = BoxMesh.new()
-	base_mesh.size = Vector3(0.6, 0.25, 0.6)
-	var base = MeshInstance3D.new()
-	base.name = "Base"
-	var wood_mat: StandardMaterial3D = preload("res://assets/textures/black.tres").duplicate() as StandardMaterial3D
-	wood_mat.albedo_color = Color(0.4, 0.25, 0.1, 1.0)
-	base.mesh = base_mesh
-	base.material_override = wood_mat
-	audio_item.add_child(base)
-
-	# Create horn mesh (cylinder)
-	var horn_mesh = CylinderMesh.new()
-	horn_mesh.top_radius = 0.5
-	horn_mesh.bottom_radius = 0.03
-	horn_mesh.height = 0.75
-	var horn = MeshInstance3D.new()
-	horn.name = "Horn"
-	var brass_mat: StandardMaterial3D = preload("res://assets/textures/black.tres").duplicate() as StandardMaterial3D
-	brass_mat.albedo_color = Color(0.8, 0.7, 0.2, 1.0)
-	brass_mat.metallic = 0.8
-	brass_mat.roughness = 0.2
-	horn.mesh = horn_mesh
-	horn.material_override = brass_mat
-	horn.position = Vector3(0, 0.35, 0.2)
-	horn.rotation_degrees = Vector3(-45, 0, 0)
-	audio_item.add_child(horn)
+	# Initialize with data
+	audio_item.init(audio_url, audio_title, exhibit_title)
 	
 	# Store metadata for re-stealing
 	audio_item.set_meta("is_placed_audio", true)
@@ -523,16 +504,11 @@ func _create_placed_audio(position: Vector3, normal: Vector3, audio_url: String,
 	audio_item.set_meta("audio_title", audio_title)
 	audio_item.set_meta("audio_url", audio_url)
 	
-	# Add collision body so raycast can hit it
-	var body: StaticBody3D = StaticBody3D.new()
-	body.collision_layer = 1048576
-	body.collision_mask = 0
-	var shape: CollisionShape3D = CollisionShape3D.new()
-	var box: BoxShape3D = BoxShape3D.new()
-	box.size = Vector3(0.7, 0.8, 0.7)
-	shape.shape = box
-	body.add_child(shape)
-	audio_item.add_child(body)
+	# Connect signals for multiplayer sync
+	if audio_item.play_requested.is_connected(_on_placed_audio_play_requested) == false:
+		audio_item.play_requested.connect(_on_placed_audio_play_requested.bind(exhibit_title, audio_title))
+	if audio_item.stop_requested.is_connected(_on_placed_audio_stop_requested) == false:
+		audio_item.stop_requested.connect(_on_placed_audio_stop_requested.bind(exhibit_title, audio_title))
 	
 	# Parent to the exhibit node
 	var parent_node: Node = _get_exhibit_node(exhibit_title)
@@ -555,6 +531,16 @@ func _create_placed_audio(position: Vector3, normal: Vector3, audio_url: String,
 	
 	# Position slightly above the surface
 	audio_item.global_position = position + normal * 0.4
+	
+	# Restore playing state if it was saved
+	var audio_key: String = exhibit_title + ":" + audio_title
+	if _placed_audio_state.has(audio_key):
+		var state: Dictionary = _placed_audio_state[audio_key]
+		if state.get("is_playing", false):
+			# Delay playback slightly to ensure audio is loaded
+			await get_tree().create_timer(0.5).timeout
+			if is_instance_valid(audio_item):
+				audio_item.play_audio()
 
 
 func _on_carry_image_loaded(url: String, image: Texture2D, _ctx: Variant, player: Node, target_url: String) -> void:
@@ -686,6 +672,69 @@ func _find_and_remove_placed_painting(image_title: String) -> Node:
 		if p.has_meta("image_title") and p.get_meta("image_title") == image_title:
 			_placed_paintings.remove_at(i)
 			return p
+	return null
+
+
+func _on_placed_audio_play_requested(exhibit_title: String, audio_title: String) -> void:
+	# Store state
+	var audio_key: String = exhibit_title + ":" + audio_title
+	_placed_audio_state[audio_key] = {"is_playing": true}
+	
+	# Sync to other players via Main
+	if NetworkManager.is_multiplayer_active():
+		if NetworkManager.is_server():
+			_main._broadcast_audio_play_sync.rpc(audio_key, exhibit_title, audio_title)
+		else:
+			_main._request_audio_play_rpc.rpc_id(1, audio_key, exhibit_title, audio_title)
+
+func _on_placed_audio_stop_requested(exhibit_title: String, audio_title: String) -> void:
+	# Store state
+	var audio_key: String = exhibit_title + ":" + audio_title
+	if _placed_audio_state.has(audio_key):
+		_placed_audio_state[audio_key]["is_playing"] = false
+	
+	# Sync to other players via Main
+	if NetworkManager.is_multiplayer_active():
+		if NetworkManager.is_server():
+			_main._broadcast_audio_stop_sync.rpc(audio_key, exhibit_title, audio_title)
+		else:
+			_main._request_audio_stop_rpc.rpc_id(1, audio_key, exhibit_title, audio_title)
+
+
+func handle_audio_play_request(exhibit_title: String, audio_title: String) -> void:
+	# Server-side: validate and store state
+	var audio_key: String = exhibit_title + ":" + audio_title
+	_placed_audio_state[audio_key] = {"is_playing": true}
+
+
+func handle_audio_stop_request(exhibit_title: String, audio_title: String) -> void:
+	# Server-side: update state
+	var audio_key: String = exhibit_title + ":" + audio_title
+	if _placed_audio_state.has(audio_key):
+		_placed_audio_state[audio_key]["is_playing"] = false
+
+
+func sync_audio_play(exhibit_title: String, audio_title: String) -> void:
+	# Find the placed audio and start playback
+	var audio_item: Node = _find_placed_audio_by_title(exhibit_title, audio_title)
+	if audio_item and audio_item.has_method("play_audio"):
+		audio_item.play_audio()
+
+
+func sync_audio_stop(exhibit_title: String, audio_title: String) -> void:
+	# Find the placed audio and stop playback
+	var audio_item: Node = _find_placed_audio_by_title(exhibit_title, audio_title)
+	if audio_item and audio_item.has_method("stop_audio"):
+		audio_item.stop_audio()
+
+
+func _find_placed_audio_by_title(exhibit_title: String, audio_title: String) -> Node:
+	for p: Node in _placed_audio:
+		if not is_instance_valid(p):
+			continue
+		if p.has_meta("exhibit_title") and p.has_meta("audio_title"):
+			if p.get_meta("exhibit_title") == exhibit_title and p.get_meta("audio_title") == audio_title:
+				return p
 	return null
 
 
@@ -935,10 +984,25 @@ func apply_stolen_paintings_state(state: Dictionary) -> void:
 	## Received by a late-joining peer to populate their initial stolen state.
 	for key in state:
 		_stolen_paintings[key] = state[key]
-		
-		# If the exhibit is already loaded, hide the painting immediately
-		var parts: PackedStringArray = key.split(":")
-		if parts.size() >= 2:
-			var wall_item := _find_wall_item_by_image_title(parts[0], parts[1])
-			if wall_item:
-				wall_item.set_stolen(true)
+
+
+func get_placed_audio_state() -> Dictionary:
+	## Returns the playing state of all placed audio items.
+	return _placed_audio_state.duplicate()
+
+
+func apply_placed_audio_state(state: Dictionary) -> void:
+	## Received by a late-joining peer to populate audio playing state.
+	for key in state:
+		_placed_audio_state[key] = state[key]
+		# If the audio item exists and should be playing, start it
+		if state[key].get("is_playing", false):
+			var parts: PackedStringArray = key.split(":")
+			if parts.size() == 2:
+				var exhibit_title: String = parts[0]
+				var audio_title: String = parts[1]
+				var audio_item: Node = _find_placed_audio_by_title(exhibit_title, audio_title)
+				if audio_item and audio_item.has_method("play_audio"):
+					# Delay to ensure audio is loaded
+					var tween = create_tween()
+					tween.tween_callback(audio_item.play_audio).set_delay(0.5)

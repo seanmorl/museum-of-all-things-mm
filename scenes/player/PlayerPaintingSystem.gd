@@ -241,24 +241,31 @@ func try_place_item() -> bool:
 	query.exclude = [_player.get_rid()]
 	var result: Dictionary = space_state.intersect_ray(query)
 
+	# If forward raycast didn't hit, try downward raycast for floor placement
+	if result.is_empty() and _is_carrying_audio:
+		var floor_to: Vector3 = from + Vector3.DOWN * PLACE_RAY_LENGTH
+		var floor_query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, floor_to, 1)
+		floor_query.exclude = [_player.get_rid()]
+		result = space_state.intersect_ray(floor_query)
+
 	if result.is_empty():
 		return false
 
 	var normal: Vector3 = result.normal
-	
+
 	if _is_carrying_audio:
 		# Audio items are placed on horizontal surfaces (floor, table)
-		if abs(normal.y) < 0.7:
+		if abs(normal.y) < 0.5:
 			return false  # Too vertical — need a horizontal surface
-		place_requested.emit(_carried_audio_exhibit_title, _carried_audio_title, 
+		place_requested.emit(_carried_audio_exhibit_title, _carried_audio_title,
 			_carried_audio_url, result.position, normal, Vector2(1, 1), true)
 	else:
 		# Paintings are placed on vertical surfaces (walls)
 		if abs(normal.y) > 0.5:
 			return false  # Too horizontal — it's a floor or ceiling
-		place_requested.emit(_carried_exhibit_title, _carried_image_title, 
+		place_requested.emit(_carried_exhibit_title, _carried_image_title,
 			_carried_image_url, result.position, normal, _carried_image_size, false)
-	
+
 	return true
 
 

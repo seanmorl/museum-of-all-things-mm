@@ -1357,6 +1357,12 @@ func _on_network_peer_connected(peer_id: int) -> void:
 			var state: Array = _painting_controller.get_placed_paintings_state()
 			if state.size() > 0:
 				call_deferred("_sync_placed_paintings_deferred", peer_id, state)
+		
+		# Sync placed audio state to late joiner
+		if _painting_controller:
+			var audio_state: Dictionary = _painting_controller.get_placed_audio_state()
+			if not audio_state.is_empty():
+				_sync_placed_audio_to_peer.rpc_id(peer_id, audio_state)
 
 		# Sync stolen paintings to late joiner (state only, no visual sync needed)
 		if _painting_controller:
@@ -1606,6 +1612,27 @@ func _execute_place_sync(peer_id: int, exhibit_title: String, image_title: Strin
 func _execute_place_audio_sync(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String, position: Vector3, normal: Vector3) -> void:
 	_painting_controller.execute_place_audio_sync(peer_id, exhibit_title, audio_title, audio_url, position, normal, _player)
 
+# Audio playback sync RPCs
+@rpc("any_peer", "call_remote", "reliable")
+func _request_audio_play_rpc(audio_key: String, exhibit_title: String, audio_title: String) -> void:
+	if NetworkManager.is_server():
+		_painting_controller.handle_audio_play_request(exhibit_title, audio_title)
+		_broadcast_audio_play_sync.rpc(audio_key, exhibit_title, audio_title)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_audio_stop_rpc(audio_key: String, exhibit_title: String, audio_title: String) -> void:
+	if NetworkManager.is_server():
+		_painting_controller.handle_audio_stop_request(exhibit_title, audio_title)
+		_broadcast_audio_stop_sync.rpc(audio_key, exhibit_title, audio_title)
+
+@rpc("authority", "call_local", "reliable")
+func _broadcast_audio_play_sync(audio_key: String, exhibit_title: String, audio_title: String) -> void:
+	_painting_controller.sync_audio_play(exhibit_title, audio_title)
+
+@rpc("authority", "call_local", "reliable")
+func _broadcast_audio_stop_sync(audio_key: String, exhibit_title: String, audio_title: String) -> void:
+	_painting_controller.sync_audio_stop(exhibit_title, audio_title)
+
 @rpc("authority", "call_local", "reliable")
 func _execute_eat_sync(peer_id: int) -> void:
 	_painting_controller.execute_eat_sync(peer_id, _player)
@@ -1630,17 +1657,36 @@ func _sync_placed_paintings_to_peer(state: Array) -> void:
 	if _painting_controller:
 		_painting_controller.apply_placed_paintings_state(state, _player)
 
+@rpc("authority", "call_remote", "reliable")
+func _sync_placed_audio_to_peer(state: Dictionary) -> void:
+	## Received by a newly-joined client. Sets the playing state of placed audio.
+	if _painting_controller:
+		_painting_controller.apply_placed_audio_state(state)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_stolen_paintings_to_peer(state: Dictionary) -> void:
+	## Received by a newly-joined client. Populates the stolen painting map.
+	if _painting_controller:
+		_painting_controller.apply_stolen_paintings_state(state)
+
+@rpc("authority", "call_remote", "reliable")
+func _sync_wikipedia_data(article: String, data: Dictionary) -> void:
+	## Received by clients - caches Wikipedia data from server
+	Log.debug("Main", "Received Wikipedia data for '%s' from server" % article)
+	# Directly cache the result in ExhibitFetcher
+	ExhibitFetcher._cache_result(article, data)
+
 
 func _sync_placed_paintings_deferred(peer_id: int, state: Array) -> void:
 	## Deferred sync for placed paintings - waits one frame to ensure exhibit is loaded
 	## This prevents paintings from being parented to the wrong node.
 	if not is_instance_valid(_painting_controller):
 		return
-	
+
 	# Check if exhibit is loaded (wait up to 2 seconds)
 	var max_wait: int = 40  # 40 frames at 60fps = ~0.67 seconds
 	var wait_count: int = 0
-	
+
 	while wait_count < max_wait:
 		# Check if museum has any exhibits loaded
 		var museum: Node = get_node_or_null("Museum")
@@ -1648,27 +1694,14 @@ func _sync_placed_paintings_deferred(peer_id: int, state: Array) -> void:
 			# Exhibit loaded - sync now
 			_sync_placed_paintings_to_peer.rpc_id(peer_id, state)
 			return
-		
+
 		wait_count += 1
 		await get_tree().process_frame
-	
+
 	# Timeout - sync anyway (paintings will be parented to Main as fallback)
 	Log.warn("Main", "Exhibit didn't load in time for painting sync - syncing anyway")
 	_sync_placed_paintings_to_peer.rpc_id(peer_id, state)
 
-
-@rpc("authority", "call_local", "reliable")
-func _sync_wikipedia_data(article: String, data: Dictionary) -> void:
-	## Received by clients - caches Wikipedia data from server
-	Log.debug("Main", "Received Wikipedia data for '%s' from server" % article)
-	# Directly cache the result in ExhibitFetcher
-	ExhibitFetcher._cache_result(article, data)
-
-@rpc("authority", "call_remote", "reliable")
-func _sync_stolen_paintings_to_peer(state: Dictionary) -> void:
-	## Received by a newly-joined client. Populates the stolen painting map.
-	if _painting_controller:
-		_painting_controller.apply_stolen_paintings_state(state)
 
 ## Syncs the race starting exhibit to all non-server peers so they also
 ## open the search door and load the starting article.

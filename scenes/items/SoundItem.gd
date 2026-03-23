@@ -29,7 +29,6 @@ func _setup_audio_player() -> void:
 		_player = AudioStreamPlayer3D.new()
 		_player.name = "AudioPlayer"
 		_player.max_distance = 180.0
-		_player.attenuation = 0.25
 		_player.bus = &"Sound"
 		add_child(_player)
 

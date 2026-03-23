@@ -248,13 +248,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not _enabled or not is_local:
 		return
 
-	# Mount/dismount/steal/place handling (E key) - only reaches here if not mounted
+	# Mount/dismount handling (E key) - only reaches here if not mounted
 	if event.is_action_pressed("mount") and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
 		if _painting_system and _painting_system.is_carrying():
+			# E while carrying = place item down
 			_painting_system.try_place_item()
-		elif _painting_system and _painting_system.try_steal_target():
-			pass  # Steal initiated
 		else:
+			# E while not carrying = interact (play gramophone, sit on bench, etc.)
 			var collider: Node = _get_interactable_collider()
 			if collider:
 				if collider.has_method("interact"):
@@ -265,6 +265,15 @@ func _unhandled_input(event: InputEvent) -> void:
 					_mount_system.try_mount_target()
 			else:
 				_mount_system.try_mount_target()
+		get_viewport().set_input_as_handled()
+		return
+
+	# Steal handling (left mouse click) - pick up paintings and gramophones
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED and _painting_system and not _painting_system.is_carrying():
+			if _painting_system.try_steal_target():
+				get_viewport().set_input_as_handled()
+				return
 
 	# Interact handling (equip skin, etc.) — skip if carrying a painting (right-click is eat)
 	if event.is_action_pressed("interact") and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:

@@ -1,6 +1,6 @@
-[gd_scene format=3 uid="uid://sounditem123456"]
+[gd_scene format=3 uid="uid://ddnrbpoltlrjm"]
 
-[ext_resource type="Script" path="res://scenes/items/SoundItem.gd" id="1_script"]
+[ext_resource type="Script" path="res://scenes/items/PlacedAudio.gd" id="1_script"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_base"]
 size = Vector3(0.6, 0.25, 0.6)
@@ -22,7 +22,7 @@ roughness = 0.2
 [sub_resource type="BoxShape3D" id="BoxShape3D_interaction"]
 size = Vector3(0.7, 0.8, 0.7)
 
-[node name="SoundItem" type="MeshInstance3D" groups=["render_distance", "ExhibitItem"]]
+[node name="PlacedAudio" type="MeshInstance3D" groups=["render_distance", "ExhibitItem"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 visibility_range_end = 34.0
 visibility_range_end_margin = 1.0
