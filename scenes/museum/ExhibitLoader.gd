@@ -16,6 +16,7 @@ var _logged_slot_cap: bool = false
 # Hint system disabled - these variables no longer needed
 # var _pending_backlink_rooms: Array[Dictionary] = []
 var _signals_connected: bool = false
+var destination: String = "Dog";
 
 var _starting_height: int = 40
 var _height_increment: int = 20
@@ -62,9 +63,17 @@ func init(museum: Node3D, config: Dictionary) -> void:
 			RaceManager.race_ended.connect(_on_race_ended)
 		if not RaceManager.race_cancelled.is_connected(_on_race_cancelled):
 			RaceManager.race_cancelled.connect(_on_race_cancelled)
+
+		# subscribe for updates on races
+		EventBus.subscribe(EventBus.RaceStartedEvent, _on_race_started)
 		
 		_signals_connected = true
 
+func _on_race_started(event: EventBus.RaceStartedEvent) -> void:
+	print("_on_race_started_called!");
+	destination = event.target;
+	if(destination == event.target):
+		print("Destination has been stored successfully");
 
 func get_exhibits() -> Dictionary:
 	return _exhibits
@@ -206,6 +215,11 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	var items: Array = data.items
 	var extra_text: Array = data.extra_text
 	var mood: int = data.get("mood", ExhibitMood.Mood.DEFAULT)
+
+	#inject target into doors array
+	print("Full list of doors: ", data.doors);
+	if(data.doors.has(destination)):
+		data.doors[2] = destination
 
 	Log.info("ExhibitLoader", "Room '%s' has %d doors" % [context.title, doors.size()])
 
