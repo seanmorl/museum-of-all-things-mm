@@ -38,6 +38,11 @@ var _event_label:     Label          = null
 var _event_timer_lbl: Label          = null
 var _event_type_active: int          = EventManager.EventType.NONE
 
+## Hints section
+var _hints_label:     Label          = null
+var _hints_list:      VBoxContainer  = null
+var _hints_given:     Array[String]  = []
+
 
 # ── State ─────────────────────────────────────────────────────────────────────
 var _visited_pages:   Array[String]  = []
@@ -59,6 +64,10 @@ func _ready() -> void:
 	# Event system integration
 	EventManager.event_started.connect(_on_event_started)
 	EventManager.event_ended.connect(_on_event_ended)
+	# Hint system integration
+	var hint_manager = get_node_or_null("/root/HintManager")
+	if hint_manager:
+		hint_manager.hint_revealed.connect(_on_hint_revealed)
 	_apply_initial_accessibility_settings()
 	# Apply saved HUD position
 	var hud_s: Variant = SettingsManager.get_settings("hud")
@@ -180,6 +189,21 @@ func _build_race_panel() -> void:
 	_timeline_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_timeline_scroll.add_child(_timeline_list)
 
+	# ── Hints section — below timeline ────────────────────────────────────────
+	# Thin divider
+	vbox.add_child(_make_divider())
+
+	_hints_label = Label.new()
+	_hints_label.name = "HintsLabel"
+	_hints_label.text = "💡 Hints:"
+	_hints_label.visible = false
+	vbox.add_child(_hints_label)
+
+	_hints_list = VBoxContainer.new()
+	_hints_list.add_theme_constant_override("separation", 1)
+	_hints_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(_hints_list)
+
 
 func _make_divider() -> ColorRect:
 	var d := ColorRect.new()
@@ -225,8 +249,14 @@ func _apply_theme(_dark: bool) -> void:
 		_event_timer_lbl.add_theme_font_size_override("font_size", 10)
 		_event_timer_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
 
+	if _hints_label:
+		if _serif_font: _hints_label.add_theme_font_override("font", _serif_font)
+		_hints_label.add_theme_font_size_override("font_size", 10)
+		_hints_label.add_theme_color_override("font_color", Color(accent, 0.90))
+
 	_refresh_timeline_colors()
 	_refresh_divider_colors()
+	_refresh_hints_colors()
 
 	if _timer_ring:
 		_timer_ring.queue_redraw()
@@ -256,6 +286,14 @@ func _refresh_timeline_colors() -> void:
 							Color(0.30, 0.55, 1.00) if ThemeManager.is_dark_mode else Color(0.12, 0.32, 0.82))
 					_:
 						child.add_theme_color_override("font_color", ThemeManager.subtext_color)
+
+
+func _refresh_hints_colors() -> void:
+	for container in [_hints_list]:
+		if not container: continue
+		for child in container.get_children():
+			if child is Label:
+				child.add_theme_color_override("font_color", ThemeManager.subtext_color)
 
 
 # ── Timer ring draw ───────────────────────────────────────────────────────────
@@ -483,6 +521,7 @@ func _process(delta: float) -> void:
 
 func _on_race_started(target_article: String, start_article: String) -> void:
 	_visited_pages = [start_article]
+	_hints_given.clear()
 	if _timer_label:  _timer_label.text  = "00:00"
 	if _target_label:
 		_target_label.text = target_article
@@ -496,6 +535,11 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 		for c in _timeline_list.get_children(): c.queue_free()
 	if _timeline_scroll:
 		_timeline_scroll.custom_minimum_size = Vector2(0, 0)
+	# Reset hints section
+	if _hints_list:
+		for c in _hints_list.get_children(): c.queue_free()
+	if _hints_label:
+		_hints_label.visible = false
 	# Reset event indicator
 	_event_type_active = EventManager.EventType.NONE
 	if _event_row: _event_row.visible = false
@@ -533,3 +577,38 @@ func _dismiss() -> void:
 	await get_tree().create_timer(0.22).timeout
 	visible = false
 	_visited_pages.clear()
+	_hints_given.clear()
+	if _hints_list:
+		for c in _hints_list.get_children(): c.queue_free()
+	if _hints_label:
+		_hints_label.visible = false
+
+
+func _on_hint_revealed(hint: String, hint_type: String = "backlink") -> void:
+	"""Add a revealed hint to the hints list in the HUD."""
+	if hint == "" or _hints_given.has(hint):
+		return
+
+	_hints_given.append(hint)
+
+	# Show hints label
+	if _hints_label:
+		_hints_label.visible = true
+
+	# Create hint entry
+	var hint_lbl := Label.new()
+	hint_lbl.text = "• " + hint
+	hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if _serif_font:
+		hint_lbl.add_theme_font_override("font", _serif_font)
+	hint_lbl.add_theme_font_size_override("font_size", 10)
+	_hints_list.add_child(hint_lbl)
+
+	# Animate hint entry
+	hint_lbl.modulate.a = 0.0
+	hint_lbl.position.x = 10.0
+	var tw := create_tween()
+	tw.tween_property(hint_lbl, "modulate:a", 1.0, 0.25) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(hint_lbl, "position:x", 0.0, 0.25) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)

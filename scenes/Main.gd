@@ -41,6 +41,10 @@ var _host_menu: CanvasLayer = null
 var _minimap_controller: Control = null
 var _race_status_hud: Control = null
 
+# Hint system cooldown
+var _last_hint_time: float = 0.0
+const HINT_COOLDOWN_SECONDS: float = 3.0
+
 # â”€â”€ Tournament nodes (created in _ready) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 var _tournament_setup_menu:    Control = null
 var _tournament_hud:           Control = null
@@ -394,6 +398,7 @@ func _initialize_room_service() -> void:
 	RaceManager.race_countdown.connect(_on_race_countdown)
 	RaceManager.race_won.connect(_on_race_won)
 	RaceManager.vote_cancelled.connect(_on_vote_cancelled)
+	RaceManager.target_determined.connect(_on_target_determined)
 	if RaceManager.has_signal("race_won"):
 		RaceManager.race_won.connect(_on_race_won_for_daily_challenge)
 	ExhibitFetcher.random_complete.connect(_on_random_article_complete)
@@ -772,6 +777,19 @@ func _input(event: InputEvent) -> void:
 				if _host_menu and NetworkManager.is_server() and not overlay_open:
 					_host_menu.toggle()
 
+			# Host hint keybind (I key) - only works during active race
+			if event.is_action_pressed("host_hint"):
+				if NetworkManager.is_server() and RaceManager.is_race_active():
+					var now := Time.get_unix_time_from_system()
+					if now - _last_hint_time >= HINT_COOLDOWN_SECONDS:
+						_reveal_host_hint()
+						_last_hint_time = now
+					else:
+						var remaining := int(HINT_COOLDOWN_SECONDS - (now - _last_hint_time))
+						if has_node("TabMenu/ChatHUD"):
+							$TabMenu/ChatHUD._show_system_message("⏳ Hint cooldown: %d seconds" % remaining)
+					get_viewport().set_input_as_handled()
+
 		# UI scale keyboard shortcuts â€” work in any state
 		if InputMap.has_action("ui_scale_in") and event.is_action_pressed("ui_scale_in"):
 			_adjust_ui_scale(0.1)
@@ -1149,6 +1167,11 @@ func _launch_vote() -> void:
 	var vote_hud := get_node_or_null("TabMenu/VoteHUD")
 	if vote_hud and vote_hud.has_method("on_reroll_ready"):
 		vote_hud.on_reroll_ready()
+
+func _on_target_determined(target: String) -> void:
+	"""Called when vote ends and target is determined - prefetch backlinks early."""
+	Log.info("Main", "Target determined: '%s', prefetching backlinks..." % target)
+	_fetch_and_cache_backlinks(target)
 
 func _on_race_started(target_article: String, start_article: String) -> void:
 	Log.debug("Main", "_on_race_started CALLED! target=%s start=%s" % [target_article, start_article])
@@ -1725,22 +1748,28 @@ func _sync_race_start_article(start_article: String) -> void:
 	# SERVER: Generate room and broadcast to all clients
 	if NetworkManager.is_server() and Services.room_service:
 		print("Main: Server generating room for '", start_article, "'")
-		var room_data = Services.room_service.generate_room(start_article)
 		
+		# Get target FIRST - set it in HintManager before room generates
+		var target_article: String = RaceManager.get_target_article()
+		print("Main: Race target set to '%s'" % target_article)
+		
+		# Set target in HintManager immediately so door replacement can work
+		var hint_manager = get_node_or_null("/root/HintManager")
+		if hint_manager:
+			hint_manager.set_current_target(target_article)
+		
+		# Fetch and cache backlinks (non-blocking)
+		_fetch_and_cache_backlinks(target_article)
+		
+		var room_data = Services.room_service.generate_room(start_article)
+
 		# Get Wikipedia data (or empty dict if failed)
 		var wiki_data: Variant = ExhibitFetcher.get_result(start_article)
 		if wiki_data == null:
 			print("Main: WARNING: No Wikipedia data for '%s', generating room with empty data" % start_article)
 			wiki_data = {}
 
-		# Get backlinks
-		var backlinks: Array = []
-		if ExhibitFetcher.has_result(start_article):
-			var result = ExhibitFetcher.get_result(start_article)
-			if result and result.has("links"):
-				backlinks = result.links
-		
-		Services.room_service.populate_room_data(room_data, wiki_data, backlinks)
+		Services.room_service.populate_room_data(room_data, wiki_data, [])
 		Services.room_service.broadcast_room(room_data)
 	else:
 		# CLIENT: Wait for room data from server
@@ -1878,6 +1907,272 @@ func teleport_all_players_to_start_line(start_article: String) -> void:
 					rider.current_room = "Lobby"
 	
 	Log.debug("Main", "<<< All %d players teleported to race start line!" % all_players.size())
+
+func _fetch_and_cache_backlinks(target_article: String) -> void:
+	"""Fetch backlinks at race start and cache for door replacement."""
+	if target_article == "":
+		return
+	
+	var hint_manager = get_node_or_null("/root/HintManager")
+	if hint_manager and hint_manager.get_backlinks(target_article).size() > 0:
+		return
+	
+	var url := "https://en.wikipedia.org/w/api.php?action=query&format=json&list=backlinks&bllimit=100&bltitle=" + target_article.uri_encode() + "&blnamespace=0&origin=*"
+	var http := HTTPRequest.new()
+	add_child(http)
+	
+	var request_completed = func(result_code, response_code, _headers, body):
+		if result_code == HTTPRequest.RESULT_SUCCESS and response_code == 200:
+			var json = JSON.new()
+			if json.parse(body.get_string_from_utf8()) == OK:
+				var data = json.get_data()
+				if data.has("query") and data.query.has("backlinks"):
+					var backlinks: Array[String] = []
+					var seen: Dictionary = {}  # Deduplication set
+					for bl in data.query.backlinks:
+						if bl.has("title"):
+							var title = bl.title as String
+							# Filter out file/image pages and special pages
+							if title.begins_with("File:") or title.begins_with("Image:"):
+								continue
+							if title.begins_with("Category:"):
+								continue
+							if title.begins_with("Template:"):
+								continue
+							if title.begins_with("Wikipedia:") or title.begins_with("Help:"):
+								continue
+							# Deduplicate
+							if not seen.has(title):
+								seen[title] = true
+								backlinks.append(title)
+					if hint_manager:
+						hint_manager.set_backlinks(target_article, backlinks)
+						print("Main: Cached %d unique backlinks for '%s'" % [backlinks.size(), target_article])
+		http.queue_free()
+	
+	http.request_completed.connect(request_completed)
+	http.request(url)
+
+func _reveal_host_hint() -> void:
+	"""Host pressed I key - reveal a backlink hint to all players."""
+	var hint_manager = get_node_or_null("/root/HintManager")
+	if not hint_manager:
+		print("Main: HintManager not found!")
+		return
+
+	# Backlinks are already fetched at race start, just reveal one
+	var hint_data: Array = hint_manager.get_next_hint()
+	var hint: String = hint_data[0] if hint_data.size() > 0 else ""
+
+	if hint != "":
+		hint_manager.reveal_hint_to_all(hint, "backlink")
+		# Show system message to all players
+		if has_node("TabMenu/ChatHUD"):
+			$TabMenu/ChatHUD._show_system_message("💡 Go to: %s" % hint)
+		print("Main: Host revealed hint: '%s'" % hint)
+	else:
+		# No hints available
+		if has_node("TabMenu/ChatHUD"):
+			$TabMenu/ChatHUD._show_system_message("💡 No hints available!")
+		print("Main: No hints available to reveal")
+
+func _fetch_categories_for_article(article: String) -> Array[String]:
+	"""Fetch Wikipedia categories for an article."""
+	var categories: Array[String] = []
+	
+	# Check if we already have the data cached
+	var result = ExhibitFetcher.get_result(article)
+	if result and result.has("categories"):
+		for cat_data in result.categories:
+			if cat_data.has("title"):
+				categories.append(cat_data.title.replace("Category:", ""))
+	
+	# If no categories, fetch them
+	if categories.size() == 0:
+		# Direct API call for categories
+		var url := "https://en.wikipedia.org/w/api.php?action=query&prop=categories&format=json&cllimit=50&titles=" + article.uri_encode()
+		var http := HTTPRequest.new()
+		add_child(http)
+		var fetch_complete: bool = false
+		
+		var request_completed = func(result_code, response_code, _headers, body):
+			if result_code == HTTPRequest.RESULT_SUCCESS and response_code == 200:
+				var json = JSON.new()
+				if json.parse(body.get_string_from_utf8()) == OK:
+					var data = json.get_data()
+					if data.has("query") and data.query.has("pages"):
+						for page_id in data.query.pages:
+							var page = data.query.pages[page_id]
+							if page.has("categories"):
+								for cat in page.categories:
+									if cat.has("title"):
+										categories.append(cat.title.replace("Category:", ""))
+			fetch_complete = true
+			http.queue_free()
+		
+		http.request_completed.connect(request_completed)
+		http.request(url)
+		
+		# Wait for response (max 2 seconds)
+		for i in range(20):
+			if fetch_complete:
+				break
+			await get_tree().create_timer(0.1).timeout
+	
+	return categories
+
+func _fetch_wikidata_properties(article: String) -> Array[Dictionary]:
+	"""Fetch Wikidata properties for an article."""
+	var properties: Array[Dictionary] = []
+	
+	# Properties to fetch (P31=instance of, P279=subclass of, P106=medical use, P921=main topic)
+	var useful_properties = ["P31", "P279", "P106", "P921", "P361", "P527"]
+	
+	# Step 1: Get Q-ID from Wikipedia
+	var q_id: String = await _get_wikidata_qid(article)
+	if q_id == "":
+		return properties
+	
+	# Step 2: Fetch claims for useful properties
+	var url := "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=" + q_id + "&props=claims&languages=en"
+	var http := HTTPRequest.new()
+	add_child(http)
+	var fetch_complete: bool = false
+	var raw_claims: Dictionary = {}
+	
+	var request_completed = func(result_code, response_code, _headers, body):
+		if result_code == HTTPRequest.RESULT_SUCCESS and response_code == 200:
+			var json = JSON.new()
+			if json.parse(body.get_string_from_utf8()) == OK:
+				var data = json.get_data()
+				if data.has("entities") and data.entities.has(q_id):
+					var entity = data.entities[q_id]
+					if entity.has("claims"):
+						raw_claims = entity.claims
+		fetch_complete = true
+		http.queue_free()
+	
+	http.request_completed.connect(request_completed)
+	http.request(url)
+	
+	# Wait for response
+	for i in range(20):
+		if fetch_complete:
+			break
+		await get_tree().create_timer(0.1).timeout
+	
+	# Step 3: Extract property values and fetch labels
+	if raw_claims.size() > 0:
+		var q_ids_to_fetch: Array[String] = []
+		
+		# Collect all Q-IDs we need labels for
+		for prop_id in useful_properties:
+			if raw_claims.has(prop_id):
+				for claim in raw_claims[prop_id]:
+					if claim.has("mainsnak") and claim.mainsnak.has("datavalue") and \
+					   claim.mainsnak.datavalue.has("value") and \
+					   claim.mainsnak.datavalue.value.has("id"):
+						var value_id: String = claim.mainsnak.datavalue.value.id
+						if value_id.begins_with("Q"):
+							q_ids_to_fetch.append(value_id)
+		
+		# Fetch labels for all Q-IDs
+		if q_ids_to_fetch.size() > 0:
+			var labels_url := "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids=" + "|".join(q_ids_to_fetch) + "&languages=en&props=labels"
+			var labels_http := HTTPRequest.new()
+			add_child(labels_http)
+			var labels_complete: bool = false
+			var labels_data: Dictionary = {}
+			
+			var labels_completed = func(result_code, response_code, _headers, body):
+				if result_code == HTTPRequest.RESULT_SUCCESS and response_code == 200:
+					var json = JSON.new()
+					if json.parse(body.get_string_from_utf8()) == OK:
+						labels_data = json.get_data()
+				labels_complete = true
+				labels_http.queue_free()
+			
+			labels_http.request_completed.connect(labels_completed)
+			labels_http.request(labels_url)
+			
+			# Wait for labels
+			for i in range(20):
+				if labels_complete:
+					break
+				await get_tree().create_timer(0.1).timeout
+			
+			# Build properties array
+			var labels: Dictionary = {}
+			if labels_data.has("entities"):
+				for qid in labels_data.entities:
+					var entity = labels_data.entities[qid]
+					if entity.has("labels") and entity.labels.has("en"):
+						labels[qid] = entity.labels["en"].value
+			
+			# Property labels
+			var prop_labels = {
+				"P31": "Type",
+				"P279": "Subclass of",
+				"P106": "Medical use",
+				"P921": "Main topic",
+				"P361": "Part of",
+				"P527": "Has part"
+			}
+			
+			for prop_id in useful_properties:
+				if raw_claims.has(prop_id):
+					var claims_array: Array = raw_claims[prop_id]
+					for claim_variant in claims_array:
+						var claim: Dictionary = claim_variant as Dictionary
+						if claim.is_empty():
+							continue
+						if claim.has("mainsnak") and claim.mainsnak.has("datavalue") and \
+						   claim.mainsnak.datavalue.has("value") and \
+						   claim.mainsnak.datavalue.value.has("id"):
+							var value_id: String = claim.mainsnak.datavalue.value.id
+							var value_label: String = labels.get(value_id, value_id)
+							var prop_label: String = prop_labels.get(prop_id, prop_id)
+							properties.append({"label": prop_label, "value": value_label})
+	
+	return properties
+
+func _get_wikidata_qid(article: String) -> String:
+	"""Get Wikidata Q-ID for a Wikipedia article."""
+	# Check if we have it cached from Wikipedia fetch
+	var result = ExhibitFetcher.get_result(article)
+	if result and result.has("wikibase_item"):
+		return result.wikibase_item
+	
+	# Fetch from Wikipedia API
+	var url := "https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&format=json&titles=" + article.uri_encode()
+	var http := HTTPRequest.new()
+	add_child(http)
+	var fetch_complete: bool = false
+	var q_id: String = ""
+	
+	var request_completed = func(result_code, response_code, _headers, body):
+		if result_code == HTTPRequest.RESULT_SUCCESS and response_code == 200:
+			var json = JSON.new()
+			if json.parse(body.get_string_from_utf8()) == OK:
+				var data = json.get_data()
+				if data.has("query") and data.query.has("pages"):
+					for page_id in data.query.pages:
+						var page = data.query.pages[page_id]
+						if page.has("pageprops") and page.pageprops.has("wikibase_item"):
+							q_id = page.pageprops.wikibase_item
+		fetch_complete = true
+		http.queue_free()
+	
+	http.request_completed.connect(request_completed)
+	http.request(url)
+	
+	# Wait for response
+	for i in range(20):
+		if fetch_complete:
+			break
+		await get_tree().create_timer(0.1).timeout
+	
+	return q_id
 
 func _get_exhibit_for_article(article: String) -> Node:
 	## Get the exhibit node for an article title

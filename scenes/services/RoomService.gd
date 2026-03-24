@@ -37,11 +37,11 @@ func generate_room(title: String) -> RoomData:
 	room_generated.emit(data)
 	return data
 
-func populate_room_data(data: RoomData, wikipedia_data: Dictionary, backlinks: Array) -> void:
+func populate_room_data(data: RoomData, wikipedia_data: Dictionary, _backlinks: Array = []) -> void:
 	"""Populate RoomData with fetched Wikipedia data."""
 	data.wikipedia_data = wikipedia_data
-	data.backlinks = backlinks
-	print("RoomService: Populated room data for '", data.title, "' with ", backlinks.size(), " backlinks")
+	# Note: Backlinks are no longer used for door injection - they're only for hints
+	print("RoomService: Populated room data for '", data.title, "'")
 
 # --- Server: Broadcast Room ---
 

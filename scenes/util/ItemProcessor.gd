@@ -255,6 +255,7 @@ func _parse_wikitext(wikitext: String) -> Array:
 
 	return links
 
+
 func commons_images_to_items(title: String, images: Array, extra_text: Array) -> Array:
 	var items: Array = []
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()

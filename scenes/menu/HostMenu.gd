@@ -37,6 +37,18 @@ const _UI_CRYSTAL_SOUND: AudioStream = preload("res://assets/sound/UI/UI Crystal
 func _ready() -> void:
 	layer = 50  # Below pause menu (which is at layer 100)
 	process_mode = Node.PROCESS_MODE_DISABLED  # Don't process when hidden
+	visible = false  # Ensure completely hidden
+	
+	# Hide when race starts
+	if has_node("/root/RaceManager"):
+		var race_manager = get_node("/root/RaceManager")
+		if race_manager.has_signal("race_started"):
+			race_manager.race_started.connect(_on_race_started)
+
+func _on_race_started(_target: String, _start: String) -> void:
+	"""Hide host menu when race starts."""
+	if _visible:
+		hide_menu()
 	set_process_input(false)
 	set_process_unhandled_input(false)
 	
@@ -222,6 +234,7 @@ func _apply_theme() -> void:
 		style = StyleBoxFlat.new()
 		_panel.add_theme_stylebox_override("panel", style)
 
+	# Use ThemeManager's bg_color directly (it already has correct alpha)
 	style.bg_color     = ThemeManager.bg_color
 	style.border_color = ThemeManager.border_color
 	for side in [0, 1, 2, 3]:
@@ -235,6 +248,9 @@ func _apply_theme() -> void:
 	style.content_margin_right  = 30
 	style.content_margin_top    = 24
 	style.content_margin_bottom = 24
+	
+	# Force update the panel
+	_panel.add_theme_stylebox_override("panel", style)
 
 	# Re-style all live buttons and labels if menu is open
 	if _visible and is_instance_valid(_vbox):
@@ -274,6 +290,7 @@ func show_menu() -> void:
 	if _visible or _animating:
 		return
 	_create_ui_structure()  # Create UI on first show
+	_apply_theme()  # Ensure theme is applied
 	_visible = true
 	visible = true  # Enable CanvasLayer
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -284,6 +301,12 @@ func show_menu() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_rebuild_menu()
 	_animate_in()
+	
+	# Hide RaceHUD and RaceStatusHUD while menu is open
+	if has_node("/root/RaceHUD"):
+		get_node("/root/RaceHUD").visible = false
+	if has_node("/root/RaceStatusHUD"):
+		get_node("/root/RaceStatusHUD").visible = false
 
 func hide_menu() -> void:
 	if not _visible or _animating:
@@ -299,6 +322,11 @@ func hide_menu() -> void:
 		set_process_unhandled_key_input(false)
 		visible = false  # Disable CanvasLayer
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+		
+		# Show RaceHUD again
+		if has_node("/root/RaceHUD"):
+			get_node("/root/RaceHUD").visible = true
+		
 		host_menu_closed.emit()
 	)
 

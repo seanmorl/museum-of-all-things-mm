@@ -13,6 +13,9 @@ var _loading_exhibits: Dictionary = {}  # Track in-flight fetches to prevent dup
 var _pending_items_results: Dictionary = {}  # title -> Dictionary result (per-title items_complete)
 var _logged_slot_cap: bool = false
 
+# Backlink race condition fix: track rooms loaded before backlinks ready
+var _pending_backlink_rooms: Array[Dictionary] = []  # {title: String, exit: Hall, hall: Hall, doors: Array}
+
 var _starting_height: int = 40
 var _height_increment: int = 20
 
@@ -39,6 +42,18 @@ func init(museum: Node3D, config: Dictionary) -> void:
 	_max_room_dimension = config.get("max_room_dimension", 5)
 	if not ItemProcessor.items_complete.is_connected(_on_items_complete):
 		ItemProcessor.items_complete.connect(_on_items_complete)
+	
+	# Connect to hints_loaded signal to handle race condition
+	var hint_manager = get_node_or_null("/root/HintManager")
+	if hint_manager and hint_manager.has_signal("hints_loaded"):
+		if not hint_manager.hints_loaded.is_connected(_on_hints_loaded):
+			hint_manager.hints_loaded.connect(_on_hints_loaded)
+	
+	# Connect to race_ended to clean up pending rooms
+	if not RaceManager.race_ended.is_connected(_on_race_ended):
+		RaceManager.race_ended.connect(_on_race_ended)
+	if not RaceManager.race_cancelled.is_connected(_on_race_cancelled):
+		RaceManager.race_cancelled.connect(_on_race_cancelled)
 
 
 func get_exhibits() -> Dictionary:
@@ -314,8 +329,35 @@ func _on_exit_added_no_hall(exit: Hall, doors: Array, new_exhibit: Node3D) -> vo
 func _on_exit_added(exit: Hall, doors: Array, backlink: bool, new_exhibit: Node3D, hall: Hall) -> void:
 	var linked_exhibit: String = ""
 
-	# Simple: just pop the first door (target is already at front if it exists)
-	if doors.size() > 0:
+	# Check if this room is a backlink of the race target (replace random door with target)
+	var race_target: String = _get_race_target()
+	var hint_manager = get_node_or_null("/root/HintManager")
+	var backlinks_ready: bool = hint_manager and hint_manager.has_hints()
+	var is_backlink_room: bool = _is_backlink_of_target(new_exhibit.title, race_target)
+	
+	if is_backlink_room and race_target != "":
+		# Replace a random door with the race target
+		if doors.size() > 0:
+			var random_idx: int = randi() % doors.size()
+			linked_exhibit = doors[random_idx]
+			doors[random_idx] = race_target  # Replace with target
+			Log.info("ExhibitLoader", "Backlink room '%s': replaced door with race target '%s'" % [new_exhibit.title, race_target])
+		else:
+			linked_exhibit = race_target  # No doors, just use target
+			Log.info("ExhibitLoader", "Backlink room '%s': no doors, using race target '%s'" % [new_exhibit.title, race_target])
+	elif not backlinks_ready and race_target != "" and not doors.is_empty():
+		# Backlinks not ready yet - store this room for later processing
+		_pending_backlink_rooms.append({
+			"title": new_exhibit.title,
+			"exit": exit,
+			"hall": hall,
+			"doors": doors.duplicate()
+		})
+		Log.debug("ExhibitLoader", "Room '%s' loaded before backlinks ready - queued for later" % new_exhibit.title)
+		# Normal: pop the first door for now (will be updated when backlinks arrive)
+		linked_exhibit = Util.coalesce(doors.pop_front(), "")
+	elif doors.size() > 0:
+		# Normal: pop the first door
 		linked_exhibit = Util.coalesce(doors.pop_front(), "")
 		Log.debug("ExhibitLoader", "Exit '%s' -> '%s' (doors remaining: %d)" % [
 			new_exhibit.title, linked_exhibit, doors.size()])
@@ -323,11 +365,72 @@ func _on_exit_added(exit: Hall, doors: Array, backlink: bool, new_exhibit: Node3
 		# No more doors left! This exit won't lead anywhere useful
 		linked_exhibit = "Lobby"  # Fallback
 		Log.warn("ExhibitLoader", "Exit added but no doors remaining! Using fallback to Lobby")
-	
+
 	exit.to_title = linked_exhibit
 	if linked_exhibit != "":
 		ExhibitGraph.add_edge(new_exhibit.title, linked_exhibit)
 	exit.loader.body_entered.connect(_museum._on_loader_body_entered.bind(exit))
+
+func _get_race_target() -> String:
+	"""Get the current race target from HintManager."""
+	var hint_manager = get_node_or_null("/root/HintManager")
+	if hint_manager and hint_manager.has_method("get_current_target"):
+		return hint_manager.get_current_target()
+	return ""
+
+func _is_backlink_of_target(room_title: String, target: String) -> bool:
+	"""Check if this room is a backlink of the race target."""
+	if target == "" or room_title == "":
+		return false
+	var hint_manager = get_node_or_null("/root/HintManager")
+	if hint_manager and hint_manager.has_method("get_backlinks"):
+		var backlinks = hint_manager.get_backlinks(target)
+		if backlinks.is_empty():
+			Log.debug("ExhibitLoader", "No backlinks cached for target '%s' yet" % target)
+		return backlinks.has(room_title)
+	Log.warn("ExhibitLoader", "HintManager not found for backlink check")
+	return false
+
+func _on_hints_loaded(_target: String) -> void:
+	"""Called when backlinks are loaded - process any pending rooms."""
+	if _pending_backlink_rooms.is_empty():
+		return
+	
+	var race_target: String = _get_race_target()
+	if race_target == "":
+		_pending_backlink_rooms.clear()
+		return
+	
+	var processed_count: int = 0
+	for pending in _pending_backlink_rooms:
+		var room_title: String = pending.title
+		var exit: Hall = pending.exit
+		var doors: Array = pending.doors
+		
+		# Check if this room is now known to be a backlink
+		if _is_backlink_of_target(room_title, race_target):
+			# Replace the door with the race target
+			if doors.size() > 0:
+				var old_dest: String = exit.to_title
+				exit.to_title = race_target
+				Log.info("ExhibitLoader", "Backlink room '%s' (loaded early): updated door from '%s' to '%s'" % [
+					room_title, old_dest, race_target])
+				processed_count += 1
+	
+	Log.info("ExhibitLoader", "Processed %d pending backlink rooms after hints loaded" % processed_count)
+	_pending_backlink_rooms.clear()
+
+func _on_race_ended(_winner_peer_id: int, _winner_name: String) -> void:
+	"""Clean up pending backlink rooms when race ends."""
+	if not _pending_backlink_rooms.is_empty():
+		Log.debug("ExhibitLoader", "Clearing %d pending backlink rooms on race end" % _pending_backlink_rooms.size())
+		_pending_backlink_rooms.clear()
+
+func _on_race_cancelled() -> void:
+	"""Clean up pending backlink rooms when race is cancelled."""
+	if not _pending_backlink_rooms.is_empty():
+		Log.debug("ExhibitLoader", "Clearing %d pending backlink rooms on race cancel" % _pending_backlink_rooms.size())
+		_pending_backlink_rooms.clear()
 
 
 func link_halls(entry: Hall, exit: Hall) -> void:

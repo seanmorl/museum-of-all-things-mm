@@ -5,18 +5,17 @@ extends Control
 ## Styled identically to RaceHUD.gd (same ThemeManager wiring, Cormorant Garamond,
 ## StyleBoxFlat, text_color / subtext_color / border_color palette).
 ##
-## Position: bottom-left, so it doesn't clash with:
+## Position: top-right, so it doesn't clash with:
 ##   • RaceHUD    — top-left
 ##   • Minimap    — bottom-right
 ##   • PlayerList — full-screen hold overlay
 ##
 ## Hotkey: R  (Tab is already show_player_list — hold to show)
-## Auto-shows on race_started; auto-hides 5s after race_ended.
-## R key only works while a race is active or the panel is already open.
+## Hidden by default during race - press R to toggle visibility.
 ##
 ## Spawning: Main.gd creates this with add_child() and we sit as a direct
 ## child of Main (a Node, not a Control). We create our own PanelContainer
-## as a child with PRESET_BOTTOM_LEFT anchoring.  We do NOT re-add self
+## as a child with PRESET_TOP_RIGHT anchoring.  We do NOT re-add self
 ## to any other parent.
 
 const PANEL_W   : float = 300.0
@@ -27,6 +26,7 @@ const MAX_PEERS : int   = 8
 # ── Node refs (all built in _build_ui) ────────────────────────────────────────
 var _serif_font : Font = null
 
+var _canvas_layer : CanvasLayer = null
 var _panel      : PanelContainer = null
 var _race_style : StyleBoxFlat   = null
 var _header_sb  : StyleBoxFlat   = null
@@ -54,7 +54,7 @@ var _local_trail    : Array[String] = []
 var _local_last_room: String      = ""
 
 
-# ── Ready ──────────────────────────────────────────────────────────────────────
+# ── Ready ────────────────────────────────────────────────────────────────────
 
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
@@ -97,23 +97,28 @@ func _ready() -> void:
 # ── UI construction ────────────────────────────────────────────────────────────
 
 func _build_ui() -> void:
+	# CanvasLayer to render on top of other HUDs
+	_canvas_layer = CanvasLayer.new()
+	_canvas_layer.layer = 10
+	add_child(_canvas_layer)
+
 	_panel = PanelContainer.new()
 	_panel.name = "RaceStatusPanel"
 	_race_style = StyleBoxFlat.new()
 	_panel.add_theme_stylebox_override("panel", _race_style)
 
-	# Bottom-left, grows upward and to the right
-	_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_END
-	_panel.grow_vertical   = Control.GROW_DIRECTION_BEGIN
-	_panel.offset_left   = 12
-	_panel.offset_bottom = -12
-	_panel.offset_right  = 12 + PANEL_W
-	_panel.offset_top    = -12   # will be overridden by content height
+	# Top-right, grows downward and to the left
+	_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_panel.grow_vertical   = Control.GROW_DIRECTION_END
+	_panel.offset_left   = -12 - PANEL_W
+	_panel.offset_top    = 12
+	_panel.offset_right  = -12
+	_panel.offset_bottom = 12   # will be overridden by content height
 
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_panel.visible = false
-	add_child(_panel)
+	_canvas_layer.add_child(_panel)
 
 	var mc := MarginContainer.new()
 	mc.add_theme_constant_override("margin_left",   10)
@@ -234,9 +239,10 @@ func _on_race_started(target_article: String, _start: String) -> void:
 	_local_trail.clear()
 	_local_last_room  = ""
 	_auto_hide_timer  = 0.0
+	_manual_toggle    = false
 	_refresh_player_list()
 	_update_target_lbl()
-	_show_panel()
+	# Don't auto-show - player must press R to open
 
 
 func _on_race_ended(winner_peer_id: int, _winner_name: String) -> void:
@@ -244,8 +250,8 @@ func _on_race_ended(winner_peer_id: int, _winner_name: String) -> void:
 	_winner_peer = winner_peer_id
 	_update_target_lbl()
 	if _canvas: _canvas.queue_redraw()
-	if not _manual_toggle:
-		_auto_hide_timer = 5.0
+	# Always hide when race ends
+	_hide_panel()
 
 
 func _on_race_cancelled() -> void:
@@ -503,7 +509,8 @@ func _sync_remote_players() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not InputMap.has_action("toggle_race_status"): return
 	if not event.is_action_pressed("toggle_race_status"): return
-	if not _race_active and (not _panel or not _panel.visible): return
+	# Only work during active race
+	if not _race_active: return
 	_manual_toggle   = true
 	_auto_hide_timer = 0.0
 	if _panel and _panel.visible: _hide_panel()

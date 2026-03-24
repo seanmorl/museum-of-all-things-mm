@@ -15,6 +15,8 @@ signal vote_cancelled
 signal vote_started(candidates: Array)
 ## Emitted on all peers when vote results are in, just before race_started.
 signal vote_ended(winner: String)
+## Emitted when target is determined (after vote ends). Use for prefetching.
+signal target_determined(target: String)
 ## Emitted on all peers when the host changes target difficulty.
 signal difficulty_changed(difficulty: String)
 ## Emitted on all peers when the host sets or clears a category override.
@@ -371,7 +373,10 @@ func _sync_vote_start(candidates: Array) -> void:
 @rpc("authority", "call_local", "reliable")
 func _sync_vote_end(winning_idx: int) -> void:
 	_vote_active = false
-	vote_ended.emit(_vote_candidates[winning_idx])
+	var winner: String = _vote_candidates[winning_idx]
+	vote_ended.emit(winner)
+	_target_article = winner
+	target_determined.emit(winner)
 
 @rpc("authority", "call_local", "reliable")
 func _sync_vote_settings(difficulty: String, category: String, seeded_shuffle: bool, seed: int) -> void:
@@ -606,6 +611,9 @@ func _sync_race_end(winner_peer_id: int, winner_name: String, final_time: float,
 	if OS.is_debug_build():
 		print("RaceManager: Race ended, winner: ", winner_name, " in ", "%.1f" % final_time, "s")
 
+	# Clear hint cache to prevent memory leak
+	_clear_hint_cache()
+
 	if not NetworkManager.is_server():
 		race_ended.emit(winner_peer_id, winner_name)
 
@@ -619,8 +627,19 @@ func _sync_race_cancel() -> void:
 	_elapsed_time = 0.0
 	_timer_signal_accumulator = 0.0
 
+	# Clear hint cache to prevent memory leak
+	_clear_hint_cache()
+
 	if not NetworkManager.is_server():
 		race_cancelled.emit()
+
+func _clear_hint_cache() -> void:
+	"""Clear the hint cache to prevent memory leaks between races."""
+	var hint_manager = get_node_or_null("/root/HintManager")
+	if hint_manager and hint_manager.has_method("clear_all_hints"):
+		hint_manager.clear_all_hints()
+		if OS.is_debug_build():
+			print("RaceManager: Hint cache cleared")
 
 @rpc("authority", "call_remote", "reliable")
 func _sync_race_state_to_peer(target_article: String, start_article: String, start_time: float) -> void:

@@ -1,13 +1,13 @@
 extends Node
 class_name HintManagerClass
 ## Manages backlink hints for the race system.
-## Tracks which rooms link to the target and provides hint functionality.
+## Shows articles that link TO the target (validated to exclude navbox/template links).
 
-signal backlinks_loaded(target: String, backlinks: Array[String])
-signal hint_revealed(hint: String)
+signal hints_loaded(target: String)
+signal hint_revealed(hint: String, hint_type: String)
 
-# Backlink cache: target -> [rooms that link to target]
-var _backlink_cache: Dictionary = {}
+# Hint caches
+var _backlink_cache: Dictionary = {}  # target String -> Array[String] of backlinks
 
 # Current race target
 var _current_target: String = ""
@@ -17,157 +17,114 @@ var _hints_given: Array[String] = []
 var _max_hints: int = 5
 
 func _ready() -> void:
-	add_to_group("main")  # So ItemProcessor can find us
+	add_to_group("main")
 
-# --- Backlink Management ---
+# --- Target Management ---
 
 func set_current_target(target: String) -> void:
 	"""Set the current race target and clear hint tracking."""
 	_current_target = target
 	_hints_given.clear()
-	
 	if not _backlink_cache.has(target):
 		_backlink_cache[target] = []
 
 func set_backlinks(target: String, backlinks: Array[String]) -> void:
-	"""Store backlinks for a target article."""
+	"""Store validated backlinks for a target article."""
 	_backlink_cache[target] = backlinks
 	_current_target = target
-	backlinks_loaded.emit(target, backlinks)
+	hints_loaded.emit(_current_target)
 	Log.info("HintManager", "Stored %d backlinks for '%s'" % [backlinks.size(), target])
 
-func get_backlinks(target: String) -> Array[String]:
-	"""Get cached backlinks for a target."""
-	return _backlink_cache.get(target, [])
+func get_backlinks(target: String) -> Array:
+	if _backlink_cache.has(target):
+		return _backlink_cache[target]
+	return []
 
-func has_backlinks(target: String) -> bool:
-	"""Check if backlinks are cached for a target."""
-	return _backlink_cache.has(target) and _backlink_cache[target].size() > 0
+func get_current_target() -> String:
+	return _current_target
 
-func clear_backlinks(target: String) -> void:
-	"""Clear backlinks for a specific target."""
-	_backlink_cache.erase(target)
+func has_hints() -> bool:
+	"""Check if any hints are available."""
+	var backlinks = _backlink_cache.get(_current_target, [])
+	return backlinks.size() > 0
 
-func clear_all_backlinks() -> void:
-	"""Clear all cached backlinks."""
+func clear_all_hints() -> void:
+	"""Clear all cached hints."""
 	_backlink_cache.clear()
 	_current_target = ""
 	_hints_given.clear()
 
 # --- Hint Queries ---
 
-func is_backlink_of(target: String, door: String) -> bool:
-	"""
-	Check if a door (room) is a backlink of the target.
-	Returns true if 'door' article links to 'target' article.
-	
-	This is the key function for door injection - if a room is a backlink
-	of the target, we prioritize it during door generation.
-	"""
-	if not _backlink_cache.has(target):
-		return false
-	
-	var backlinks: Array[String] = _backlink_cache[target]
-	return backlinks.has(door)
-
-func get_next_hint() -> String:
-	"""
-	Get the next hint for the current target.
-	Returns a room name that links to the target.
-	Returns empty string if no hints available or max hints reached.
-	"""
+func get_next_hint() -> Array:  # Returns [hint_text, hint_type]
+	"""Get the next backlink hint."""
 	if _current_target == "":
-		return ""
+		return ["", ""]
+
+	var backlinks: Array[String] = _backlink_cache.get(_current_target, [])
 	
-	if not _backlink_cache.has(_current_target):
-		return ""
-	
-	var backlinks: Array[String] = _backlink_cache[_current_target]
 	if backlinks.size() == 0:
-		return ""
+		return ["", ""]
 	
-	# Filter out already-given hints
-	var available_hints: Array[String] = []
+	# Find next unused backlink
 	for backlink in backlinks:
 		if not _hints_given.has(backlink):
-			available_hints.append(backlink)
+			if _hints_given.size() >= _max_hints:
+				return ["", ""]
+			_hints_given.append(backlink)
+			return [backlink, "backlink"]
 	
-	if available_hints.size() == 0:
-		return ""
-	
-	# Check max hints
-	if _hints_given.size() >= _max_hints:
-		return ""
-	
-	# Pick next hint (could be random or sequential)
-	var hint: String = available_hints[0]
-	_hints_given.append(hint)
-	
-	return hint
-
-func get_all_hints() -> Array[String]:
-	"""Get all available hints for current target (up to max)."""
-	if _current_target == "":
-		return []
-	
-	if not _backlink_cache.has(_current_target):
-		return []
-	
-	var backlinks: Array[String] = _backlink_cache[_current_target]
-	var hints: Array[String] = []
-	
-	for i in range(min(backlinks.size(), _max_hints)):
-		hints.append(backlinks[i])
-	
-	return hints
+	return ["", ""]
 
 func get_hints_given_count() -> int:
-	"""Return number of hints already given."""
 	return _hints_given.size()
 
 func get_hints_remaining_count() -> int:
-	"""Return number of hints remaining."""
 	if _current_target == "":
 		return 0
-	if not _backlink_cache.has(_current_target):
-		return 0
-	var backlinks: Array[String] = _backlink_cache[_current_target]
+	var backlinks: Array[String] = _backlink_cache.get(_current_target, [])
 	return max(0, backlinks.size() - _hints_given.size())
 
 # --- Network Sync (Multiplayer) ---
 
-func reveal_hint_to_all(hint: String) -> void:
+func reveal_hint_to_all(hint: String, hint_type: String = "backlink") -> void:
 	"""Reveal a hint to all players (called by server)."""
 	if not NetworkManager.is_server():
 		return
-	
+
 	if hint == "":
 		return
-	
-	_reveal_hint.rpc(hint)
-	hint_revealed.emit(hint)
+
+	_reveal_hint.rpc(hint, hint_type)
+	hint_revealed.emit(hint, hint_type)
 
 @rpc("authority", "call_local", "reliable")
-func _reveal_hint(hint: String) -> void:
+func _reveal_hint(hint: String, hint_type: String) -> void:
 	"""RPC handler - all clients receive hint."""
-	Log.info("HintManager", "Hint revealed: '%s'" % hint)
-	# Hint is shown via chat/system message in Main.gd
+	Log.info("HintManager", "Hint revealed: '%s' (%s)" % [hint, hint_type])
+	
+	# Show hint to player via chat HUD
+	var main = get_node_or_null("/root/Main")
+	if main and main.has_node("TabMenu/ChatHUD"):
+		main.get_node("TabMenu/ChatHUD")._show_system_message("💡 Hint: Try visiting '%s'" % hint)
+	else:
+		# Fallback: show as a one-shot message
+		var hud = get_tree().root.find_child("ChatHUD", true, false)
+		if hud and hud.has_method("_show_system_message"):
+			hud._show_system_message("💡 Hint: Try visiting '%s'" % hint)
 
 # --- Utility ---
 
-func get_current_target() -> String:
-	"""Get the current race target."""
-	return _current_target
-
 func is_hint_system_ready() -> bool:
 	"""Check if hint system is ready to provide hints."""
-	return _current_target != "" and has_backlinks(_current_target)
+	return _current_target != "" and has_hints()
 
 # --- Debug ---
 
 func _to_string() -> String:
+	var bl = _backlink_cache.get(_current_target, []).size()
 	return "HintManager(target=%s, backlinks=%d, hints_given=%d)" % [
 		_current_target,
-		_backlink_cache.size(),
+		bl,
 		_hints_given.size()
 	]

@@ -318,6 +318,7 @@ func _fetch_category_search(query: String, context: Variant) -> void:
 func fetch_backlinks(title: String, context: Variant = null) -> void:
 	"""Fetch all articles that link to the given title (backlinks)"""
 	var url := "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=backlinks&bllimit=500&bltitle=" + title.uri_encode() + "&blnamespace=0&origin=*"
+	print("ExhibitFetcher: Fetching backlinks from URL: ", url)
 	var ctx := {
 		"backlinks": true,
 		"title": title
@@ -520,6 +521,29 @@ func _filter_links_ns(links: Array) -> Array:
 			agg.append(link.title)
 	return agg
 
+func _is_valid_article(title: String) -> bool:
+	"""Filter out non-article pages that won't generate as rooms."""
+	# Skip special namespaces
+	if title.begins_with("Special:") or title.begins_with("Portal:") or \
+	   title.begins_with("Category:") or title.begins_with("File:") or \
+	   title.begins_with("Image:") or title.begins_with("Template:") or \
+	   title.begins_with("Help:") or title.begins_with("Talk:") or \
+	   title.begins_with("User:") or title.begins_with("Wikipedia:"):
+		return false
+	# Skip list articles (they often don't generate well)
+	if title.begins_with("List of ") or title.begins_with("Lists of "):
+		return false
+	# Skip disambiguation pages
+	if title.ends_with(" (disambiguation)"):
+		return false
+	# Skip external links (URLs)
+	if title.begins_with("http://") or title.begins_with("https://"):
+		return false
+	# Skip articles with colons (usually special pages)
+	if title.contains(":"):
+		return false
+	return true
+
 func _normalize_article_title(title: String) -> String:
 	var new_title := title.replace("_", " ").uri_decode()
 	var title_fragments := new_title.split("#")
@@ -575,13 +599,24 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 		var query = res.query
 
 		# Handle backlinks response
-		if ctx.get("backlinks", false) and query.has("backlinks"):
-			var backlinks: Array[String] = []
-			for bl in query.backlinks:
-				if bl.has("title"):
-					backlinks.append(bl.title)
-			backlinks_complete.emit.call_deferred(backlinks, caller_ctx)
-			return true
+		if ctx.get("backlinks", false):
+			print("ExhibitFetcher: Processing backlinks response, query has backlinks: ", query.has("backlinks"))
+			if query.has("backlinks"):
+				var backlinks: Array[String] = []
+				for bl in query.backlinks:
+					if bl.has("title"):
+						var title: String = bl.title
+						# Filter out non-article pages (Special, Portal, Category, etc.)
+						# and external links that won't generate as rooms
+						if _is_valid_article(title):
+							backlinks.append(title)
+				print("ExhibitFetcher: Emitting backlinks_complete with %d filtered backlinks" % backlinks.size())
+				backlinks_complete.emit.call_deferred(backlinks, caller_ctx)
+				return true
+			else:
+				print("ExhibitFetcher: WARNING - backlinks request but no 'backlinks' in query response")
+				backlinks_complete.emit.call_deferred([], caller_ctx)
+				return true
 
 		# handle the canonical names
 		if query.has("normalized"):

@@ -381,6 +381,10 @@ func _set_current_room_title(title: String) -> void:
 	WorkQueue.set_current_exhibit(title)
 	SettingsEvents.emit_set_current_room(title)
 	_start_queue()
+	
+	# Update Discord Rich Presence
+	if has_node("/root/DiscordRichPresence"):
+		$"/root/DiscordRichPresence".set_room(title)
 
 	# Update local player's room BEFORE broadcasting (so visibility checks use the new value)
 	if _player and "current_room" in _player:

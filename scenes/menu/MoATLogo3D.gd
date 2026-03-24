@@ -166,25 +166,25 @@ func _draw() -> void:
 	var mx : float = start_x
 	var my : float = base_y + _breath(0) + par_y
 	_draw_letter_M(mx, my, letter_w, logo_h, BRAND_COLS[0], face_c,
-	               idle_skew + _tilt, _entrance_alpha, par_x * 0.6)
+				   idle_skew + _tilt, _entrance_alpha, par_x * 0.6)
 
 	# --- bullet ---
 	var bx : float = mx + letter_w + gap + bullet_r
 	var by : float = my + logo_h * 0.22 + _breath(1)
 	_draw_bullet(bx, by, bullet_r, BRAND_COLS[1], face_c,
-	             idle_skew + _tilt, _entrance_alpha, par_x * 1.0)
+				 idle_skew + _tilt, _entrance_alpha, par_x * 1.0)
 
 	# --- A ---
 	var ax : float = bx + bullet_r + gap
 	var ay : float = base_y + _breath(2) + par_y
 	_draw_letter_A(ax, ay, letter_w, logo_h, BRAND_COLS[2], face_c,
-	               idle_skew + _tilt, _entrance_alpha, par_x * 1.4)
+				   idle_skew + _tilt, _entrance_alpha, par_x * 1.4)
 
 	# --- T ---
 	var tx : float = ax + letter_w + gap * 0.5
 	var ty : float = base_y + _breath(3) + par_y
 	_draw_letter_T(tx, ty, letter_w * 0.95, logo_h, BRAND_COLS[3], face_c,
-	               idle_skew + _tilt, _entrance_alpha, par_x * 1.8)
+				   idle_skew + _tilt, _entrance_alpha, par_x * 1.8)
 
 	# ── Subtitle ─────────────────────────────────────────────────────────────
 	if _subtitle_alpha > 0.01 and _font:
@@ -324,7 +324,7 @@ func _draw_bullet(
 	draw_circle(Vector2(ox, oy), r, Color(face_col, a))
 	# Shine highlight
 	draw_circle(Vector2(ox - r * 0.28, oy - r * 0.28), r * 0.22,
-	            Color(1, 1, 1, a * 0.55))
+				Color(1, 1, 1, a * 0.55))
 
 
 # ── Geometry helpers ───────────────────────────────────────────────────────────
