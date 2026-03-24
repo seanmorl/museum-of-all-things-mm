@@ -3,12 +3,11 @@
 [ext_resource type="Script" uid="uid://dvi1pswxc3j03" path="res://scenes/menu/MainMenu.gd" id="1_cmhx0"]
 [ext_resource type="Theme" uid="uid://dgt5fjkytx07d" path="res://assets/resources/menu_theme.tres" id="1_dwey2"]
 [ext_resource type="Texture2D" uid="uid://dgfyxj62mioye" path="res://assets/logo/moat_logo_large_funky.png" id="3_vuiv8"]
-[ext_resource type="FontFile" uid="uid://bxph8sc2vndn" path="res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf" id="5_serif"]
+[ext_resource type="FontFile" uid="uid://dof0vurnku5bv" path="res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf" id="5_serif"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_46gfj"]
 font = ExtResource("5_serif")
 font_size = 48
-font_color = Color(1, 1, 1, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 40.0

@@ -44,6 +44,8 @@ var _race_status_hud: Control = null
 # Hint system cooldown
 var _last_hint_time: float = 0.0
 const HINT_COOLDOWN_SECONDS: float = 3.0
+var _hint_backlinks: Array[String] = []
+var _hints_revealed: int = 0
 
 # â”€â”€ Tournament nodes (created in _ready) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 var _tournament_setup_menu:    Control = null
@@ -784,10 +786,6 @@ func _input(event: InputEvent) -> void:
 					if now - _last_hint_time >= HINT_COOLDOWN_SECONDS:
 						_reveal_host_hint()
 						_last_hint_time = now
-					else:
-						var remaining := int(HINT_COOLDOWN_SECONDS - (now - _last_hint_time))
-						if has_node("TabMenu/ChatHUD"):
-							$TabMenu/ChatHUD._show_system_message("⏳ Hint cooldown: %d seconds" % remaining)
 					get_viewport().set_input_as_handled()
 
 		# UI scale keyboard shortcuts â€” work in any state
@@ -1171,6 +1169,8 @@ func _launch_vote() -> void:
 func _on_target_determined(target: String) -> void:
 	"""Called when vote ends and target is determined - prefetch backlinks early."""
 	Log.info("Main", "Target determined: '%s', prefetching backlinks..." % target)
+	_hint_backlinks.clear()
+	_hints_revealed = 0
 	_fetch_and_cache_backlinks(target)
 
 func _on_race_started(target_article: String, start_article: String) -> void:
@@ -1754,12 +1754,13 @@ func _sync_race_start_article(start_article: String) -> void:
 		print("Main: Race target set to '%s'" % target_article)
 		
 		# Set target in HintManager immediately so door replacement can work
-		var hint_manager = get_node_or_null("/root/HintManager")
-		if hint_manager:
-			hint_manager.set_current_target(target_article)
+		# Hint system disabled
+		# var hint_manager = get_node_or_null("/root/HintManager")
+		# if hint_manager:
+		# 	hint_manager.set_current_target(target_article)
 		
-		# Fetch and cache backlinks (non-blocking)
-		_fetch_and_cache_backlinks(target_article)
+		# # Fetch and cache backlinks (non-blocking)
+		# _fetch_and_cache_backlinks(target_article)
 		
 		var room_data = Services.room_service.generate_room(start_article)
 
@@ -1909,15 +1910,14 @@ func teleport_all_players_to_start_line(start_article: String) -> void:
 	Log.debug("Main", "<<< All %d players teleported to race start line!" % all_players.size())
 
 func _fetch_and_cache_backlinks(target_article: String) -> void:
-	"""Fetch backlinks at race start and cache for door replacement."""
+	"""Fetch backlinks at race start and cache for text hints."""
 	if target_article == "":
 		return
 	
-	var hint_manager = get_node_or_null("/root/HintManager")
-	if hint_manager and hint_manager.get_backlinks(target_article).size() > 0:
+	if _hint_backlinks.size() > 0:
 		return
 	
-	var url := "https://en.wikipedia.org/w/api.php?action=query&format=json&list=backlinks&bllimit=100&bltitle=" + target_article.uri_encode() + "&blnamespace=0&origin=*"
+	var url: String = "https://en.wikipedia.org/w/api.php?action=query&format=json&list=backlinks&bllimit=100&bltitle=" + target_article.uri_encode() + "&blnamespace=0&origin=*"
 	var http := HTTPRequest.new()
 	add_child(http)
 	
@@ -1928,11 +1928,10 @@ func _fetch_and_cache_backlinks(target_article: String) -> void:
 				var data = json.get_data()
 				if data.has("query") and data.query.has("backlinks"):
 					var backlinks: Array[String] = []
-					var seen: Dictionary = {}  # Deduplication set
+					var seen: Dictionary = {}
 					for bl in data.query.backlinks:
 						if bl.has("title"):
 							var title = bl.title as String
-							# Filter out file/image pages and special pages
 							if title.begins_with("File:") or title.begins_with("Image:"):
 								continue
 							if title.begins_with("Category:"):
@@ -1941,40 +1940,103 @@ func _fetch_and_cache_backlinks(target_article: String) -> void:
 								continue
 							if title.begins_with("Wikipedia:") or title.begins_with("Help:"):
 								continue
-							# Deduplicate
 							if not seen.has(title):
 								seen[title] = true
 								backlinks.append(title)
-					if hint_manager:
-						hint_manager.set_backlinks(target_article, backlinks)
-						print("Main: Cached %d unique backlinks for '%s'" % [backlinks.size(), target_article])
+					_hint_backlinks = backlinks
+					print("Main: Cached %d backlinks for hints" % backlinks.size())
+				else:
+					print("Main: No backlinks found")
 		http.queue_free()
 	
 	http.request_completed.connect(request_completed)
 	http.request(url)
 
-func _reveal_host_hint() -> void:
-	"""Host pressed I key - reveal a backlink hint to all players."""
-	var hint_manager = get_node_or_null("/root/HintManager")
-	if not hint_manager:
-		print("Main: HintManager not found!")
+func _validate_backlinks_and_cache(target_article: String, potential_backlinks: Array[String]) -> void:
+	"""Validate each backlink by fetching its content and checking if target appears."""
+	if potential_backlinks.is_empty():
+		var hint_manager = get_node_or_null("/root/HintManager")
+		if hint_manager:
+			hint_manager.set_backlinks(target_article, [])
 		return
+	
+	# Batch process - validate first 5 backlinks only (fast validation)
+	var to_validate = potential_backlinks.slice(0, min(5, potential_backlinks.size()))
+	
+	# Use a Dictionary to track state across closures
+	var state = {
+		"validated": [] as Array[String],
+		"pending": to_validate.size(),
+		"target": target_article,
+		"original_count": potential_backlinks.size()
+	}
+	
+	for backlink in to_validate:
+		# Wikipedia API: fetch page content (full extract, not just intro)
+		var url: String = "https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&explaintext=true&titles=" + backlink.uri_encode() + "&origin=*"
+		var http := HTTPRequest.new()
+		add_child(http)
+		
+		var on_complete = func(result_code, response_code, _headers, body):
+			if result_code == HTTPRequest.RESULT_SUCCESS and response_code == 200:
+				var json = JSON.new()
+				if json.parse(body.get_string_from_utf8()) == OK:
+					var data = json.get_data()
+					if data.has("query") and data.has("pages"):
+						var pages = data.query.pages
+						for page_id in pages:
+							var page = pages[page_id]
+							if page.has("extract"):
+								var extract = page.extract as String
+								# Check if target appears in the extract (main content)
+								var target_lower = state.target.to_lower()
+								var extract_lower = extract.to_lower()
+								# Also check for common variations (e.g., "the Outback", "Outback region")
+								var found = extract_lower.find(target_lower) != -1
+								if not found:
+									# Try with "the " prefix
+									found = extract_lower.find("the " + target_lower) != -1
+								if found:
+									state.validated.append(backlink)
+									print("Main: VALIDATED backlink '%s' contains '%s'" % [backlink, state.target])
+			
+			state.pending -= 1
+			if state.pending == 0:
+				# All validations complete - cache results
+				var hint_manager = get_node_or_null("/root/HintManager")
+				if hint_manager:
+					hint_manager.set_backlinks(state.target, state.validated)
+					print("Main: Cached %d VALIDATED backlinks for '%s' (filtered from %d)" % [state.validated.size(), state.target, state.original_count])
+				# Clean up any remaining HTTP requests
+				for child in get_children():
+					if child is HTTPRequest:
+						child.queue_free()
+		
+		http.request_completed.connect(on_complete)
+		http.request(url)
 
-	# Backlinks are already fetched at race start, just reveal one
-	var hint_data: Array = hint_manager.get_next_hint()
-	var hint: String = hint_data[0] if hint_data.size() > 0 else ""
-
-	if hint != "":
+func _reveal_host_hint() -> void:
+	"""Host pressed I key - reveal a text hint to all players."""
+	if _hint_backlinks.is_empty():
+		return
+	
+	var available_hints: Array[String] = []
+	for bl in _hint_backlinks:
+		if not _hints_revealed or not bl in _hint_backlinks.slice(0, _hints_revealed):
+			available_hints.append(bl)
+	
+	if available_hints.is_empty():
+		return
+	
+	var hint: String = available_hints.pick_random()
+	_hints_revealed += 1
+	
+	# Emit to RaceHUD via HintManager
+	var hint_manager = get_node_or_null("/root/HintManager")
+	if hint_manager and hint_manager.has_signal("hint_revealed"):
 		hint_manager.reveal_hint_to_all(hint, "backlink")
-		# Show system message to all players
-		if has_node("TabMenu/ChatHUD"):
-			$TabMenu/ChatHUD._show_system_message("💡 Go to: %s" % hint)
-		print("Main: Host revealed hint: '%s'" % hint)
-	else:
-		# No hints available
-		if has_node("TabMenu/ChatHUD"):
-			$TabMenu/ChatHUD._show_system_message("💡 No hints available!")
-		print("Main: No hints available to reveal")
+	
+	print("Main: Host revealed hint %d: '%s'" % [_hints_revealed, hint])
 
 func _fetch_categories_for_article(article: String) -> Array[String]:
 	"""Fetch Wikipedia categories for an article."""

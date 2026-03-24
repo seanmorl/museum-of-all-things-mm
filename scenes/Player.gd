@@ -928,29 +928,40 @@ func _teleport_to_safety() -> void:
 	
 	# Determine where to teleport player
 	var teleport_pos: Vector3
-	if _last_valid_position.y > VOID_Y_THRESHOLD:
+	var message: String
+	
+	# Check if there's an active race - use race start line if so
+	var race_manager = get_node_or_null("/root/RaceManager")
+	var is_race_active = false
+	if race_manager and race_manager.has_method("is_race_active"):
+		is_race_active = race_manager.is_race_active()
+	
+	if is_race_active:
+		# During race, spawn at the race start line (same as teleport_all_players_to_start_line)
+		teleport_pos = Vector3(0, 5.0, 23.0)
+		message = "You fell into the void!\n\nTeleported back to race start line."
+		print("Player: Active race, teleporting to race start line: ", teleport_pos)
+		if "current_room" in self:
+			current_room = "Lobby"
+	elif _last_valid_position.y > VOID_Y_THRESHOLD:
 		# Use last valid position with small Y offset to prevent immediate re-fall
 		teleport_pos = Vector3(_last_valid_position.x, _last_valid_position.y + 2.0, _last_valid_position.z)
+		message = "You fell through the floor!\n\nTeleported back to where you were."
 		print("Player: Returning to last valid position: ", teleport_pos)
 	else:
 		# Fallback to start line if no valid position tracked
 		teleport_pos = Vector3(VOID_SPAWN_XZ.x, VOID_SPAWN_Y, VOID_SPAWN_XZ.y)
+		message = "You fell into the void!\n\nTeleported back to start line."
 		print("Player: No valid position tracked, using start line: ", teleport_pos)
+		if "current_room" in self:
+			current_room = "Lobby"
 	
 	# Teleport to safe position
 	global_position = teleport_pos
 	velocity = Vector3.ZERO
 	rotation = Vector3.ZERO
 	
-	# Reset current room to lobby if using fallback
-	if _last_valid_position.y <= VOID_Y_THRESHOLD:
-		if "current_room" in self:
-			current_room = "Lobby"
-	
 	# Show message to player
 	var main = get_tree().get_first_node_in_group("main")
 	if main and main.has_method("_show_error_message"):
-		if _last_valid_position.y > VOID_Y_THRESHOLD:
-			main._show_error_message("You fell through the floor!\n\nTeleported back to where you were.")
-		else:
-			main._show_error_message("You fell into the void!\n\nTeleported back to start line.")
+		main._show_error_message(message)

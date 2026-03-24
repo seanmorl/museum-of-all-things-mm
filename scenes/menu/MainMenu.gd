@@ -7,11 +7,37 @@ signal start_dedicated_host
 
 const _FONT_PATH := "res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf"
 
+const FACTS := [
+	"Did you know? Wikipedia has over 60 million articles in more than 300 languages.",
+	"The Museum generates rooms from real Wikipedia articles - no two visits are the same!",
+	"Each room door leads to another Wikipedia article, creating an infinite museum.",
+	"Every painting in the museum comes from Wikimedia Commons.",
+	"The multiplayer mode supports up to 16 players exploring together.",
+	"You can customize your player with skins from any Wikimedia image URL.",
+	"Wikipedia contains more than 40 billion words - enough to fill millions of books.",
+	"The race mode lets you and friends vote on a target and race to find it first!",
+	"You can climb on top of other players and ride around the museum together.",
+	"The daily challenge gives you a fresh target article every day.",
+	"🗳️ Take the Dr Plem Hot or Not 2026 survey: linktr.ee/hot_or_not",
+	"Wikimedia Commons has over 100 million free-to-use images and media files.",
+	"The shortest Wikipedia article is only 4 bytes - just a redirect!",
+	"You can change your player color in the settings menu.",
+	"The museum uses a random seed for each race to ensure fair gameplay.",
+	"Press J to open your journal and track which articles you've visited.",
+	"Tournament mode lets hosts run elimination brackets with multiple rounds.",
+	"Secret rooms can be hidden in some exhibits - keep an eye out!",
+	"The museum supports voice chat in multiplayer mode.",
+	"You can place paintings on walls once you've collected them.",
+]
+
 var _serif_font: Font = null
 var _panel_style: StyleBoxFlat = null
 var _button_container: VBoxContainer = null
 var _patch_notes_popup: Control = null
 var _patch_notes_panel: PanelContainer = null
+var _fact_label: Label = null
+var _fact_timer: Timer = null
+var _current_fact_index: int = 0
 # Original positions for repeatable entrance animation
 var _vbox_orig_pos: Vector2 = Vector2.ZERO
 var _logo_orig_y: float = 0.0
@@ -31,6 +57,7 @@ func _ready() -> void:
 	_build_menu()
 	_build_patch_notes_popup()
 	_apply_theme()
+	_setup_fact_label()
 
 	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
 	ThemeManager.reading_font_changed.connect(_on_reading_font_changed)
@@ -462,6 +489,58 @@ func _entrance_animation() -> void:
 				delay += UIStyle.STAGGER_DELAY
 
 	_start_fade_in()
+	_update_fact_display()
+
+
+func _setup_fact_label() -> void:
+	_fact_label = Label.new()
+	_fact_label.name = "FactLabel"
+	_fact_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_fact_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_fact_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_fact_label.custom_minimum_size = Vector2(0, 32)
+	if _serif_font:
+		_fact_label.add_theme_font_override("font", _serif_font)
+	_fact_label.add_theme_font_size_override("font_size", 12)
+	_fact_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	
+	var vbox := get_node_or_null("MarginContainer/CenterContainer/VBoxContainer") as VBoxContainer
+	if vbox:
+		vbox.add_child(_fact_label)
+	
+	_fact_timer = Timer.new()
+	_fact_timer.name = "FactTimer"
+	_fact_timer.wait_time = 10.0
+	_fact_timer.one_shot = false
+	_fact_timer.timeout.connect(_on_fact_timer_timeout)
+	add_child(_fact_timer)
+
+
+func _on_fact_timer_timeout() -> void:
+	if not _fact_label:
+		return
+	var tw := create_tween()
+	tw.tween_property(_fact_label, "modulate:a", 0.0, 0.5)
+	tw.chain().tween_callback(_cycle_fact)
+
+
+func _cycle_fact() -> void:
+	_current_fact_index = (_current_fact_index + 1) % FACTS.size()
+	_fact_label.text = FACTS[_current_fact_index]
+	var tw := create_tween()
+	tw.tween_property(_fact_label, "modulate:a", 1.0, 0.5)
+
+
+func _update_fact_display() -> void:
+	if not _fact_label:
+		return
+	_current_fact_index = randi() % FACTS.size()
+	_fact_label.text = FACTS[_current_fact_index]
+	_fact_label.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(_fact_label, "modulate:a", 1.0, 0.5).set_delay(1.0)
+	if _fact_timer:
+		_fact_timer.start()
 
 
 func _start_fade_in() -> void:
@@ -475,6 +554,8 @@ func _start_fade_in() -> void:
 
 
 func _animate_out(then: Callable) -> void:
+	if _fact_timer:
+		_fact_timer.stop()
 	var vbox := get_node_or_null("MarginContainer/CenterContainer/VBoxContainer") as Control
 	if vbox:
 		var tw := create_tween().set_parallel(true)
