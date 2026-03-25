@@ -9,6 +9,7 @@ var _stream: AudioStreamOggVorbis = null
 var _is_playing: bool = false
 var _player: AudioStreamPlayer3D = null
 var _loading: bool = false
+var _visual_indicator: Label = null
 
 var is_playing: bool = false:
 	get:
@@ -18,8 +19,10 @@ var is_playing: bool = false:
 			_is_playing = value
 			if _is_playing:
 				play_requested.emit()
+				_update_visual_indicator(true)
 			else:
 				stop_requested.emit()
+				_update_visual_indicator(false)
 
 signal play_requested
 signal stop_requested
@@ -53,6 +56,31 @@ func _fetch_audio() -> void:
 	add_child(http)
 	http.request_completed.connect(_on_audio_downloaded.bind(http))
 	http.request(audio_url)
+	_create_visual_indicator()
+
+
+func _create_visual_indicator() -> void:
+	_visual_indicator = Label.new()
+	_visual_indicator.text = "🔊"
+	_visual_indicator.add_theme_font_size_override("font_size", 24)
+	_visual_indicator.position = Vector2(0, 32)
+	_visual_indicator.modulate.a = 0.0
+	add_child(_visual_indicator)
+
+
+func _update_visual_indicator(playing: bool) -> void:
+	if not _visual_indicator:
+		return
+	var settings = SettingsManager.get_settings("accessibility")
+	var show_indicator = settings.get("audio_visual_indicator", false) if settings else false
+	
+	if show_indicator and playing:
+		_visual_indicator.modulate.a = 1.0
+		var tw = create_tween()
+		tw.tween_property(_visual_indicator, "modulate:a", 0.5, 0.5)
+		tw.set_loops()
+	else:
+		_visual_indicator.modulate.a = 0.0
 
 func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, http: HTTPRequest) -> void:
 	http.queue_free()

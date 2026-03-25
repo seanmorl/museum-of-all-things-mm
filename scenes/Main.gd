@@ -363,9 +363,9 @@ func _initialize_room_service() -> void:
 	
 	_recreate_player()
 	
-	# Create minimap controller (replaces old MinimapHUD + ConnectionHUD)
-	_minimap_controller = load("res://scenes/ui/MinimapController.gd").new()
-	_minimap_controller.name = "MinimapController"
+	# Create simple minimap
+	_minimap_controller = load("res://scenes/ui/SimpleMinimap.gd").new()
+	_minimap_controller.name = "SimpleMinimap"
 	add_child(_minimap_controller)
 	_minimap_controller.init(_player)
 

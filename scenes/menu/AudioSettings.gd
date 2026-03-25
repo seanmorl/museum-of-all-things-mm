@@ -10,6 +10,8 @@ extends "res://scenes/menu/BaseSettingsPanel.gd"
 @onready var music_value: Label = %MusicValue
 @onready var tts_button: CheckBox = %TTSButton
 @onready var tts_voice: OptionButton = %TTSVoice
+@onready var tts_speed: HSlider = %TTSSpeed
+@onready var tts_speed_value: Label = %TTSSpeedValue
 
 var global_bus_idx: int
 var sound_bus_idx: int
@@ -62,6 +64,13 @@ func _apply_settings(settings: Dictionary) -> void:
 		tts_button.button_pressed = settings.tts_enabled
 	else:
 		tts_button.button_pressed = true
+	
+	if settings.has("tts_speed"):
+		tts_speed.value = settings.tts_speed
+		tts_speed_value.text = "%.0f%%" % (settings.tts_speed * 100.0)
+	else:
+		tts_speed.value = 1.0
+		tts_speed_value.text = "100%"
 
 
 func _create_settings_obj() -> Dictionary:
@@ -71,6 +80,7 @@ func _create_settings_obj() -> Dictionary:
 		"ambience": ambience_volume.value,
 		"music": music_volume.value,
 		"tts_enabled": tts_button.button_pressed,
+		"tts_speed": tts_speed.value,
 	}
 
 
@@ -108,6 +118,14 @@ func _on_tts_voice_item_selected(index: int) -> void:
 		if voice_id and not voice_id.is_empty():
 			TTSManager.set_voice(voice_id)
 			print("[AudioSettings] Voice changed to: ", voice_id)
+
+
+func _on_tts_speed_changed(value: float) -> void:
+	tts_speed_value.text = "%.0f%%" % (value * 100.0)
+	var settings = SettingsManager.get_settings("audio")
+	if settings is Dictionary:
+		settings["tts_speed"] = value
+		SettingsManager.save_settings("audio", settings)
 
 
 func _format_system_voice(voice_data: Dictionary) -> String:

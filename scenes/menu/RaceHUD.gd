@@ -81,14 +81,22 @@ func _apply_initial_accessibility_settings() -> void:
 	var acc: Dictionary = SettingsManager.get_settings("accessibility") if SettingsManager.get_settings("accessibility") else {}
 	if acc.get("large_hud_text", false):
 		_apply_large_hud_text(true)
+	var opacity = acc.get("hud_opacity", 1.0)
+	_apply_hud_opacity(opacity)
 
 func _on_accessibility_changed(key: String, value: Variant) -> void:
 	if key == "large_hud_text":
 		_apply_large_hud_text(value as bool)
+	elif key == "hud_opacity":
+		_apply_hud_opacity(value as float)
 
 func _apply_large_hud_text(enabled: bool) -> void:
 	if _timer_label:  _timer_label.add_theme_font_size_override("font_size",  30 if enabled else 20)
 	if _target_label: _target_label.add_theme_font_size_override("font_size", 16 if enabled else 11)
+
+
+func _apply_hud_opacity(opacity: float) -> void:
+	modulate.a = opacity
 
 
 func set_hud_position(idx: int) -> void:

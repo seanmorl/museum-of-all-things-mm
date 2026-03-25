@@ -365,6 +365,20 @@ func _build_patch_notes_popup() -> void:
 	vbox.add_child(HSeparator.new())
 
 	var content := [
+		{"text": "♿ New Accessibility Options", "size": 16, "color": Color(0.4, 0.8, 1.0)},
+		{"text": "• Audio visual indicators for hearing impaired", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• HUD opacity slider", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Photosensitivity warning toggle", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Hold-to-click for motor accessibility", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• TTS speed slider in audio settings", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "🗺️ New Hint System", "size": 16, "color": Color(0.4, 0.8, 1.0)},
+		{"text": "• Press I as host to reveal Wikipedia-based hints", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Hints appear in RaceHUD with 3-second cooldown", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "📜 Rotating Facts on Main Menu", "size": 16, "color": Color(0.4, 0.8, 1.0)},
+		{"text": "• 21 facts cycling every 10 seconds", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "• Includes survey link: linktr.ee/hot_or_not", "size": 13, "color": ThemeManager.subtext_color},
+		{"text": "🎮 Discord Rich Presence", "size": 16, "color": Color(0.4, 0.8, 1.0)},
+		{"text": "• Now shows current exhibit in singleplayer", "size": 13, "color": ThemeManager.subtext_color},
 		{"text": "🏗️ Major Refactoring Complete!", "size": 16, "color": Color(0.4, 0.8, 1.0)},
 		{"text": "• New service-based architecture", "size": 13, "color": ThemeManager.subtext_color},
 		{"text": "• EventBus for clean communication", "size": 13, "color": ThemeManager.subtext_color},

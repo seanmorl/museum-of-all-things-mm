@@ -646,6 +646,64 @@ func _build_accessibility_settings() -> Control:
 	container.add_child(_hint.call(
 		"Hint banners stay on screen until the race ends instead of fading after a few seconds."))
 
+	# ── Audio & Visual ─────────────────────────────────────────────────────────
+	container.add_child(_h.call("Audio & Visual"))
+
+	var avi_on: bool = saved.get("audio_visual_indicator", false)
+	container.add_child(_toggle.call("Show playing audio indicator", avi_on,
+		func(on: bool):
+			_save_accessibility("audio_visual_indicator", on)
+			_emit_accessibility_event("audio_visual_indicator", on)
+	))
+	container.add_child(_hint.call(
+		"Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."))
+
+	var psw_on: bool = saved.get("photosensitivity_warning", true)
+	container.add_child(_toggle.call("Photosensitivity warning", psw_on,
+		func(on: bool):
+			_save_accessibility("photosensitivity_warning", on)
+			_emit_accessibility_event("photosensitivity_warning", on)
+	))
+	container.add_child(_hint.call(
+		"Shows a warning before exhibits with flashing or strobing content."))
+
+	# HUD Opacity
+	var ho: float = saved.get("hud_opacity", 1.0)
+	var ho_val := Label.new()
+	ho_val.custom_minimum_size = Vector2(44, 0)
+	ho_val.text = "%.0f%%" % (ho * 100.0)
+	var ho_slider := HSlider.new()
+	ho_slider.min_value = 0.3; ho_slider.max_value = 1.0; ho_slider.step = 0.1
+	ho_slider.value = ho; ho_slider.custom_minimum_size = Vector2(180, 0)
+	var ho_reset := Button.new()
+	ho_reset.text = "Reset"; ho_reset.custom_minimum_size = Vector2(54, 0)
+	ho_reset.pressed.connect(func(): ho_slider.value = 1.0)
+	ho_slider.value_changed.connect(func(v: float):
+		ho_val.text = "%.0f%%" % (v * 100.0)
+		_save_accessibility("hud_opacity", v)
+		_emit_accessibility_event("hud_opacity", v)
+	)
+	var ho_row := HBoxContainer.new()
+	ho_row.add_theme_constant_override("separation", 8)
+	var ho_lbl := Label.new(); ho_lbl.text = "HUD opacity"
+	ho_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ho_row.add_child(ho_lbl); ho_row.add_child(ho_slider)
+	ho_row.add_child(ho_val); ho_row.add_child(ho_reset)
+	container.add_child(ho_row)
+	container.add_child(_hint.call("Makes the race HUD more transparent to see more of the game world."))
+
+	# ── Motor ────────────────────────────────────────────────────────────────────
+	container.add_child(_h.call("Motor"))
+
+	var htc_on: bool = saved.get("hold_to_click", false)
+	container.add_child(_toggle.call("Hold to activate buttons", htc_on,
+		func(on: bool):
+			_save_accessibility("hold_to_click", on)
+			_emit_accessibility_event("hold_to_click", on)
+	))
+	container.add_child(_hint.call(
+		"Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."))
+
 	# Secret Disco Button
 	var disco_row := HBoxContainer.new()
 	disco_row.alignment = BoxContainer.ALIGNMENT_END
