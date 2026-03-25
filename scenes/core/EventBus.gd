@@ -117,13 +117,11 @@ func unsubscribe(event_class: GDScript, callback: Callable) -> void:
 			_subscribers[event_class].remove_at(idx)
 
 func publish(event: GameEvent) -> void:
-	"""Publish an event to all subscribers."""
 	event_published.emit(event)
 	
-	var event_class = event.get_class()
+	var event_class = event.get_script()
 	if _subscribers.has(event_class):
 		for callback: Callable in _subscribers[event_class]:
-			# Call in next frame to avoid reentrancy issues
 			call_deferred("_invoke_callback", callback, event)
 
 func _invoke_callback(callback: Callable, event: GameEvent) -> void:
