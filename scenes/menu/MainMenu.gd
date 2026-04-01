@@ -385,7 +385,11 @@ func _on_trending_failed(error: String) -> void:
 func _on_trending_timer_timeout() -> void:
 	if _trending_articles.size() > 1:
 		_trending_index = (_trending_index + 1) % _trending_articles.size()
-		_update_trending_display()
+		# Fade out, update text, fade in
+		var tw := create_tween()
+		tw.tween_property(_trending_label, "modulate:a", 0.0, 0.5)
+		tw.chain().tween_callback(_update_trending_display)
+		tw.chain().tween_property(_trending_label, "modulate:a", 1.0, 0.5)
 
 
 func _update_trending_display() -> void:
