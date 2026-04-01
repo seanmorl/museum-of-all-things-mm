@@ -3,7 +3,7 @@ class_name DailyChallengeCard
 ## Compact lobby panel card for the Daily Challenge.
 
 const ACCENT_COLOR  := Color(0.35, 0.75, 1.00)
-const CARD_WIDTH    := 230.0
+const CARD_WIDTH    := 220.0
 
 var _manager: Node     = null
 var _hud: Node         = null
@@ -12,34 +12,30 @@ var _player: Node      = null
 var _menu_layer: Node  = null
 var _start_game_fn: Callable
 var _font: Font        = null
+var _serif_font: Font  = null
 var _inited: bool      = false
 
 var _card: PanelContainer      = null
 var _card_style: StyleBoxFlat  = null
 var _header_lbl: Label         = null
 var _date_lbl: Label           = null
-var _streak_lbl: Label         = null
-var _target_caption: Label     = null
 var _target_lbl: Label         = null
-var _meta_lbl: Label           = null
-var _done_lbl: Label           = null
+var _time_val_lbl: Label       = null
+var _rank_val_lbl: Label       = null
 var _play_btn: Button          = null
-var _lb_caption: Label         = null
-var _lb_list: VBoxContainer    = null
-var _sep1: HSeparator          = null
-var _sep2: HSeparator          = null
-var _info_btn: Button          = null
 var _help_popup: Control       = null
 
 var _is_card_visible: bool = false
 var _last_room: String     = ""
 var _is_multiplayer: bool  = false
+var _is_on_main_menu: bool = true  # Track if we're on main menu
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
+	_serif_font = load("res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf")
 	_build_card()
 	
 	if ThemeManager:
@@ -51,18 +47,14 @@ func _ready() -> void:
 	_card.visible = false
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if _help_popup and _help_popup.visible and not _help_closing and event.is_action_pressed("ui_cancel"):
-		_hide_help()
-		get_viewport().set_input_as_handled()
-
-
 func init_for_main_menu(manager: Node, hud: Node, leaderboard: Node = null, menu_layer: Node = null) -> void:
 	_manager      = manager
 	_hud          = hud
 	_leaderboard  = leaderboard
 	_menu_layer   = menu_layer
 	_is_multiplayer = false
+	_is_on_main_menu = true
+	_player = null  # No player on main menu
 	if not _inited:
 		_inited = true
 		if _manager.has_signal("challenge_ready"):
@@ -75,6 +67,12 @@ func init_for_main_menu(manager: Node, hud: Node, leaderboard: Node = null, menu
 		menu_layer.visibility_changed.connect(_on_menu_layer_visibility_changed.bind(menu_layer))
 	_refresh_content()
 	_last_room = "FORCE_RECHECK"
+	# Fetch leaderboard scores for main menu display
+	if _leaderboard and _leaderboard.has_method("fetch_scores") and _manager:
+		_leaderboard.fetch_scores(_manager.get_today_key())
+	# Show the card immediately since we're on main menu with no player
+	if not _is_card_visible:
+		_show_card()
 
 
 func set_multiplayer_mode(enabled: bool) -> void:
@@ -85,6 +83,18 @@ func set_multiplayer_mode(enabled: bool) -> void:
 		_last_room = "FORCE_RECHECK"
 
 
+func set_main_menu_mode() -> void:
+	_is_on_main_menu = true
+	_player = null
+	_last_room = "FORCE_RECHECK"
+	# Fetch fresh leaderboard data
+	if _leaderboard and _leaderboard.has_method("fetch_scores") and _manager:
+		_leaderboard.fetch_scores(_manager.get_today_key())
+	# Show the card
+	if not _is_card_visible:
+		_show_card()
+
+
 func init(manager: Node, hud: Node, player: Node, leaderboard: Node = null, start_game_fn: Callable = Callable(), menu_layer: Node = null) -> void:
 	_manager       = manager
 	_hud           = hud
@@ -93,6 +103,7 @@ func init(manager: Node, hud: Node, player: Node, leaderboard: Node = null, star
 	_menu_layer    = menu_layer
 	_start_game_fn = start_game_fn
 	_is_multiplayer = false
+	_is_on_main_menu = false  # No longer on main menu
 
 	if menu_layer and not menu_layer.visibility_changed.is_connected(_on_menu_layer_visibility_changed):
 		menu_layer.visibility_changed.connect(_on_menu_layer_visibility_changed.bind(menu_layer))
@@ -150,402 +161,267 @@ func _build_card() -> void:
 	_card = PanelContainer.new()
 	_card.name = "DailyChallengeCard"
 	_card.custom_minimum_size = Vector2(CARD_WIDTH, 0)
-	_card.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_card.offset_left   = 16.0
-	_card.offset_bottom = -16.0
-	_card.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_card.mouse_filter  = Control.MOUSE_FILTER_PASS
 	add_child(_card)
 
 	_card_style = StyleBoxFlat.new()
+	_card_style.bg_color = Color(0.08, 0.08, 0.1, 0.8)
+	_card_style.border_width_left = 1
+	_card_style.border_width_top = 1
+	_card_style.border_width_right = 1
+	_card_style.border_width_bottom = 1
+	_card_style.border_color = Color(1, 1, 1, 0.1)
+	_card_style.corner_radius_top_left = 14
+	_card_style.corner_radius_top_right = 14
+	_card_style.corner_radius_bottom_right = 14
+	_card_style.corner_radius_bottom_left = 14
 	_card.add_theme_stylebox_override("panel", _card_style)
 
+	var outer_vbox := VBoxContainer.new()
+	outer_vbox.add_theme_constant_override("separation", 0)
+	_card.add_child(outer_vbox)
+
+	# Rainbow Bar
+	var gradient := Gradient.new()
+	gradient.add_point(0.0, Color(0.12, 0.32, 0.8))
+	gradient.add_point(0.2, Color(0.62, 0.23, 0.07))
+	gradient.add_point(0.4, Color(0.78, 0.48, 0.08))
+	gradient.add_point(0.6, Color(0.12, 0.48, 0.23))
+	gradient.add_point(0.8, Color(0.64, 0.08, 0.38))
+	gradient.add_point(1.0, Color(0.42, 0.12, 0.63))
+	var grad_tex := GradientTexture2D.new()
+	grad_tex.gradient = gradient
+	grad_tex.fill_from = Vector2(0, 0)
+	grad_tex.fill_to = Vector2(1, 0)
+	
+	var rainbow_tex := TextureRect.new()
+	rainbow_tex.texture = grad_tex
+	rainbow_tex.custom_minimum_size.y = 4
+	rainbow_tex.stretch_mode = TextureRect.STRETCH_SCALE
+	outer_vbox.add_child(rainbow_tex)
+
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   16)
-	margin.add_theme_constant_override("margin_right",  16)
-	margin.add_theme_constant_override("margin_top",    14)
-	margin.add_theme_constant_override("margin_bottom", 14)
-	_card.add_child(margin)
+	margin.add_theme_constant_override("margin_left",   12)
+	margin.add_theme_constant_override("margin_right",  12)
+	margin.add_theme_constant_override("margin_top",    10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	outer_vbox.add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 6)
 	margin.add_child(vbox)
-
-	var header_row := HBoxContainer.new()
-	header_row.add_theme_constant_override("separation", 6)
-	vbox.add_child(header_row)
-
-	var icon_lbl := Label.new()
-	icon_lbl.text = "📅"
-	icon_lbl.add_theme_font_size_override("font_size", 14)
-	header_row.add_child(icon_lbl)
 
 	_header_lbl = Label.new()
 	_header_lbl.text = "DAILY CHALLENGE"
-	_header_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_row.add_child(_header_lbl)
-
-	_info_btn = Button.new()
-	_info_btn.text = "ⓘ"
-	_info_btn.custom_minimum_size = Vector2(28, 28)
-	_info_btn.pressed.connect(_show_help)
-	header_row.add_child(_info_btn)
-
-	_build_help_popup()
-
-	var meta_row := HBoxContainer.new()
-	meta_row.add_theme_constant_override("separation", 8)
-	vbox.add_child(meta_row)
+	_header_lbl.add_theme_font_size_override("font_size", 9)
+	_header_lbl.add_theme_color_override("font_color", Color(0.4, 0.6, 1.0))
+	vbox.add_child(_header_lbl)
 
 	_date_lbl = Label.new()
-	_date_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	meta_row.add_child(_date_lbl)
-
-	_streak_lbl = Label.new()
-	meta_row.add_child(_streak_lbl)
-
-	_sep1 = HSeparator.new()
-	vbox.add_child(_sep1)
-
-	_target_caption = Label.new()
-	_target_caption.text = "TODAY'S TARGET"
-	vbox.add_child(_target_caption)
+	_date_lbl.text = ""
+	_date_lbl.add_theme_font_size_override("font_size", 9)
+	_date_lbl.modulate.a = 0.4
+	vbox.add_child(_date_lbl)
 
 	_target_lbl = Label.new()
-	_target_lbl.text = "Loading..."
-	_target_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_target_lbl.custom_minimum_size = Vector2(CARD_WIDTH - 32.0, 0)
+	_target_lbl.text = "Fetching..."
+	_target_lbl.add_theme_font_override("font", _serif_font)
+	_target_lbl.add_theme_font_size_override("font_size", 14)
 	vbox.add_child(_target_lbl)
 
-	_meta_lbl = Label.new()
-	_meta_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vbox.add_child(_meta_lbl)
+	var stats_grid := GridContainer.new()
+	stats_grid.columns = 2
+	stats_grid.add_theme_constant_override("h_separation", 8)
+	stats_grid.add_theme_constant_override("v_separation", 8)
+	vbox.add_child(stats_grid)
 
-	_done_lbl = Label.new()
-	_done_lbl.text = "Completed today!"
-	_done_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_done_lbl.visible = false
-	vbox.add_child(_done_lbl)
+	_time_val_lbl = _build_stat_box(stats_grid, "Best Time", "---")
+	_rank_val_lbl = _build_stat_box(stats_grid, "Rank", "---")
 
 	_play_btn = Button.new()
-	_play_btn.text = "ENTER THE MUSEUM  →"
+	_play_btn.text = "Enter →"
+	_play_btn.custom_minimum_size.y = 32
 	_play_btn.pressed.connect(_on_play_pressed)
 	vbox.add_child(_play_btn)
 
-	_sep2 = HSeparator.new()
-	vbox.add_child(_sep2)
 
-	_lb_caption = Label.new()
-	_lb_caption.text = "TOP SCORES"
-	vbox.add_child(_lb_caption)
-
-	_lb_list = VBoxContainer.new()
-	_lb_list.add_theme_constant_override("separation", 4)
-	vbox.add_child(_lb_list)
-
-
-var _help_panel: PanelContainer = null
-var _help_closing: bool = false
-var _help_title_lbl: Label = null
-var _help_rules_lbls: Array[Label] = []
-
-func _build_help_popup() -> void:
-	_help_popup = Control.new()
-	_help_popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_help_popup.mouse_filter = Control.MOUSE_FILTER_STOP
-	_help_popup.visible = false
-	add_child(_help_popup)
-
-	var dim := ColorRect.new()
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0, 0, 0, 0.60)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_help_popup.add_child(dim)
-
-	_help_panel = PanelContainer.new()
-	_help_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_help_panel.size = Vector2(300, 260)
-	_help_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_help_panel.grow_vertical   = Control.GROW_DIRECTION_BOTH
-	_help_popup.add_child(_help_panel)
-
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.1, 0.1, 0.12, 0.95)
-	panel_style.set_corner_radius_all(12)
-	_help_panel.add_theme_stylebox_override("panel", panel_style)
-
+func _build_stat_box(parent: Control, label: String, val: String) -> Label:
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(1, 1, 1, 0.03)
+	style.set_corner_radius_all(6)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(1, 1, 1, 0.05)
+	panel.add_theme_stylebox_override("panel", style)
+	parent.add_child(panel)
+	
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   20)
-	margin.add_theme_constant_override("margin_right",  20)
-	margin.add_theme_constant_override("margin_top",    16)
-	margin.add_theme_constant_override("margin_bottom", 16)
-	_help_panel.add_child(margin)
-
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	panel.add_child(margin)
+	
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
-
-	_help_title_lbl = Label.new()
-	_help_title_lbl.text = "DAILY CHALLENGE"
-	_help_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(_help_title_lbl)
-
-	vbox.add_child(HSeparator.new())
-
-	var rules := [
-		"• Find the target article",
-		"• Use only Wikipedia links",
-		"• ⌨️ Terminal disabled",
-		"• One attempt per day",
-		"• Beat your best time!"
-	]
-
-	for rule in rules:
-		var lbl := Label.new()
-		lbl.text = rule
-		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-		_help_rules_lbls.append(lbl)
-		vbox.add_child(lbl)
-
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(spacer)
-
-	var close_btn := Button.new()
-	close_btn.text = "Got it!"
-	close_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	close_btn.custom_minimum_size = Vector2(0, 36)
-	close_btn.pressed.connect(_hide_help)
-	vbox.add_child(close_btn)
-
-
-func _animate_help_in() -> void:
-	_help_panel.modulate.a = 0.0
-	_help_panel.scale = Vector2(0.9, 0.9)
-	_help_panel.pivot_offset = _help_panel.size / 2.0
-	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_help_panel, "modulate:a", 1.0, 0.3)
-	tw.tween_property(_help_panel, "scale", Vector2.ONE, 0.3)
-
-
-func _animate_help_out(then: Callable) -> void:
-	if _help_closing: return
-	_help_closing = true
-	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_property(_help_panel, "modulate:a", 0.0, 0.2)
-	tw.tween_property(_help_panel, "scale", Vector2(0.9, 0.9), 0.2)
-	tw.chain().tween_callback(func():
-		_help_closing = false
-		then.call()
-	)
-
-
-func _show_help() -> void:
-	_help_popup.visible = true
-	_animate_help_in()
-
-
-func _hide_help() -> void:
-	_animate_help_out(func(): _help_popup.visible = false)
-
-
-func _apply_theme() -> void:
-	if not _card or not ThemeManager: return
 	
-	_font = ThemeManager.get_reading_font()
+	var val_lbl := Label.new()
+	val_lbl.text = val
+	val_lbl.add_theme_font_size_override("font_size", 14)
+	val_lbl.add_theme_font_override("font", _serif_font)
+	vbox.add_child(val_lbl)
 	
-	# Update Card Background
-	if _card_style:
-		_card_style.bg_color = ThemeManager.bg_color
-		_card_style.border_width_left = 4
-		_card_style.border_width_top = 1
-		_card_style.border_width_right = 1
-		_card_style.border_width_bottom = 1
-		_card_style.border_color = ACCENT_COLOR
-		_card_style.set_corner_radius_all(10)
-		_card_style.shadow_color = Color(0, 0, 0, 0.3 if ThemeManager.is_dark_mode else 0.1)
-		_card_style.shadow_size = 8
-		_card_style.shadow_offset = Vector2(0, 4)
-
-	var accent := ACCENT_COLOR
-	var text := ThemeManager.text_color
-	var subtext := ThemeManager.subtext_color
+	var lbl := Label.new()
+	lbl.text = label.to_upper()
+	lbl.add_theme_font_size_override("font_size", 8)
+	lbl.modulate.a = 0.4
+	vbox.add_child(lbl)
 	
-	_style_lbl(_header_lbl,     accent,  12)
-	_style_lbl(_date_lbl,       subtext, 11)
-	_streak_lbl.text = _manager.get_streak_string() if _manager and _manager.has_method("get_streak_string") else ""
-	_style_lbl(_streak_lbl,     subtext, 11)
-	_style_lbl(_target_caption, accent.lerp(text, 0.3), 10)
-	_style_lbl(_target_lbl,     text,    18)
-	_style_lbl(_meta_lbl,       subtext, 12)
-	_style_lbl(_done_lbl,       Color(0.4, 0.9, 0.5), 14)
-	_style_lbl(_lb_caption,     accent.lerp(text, 0.3), 10)
+	return val_lbl
 
-	_style_btn(_info_btn, false)
-	_style_play_btn()
-	_restyle_leaderboard_rows()
 
-	# Help popup
-	if _help_panel:
-		var hstyle = _help_panel.get_theme_stylebox("panel") as StyleBoxFlat
-		if hstyle:
-			hstyle.bg_color = ThemeManager.bg_color
-			hstyle.border_color = accent
-			hstyle.border_width_top = 2
+func _refresh_content() -> void:
+	if not _manager or not _inited: return
 	
-	_style_lbl(_help_title_lbl, text, 18)
-	for lbl in _help_rules_lbls:
-		_style_lbl(lbl, subtext, 14)
-
-func _style_lbl(lbl: Label, color: Color, size: int) -> void:
-	if not lbl: return
-	lbl.add_theme_color_override("font_color", color)
-	lbl.add_theme_font_size_override("font_size", size)
-	if _font: lbl.add_theme_font_override("font", _font)
-
-
-func _style_play_btn() -> void:
-	if not _play_btn: return
-	if _font: _play_btn.add_theme_font_override("font", _font)
-	_play_btn.add_theme_font_size_override("font_size", 13)
+	var target: String = _manager.get_target_article() if _manager.has_method("get_target_article") else "???"
+	_target_lbl.text = target
 	
-	var sn := StyleBoxFlat.new()
-	sn.bg_color = Color(ACCENT_COLOR, 0.1)
-	sn.border_width_bottom = 2
-	sn.border_color = ACCENT_COLOR
-	sn.content_margin_top = 8
-	sn.content_margin_bottom = 8
-	_play_btn.add_theme_stylebox_override("normal", sn)
+	# Date formatting
+	var d = Time.get_datetime_dict_from_system()
+	var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+	var date_str = "%s %d, %d" % [months[d.month-1], d.day, d.year]
+	
+	var streak = _manager.get_streak() if _manager.has_method("get_streak") else 0
+	if streak > 0:
+		_date_lbl.text = "%s • 🔥 %d day streak" % [date_str, streak]
+	else:
+		_date_lbl.text = date_str
 
-	var sh := sn.duplicate() as StyleBoxFlat
-	sh.bg_color = Color(ACCENT_COLOR, 0.2)
-	_play_btn.add_theme_stylebox_override("hover", sh)
-
-
-func _style_btn(btn: Button, _primary: bool) -> void:
-	if not btn: return
-	btn.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	var s := StyleBoxEmpty.new()
-	btn.add_theme_stylebox_override("normal", s)
-	btn.add_theme_stylebox_override("hover", s)
+	if _leaderboard:
+		var scores = _leaderboard.get_scores() if _leaderboard.has_method("get_scores") else []
+		if not scores.is_empty():
+			# Find my rank
+			var my_name = NetworkManager.local_player_name
+			var rank = 0
+			for i in range(scores.size()):
+				if scores[i].name == my_name:
+					rank = i + 1
+					_time_val_lbl.text = scores[i].time_str
+					break
+			_rank_val_lbl.text = "#" + str(rank) if rank > 0 else "---"
 
 
 func _show_card() -> void:
 	if _is_card_visible: return
 	_is_card_visible = true
 	_refresh_content()
-	if _leaderboard and _manager:
-		_leaderboard.fetch_scores(_manager.get_today_key() if _manager.has_method("get_today_key") else "")
+	
 	_card.visible = true
+	
+	# Apply positioning based on whether it's in the main menu placeholder
+	var is_in_placeholder = get_parent() and get_parent().name == "DCPlaceholder"
+	
+	if is_in_placeholder:
+		# Keep natural card size, centered in placeholder
+		_card.set_anchors_preset(Control.PRESET_CENTER)
+		_card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	else:
+		_card.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		_card.offset_left   = 16.0
+		_card.offset_bottom = -16.0
+		_card.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	
 	_card.modulate.a = 0.0
-	_card.position.x = -20
+	if not is_in_placeholder:
+		_card.position.x = -20
 	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_card, "modulate:a", 1.0, 0.4)
-	tw.tween_property(_card, "position:x", 0.0, 0.4)
+	if not is_in_placeholder:
+		tw.tween_property(_card, "position:x", 16.0, 0.4)
 
 
 func _hide_card() -> void:
 	if not _is_card_visible: return
 	_is_card_visible = false
+	
+	var is_in_placeholder = get_parent() and get_parent().name == "DCPlaceholder"
+	
 	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_property(_card, "modulate:a", 0.0, 0.2)
-	tw.tween_property(_card, "position:x", -20, 0.2)
+	if not is_in_placeholder:
+		tw.tween_property(_card, "position:x", -20, 0.2)
 	tw.chain().tween_callback(func(): _card.visible = false)
 
 
-func _refresh_content() -> void:
-	if not _manager: return
-	_date_lbl.text = _manager.get_today_key() if _manager.has_method("get_today_key") else ""
-	var target: String = _manager.get_target_article() if _manager.has_method("get_target_article") else ""
-	_target_lbl.text = target if target != "" else "Loading..."
-	var streak: int  = _manager.get_streak() if _manager.has_method("get_streak") else 0
-	var best: float  = _manager.get_best_time() if _manager.has_method("get_best_time") else 0.0
-	_streak_lbl.text = "🔥 %d" % streak if streak > 0 else ""
-	_meta_lbl.text   = "Personal Best: %d:%02d" % [int(best) / 60, int(best) % 60] if best > 0.0 else ""
-	var done: bool = _manager.already_completed_today() if _manager.has_method("already_completed_today") else false
-	_done_lbl.visible  = done
-	_play_btn.visible  = not done
-	_play_btn.disabled = target == ""
-
-
-func _on_challenge_ready(target: String, _start: String) -> void:
-	_target_lbl.text   = target
-	_play_btn.disabled = false
-
-
-func _on_challenge_completed(_time_sec: float, _is_best: bool) -> void:
-	_refresh_content()
-
-
-func _on_scores_updated(entries: Array) -> void:
-	_rebuild_leaderboard(entries)
-
-
-func _rebuild_leaderboard(entries: Array) -> void:
-	if not _lb_list: return
-	for child in _lb_list.get_children(): child.queue_free()
+func _apply_theme() -> void:
+	if not _card: return
+	var dark := ThemeManager.is_dark_mode
 	
-	if entries.is_empty():
-		var empty = Label.new()
-		empty.text = "No scores yet..."
-		_style_lbl(empty, ThemeManager.subtext_color, 11)
-		_lb_list.add_child(empty)
-		return
+	_card_style.bg_color = ThemeManager.bg_color
+	_card_style.bg_color.a = 0.8 if dark else 0.95
+	_card_style.border_color = ThemeManager.border_color
+	
+	if _header_lbl:
+		_header_lbl.add_theme_color_override("font_color", (ACCENT_COLOR if dark else Color(0.2, 0.4, 0.8)))
+	
+	if _date_lbl:
+		_date_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	
+	if _target_lbl:
+		_target_lbl.add_theme_color_override("font_color", ThemeManager.text_color)
+		_target_lbl.add_theme_font_override("font", _serif_font)
 
-	for i in min(entries.size(), 3):
-		var row := HBoxContainer.new()
-		_lb_list.add_child(row)
-		var rank := Label.new()
-		rank.text = "%d." % (i+1)
-		_style_lbl(rank, ThemeManager.subtext_color, 11)
-		row.add_child(rank)
-		var name := Label.new()
-		name.text = str(entries[i].get("name", "?"))
-		name.size_flags_horizontal = SIZE_EXPAND_FILL
-		_style_lbl(name, ThemeManager.text_color, 11)
-		row.add_child(name)
-		var score := Label.new()
-		var t := float(entries[i].get("time_seconds", 0))
-		score.text = "%d:%02d" % [int(t)/60, int(t)%60]
-		_style_lbl(score, ACCENT_COLOR, 11)
-		row.add_child(score)
-
-
-func _restyle_leaderboard_rows() -> void:
-	_rebuild_leaderboard([]) # Easiest way to force restyle with new font
-
-
-func _on_menu_layer_visibility_changed(menu_layer: Node) -> void:
-	if not menu_layer.visible:
-		_last_room = "FORCE_RECHECK"
-		return
-	var main_menu := menu_layer.get_node_or_null("MainMenu")
-	var only_main_menu_open: bool = main_menu != null and main_menu.visible
-	for other in ["PauseMenu", "Settings", "MultiplayerMenu", "PopupTerminalMenu"]:
-		var n := menu_layer.get_node_or_null(other)
-		if n != null and n.visible:
-			only_main_menu_open = false
-			break
-	if only_main_menu_open:
-		_last_room = "FORCE_RECHECK"
-	else:
-		_hide_card()
-
-
-func animate_out(then: Callable = Callable()) -> void:
-	if not _is_card_visible:
-		if then.is_valid(): then.call()
-		return
-	_is_card_visible = false
-	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_property(_card, "modulate:a", 0.0, 0.16)
-	tw.tween_property(_card, "position:x", -20, 0.16)
-	if then.is_valid(): tw.chain().tween_callback(then)
+	# Update stat boxes
+	for panel in _card.find_children("", "PanelContainer", true, false):
+		if panel == _card: continue
+		var style = panel.get_theme_stylebox("panel") as StyleBoxFlat
+		if style:
+			style.bg_color = ThemeManager.bg_color
+			style.bg_color.a = 0.2
+			style.border_color = ThemeManager.border_color
+		
+		for label in panel.find_children("", "Label", true, false):
+			if label.name.ends_with("_val"):
+				label.add_theme_color_override("font_color", ThemeManager.text_color)
+			else:
+				label.add_theme_color_override("font_color", ThemeManager.subtext_color)
+	
+	if _play_btn:
+		_play_btn.add_theme_color_override("font_color", ThemeManager.text_color)
+		_play_btn.add_theme_color_override("font_hover_color", ThemeManager.text_color)
+		_play_btn.add_theme_color_override("font_pressed_color", ThemeManager.text_color)
+		
+		var btn_style = StyleBoxFlat.new()
+		btn_style.bg_color = Color(1, 1, 1, 0.1) if dark else Color(0, 0, 0, 0.05)
+		btn_style.set_corner_radius_all(8)
+		_play_btn.add_theme_stylebox_override("normal", btn_style)
+		
+		var hover_style = btn_style.duplicate() as StyleBoxFlat
+		hover_style.bg_color.a = 0.2 if dark else 0.1
+		_play_btn.add_theme_stylebox_override("hover", hover_style)
 
 
 func _on_play_pressed() -> void:
-	animate_out()
-	if _start_game_fn.is_valid(): _start_game_fn.call()
-	if _manager and not _manager.already_completed_today():
-		if _hud and _hud.has_signal("challenge_started"):
-			_hud.challenge_started.emit()
+	if _start_game_fn.is_valid():
+		_start_game_fn.call()
+	elif _hud:
+		_hud.visible = true
+
+
+func _on_challenge_ready(_target: String, _start: String) -> void:
+	_refresh_content()
+
+
+func _on_challenge_completed(_time: float, _is_best: bool) -> void:
+	_refresh_content()
+
+
+func _on_scores_updated(_entries: Array = []) -> void:
+	_refresh_content()
+
+
+func _on_menu_layer_visibility_changed(_node: Node) -> void:
+	_last_room = "FORCE_RECHECK"

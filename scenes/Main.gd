@@ -254,19 +254,22 @@ func _initialize_room_service() -> void:
 	if _daily_challenge_manager.has_signal("challenge_completed"):
 		_daily_challenge_manager.challenge_completed.connect(_on_challenge_completed_for_leaderboard)
 
-	# Lobby card â€” member-var CanvasLayer so it stays alive after _ready() returns
-	_daily_challenge_card_layer = CanvasLayer.new()
-	_daily_challenge_card_layer.name = "DailyChallengeCardLayer"
-	_daily_challenge_card_layer.layer = 100  # guaranteed above all menus regardless of MenuLayer's layer
-	add_child(_daily_challenge_card_layer)
-	_daily_challenge_card = load("res://scenes/ui/DailyChallengeCard.gd").new()
-	_daily_challenge_card.name = "DailyChallengeCard"
-	_daily_challenge_card_layer.add_child(_daily_challenge_card)
-	# Pre-fetch today's target right away â€” don't wait for game start
-	_daily_challenge_manager.start_challenge()
-	# Show card on main menu immediately (no player yet)
-	if _daily_challenge_card.has_method("init_for_main_menu"):
-		_daily_challenge_card.init_for_main_menu(_daily_challenge_manager, _daily_challenge_hud, _daily_challenge_leaderboard, _menu_layer)
+	# Lobby card — member-var CanvasLayer so it stays alive after _ready() returns
+	# DISABLED: Daily Challenge card not shown on main menu
+	# _daily_challenge_card_layer = CanvasLayer.new()
+	# _daily_challenge_card_layer.name = "DailyChallengeCardLayer"
+	# _daily_challenge_card_layer.layer = 100  # guaranteed above all menus regardless of MenuLayer's layer
+	# add_child(_daily_challenge_card_layer)
+	# _daily_challenge_card = load("res://scenes/ui/DailyChallengeCard.gd").new()
+	# _daily_challenge_card.name = "DailyChallengeCard"
+	# _daily_challenge_card_layer.add_child(_daily_challenge_card)
+	# _daily_challenge_card_layer.visible = false  # <--- Hide by default (redundant on title screen)
+	# # Pre-fetch today's target right away — don't wait for game start
+	# _daily_challenge_manager.start_challenge()
+	# # Show card on main menu immediately (no player yet)
+	# if _daily_challenge_card.has_method("init_for_main_menu"):
+	# 	_daily_challenge_card.init_for_main_menu(_daily_challenge_manager, _daily_challenge_hud, _daily_challenge_leaderboard, _menu_layer)
+	# _daily_challenge_card_layer.visible = true  # Show on main menu
 
 	# Spectator
 	_spectator_controller = load("res://scenes/main/SpectatorController.gd").new()
@@ -380,14 +383,15 @@ func _initialize_room_service() -> void:
 	
 	# âœ… FIX: Connect pause menu signals. Guard each with is_connected so we
 	# don't double-connect if the scene file already wired them in the inspector.
-	if not _pause_menu.resume.is_connected(_start_game):
-		_pause_menu.resume.connect(_start_game)
-	if not _pause_menu.settings.is_connected(_on_pause_menu_settings):
-		_pause_menu.settings.connect(_on_pause_menu_settings)
-	if not _pause_menu.return_to_lobby.is_connected(_on_pause_menu_return_to_lobby):
-		_pause_menu.return_to_lobby.connect(_on_pause_menu_return_to_lobby)
-	if not _pause_menu.start_race.is_connected(_on_start_race_pressed):
-		_pause_menu.start_race.connect(_on_start_race_pressed)
+	if _pause_menu:
+		if not _pause_menu.resume.is_connected(_start_game):
+			_pause_menu.resume.connect(_start_game)
+		if not _pause_menu.settings.is_connected(_on_pause_menu_settings):
+			_pause_menu.settings.connect(_on_pause_menu_settings)
+		if not _pause_menu.return_to_lobby.is_connected(_on_pause_menu_return_to_lobby):
+			_pause_menu.return_to_lobby.connect(_on_pause_menu_return_to_lobby)
+		if not _pause_menu.start_race.is_connected(_on_start_race_pressed):
+			_pause_menu.start_race.connect(_on_start_race_pressed)
 
 	MultiplayerEvents.skin_selected.connect(_on_skin_selected)
 	MultiplayerEvents.skin_reset.connect(_on_skin_reset)
@@ -491,9 +495,13 @@ func _update_world_light_intensity() -> void:
 		_world_light.light_energy = 0.08 if ThemeManager.is_dark_mode else 1.2
 
 func _start_game() -> void:
+	# Ensure player exists (might be null after returning from main menu)
+	if not _player or not is_instance_valid(_player):
+		_recreate_player()
+	
 	if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-	
+
 	# Player.start() already enables the player (_enabled = true)
 	_player.start()
 	_menu_controller.close_menus()
@@ -502,6 +510,8 @@ func _start_game() -> void:
 		_daily_challenge_hud.hide_all()
 	if _daily_challenge_card and _daily_challenge_card.has_method("_hide_card"):
 		_daily_challenge_card._hide_card()
+	if _daily_challenge_card_layer:
+		_daily_challenge_card_layer.visible = true  # <--- Show now that we are in-game
 	_map_overlay.restore_after_pause()
 	if _minimap_controller and _minimap_controller.has_method("restore_after_pause"):
 		_minimap_controller.restore_after_pause()
@@ -519,7 +529,8 @@ func _start_game() -> void:
 			_daily_challenge_card.set_multiplayer_mode(true)
 
 func _pause_game() -> void:
-	_player.pause()
+	if _player:
+		_player.pause()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 	if _minimap_controller and _minimap_controller.has_method("set_hidden"):
@@ -530,9 +541,11 @@ func _pause_game() -> void:
 		var pause_menu_visible := _pause_menu and _pause_menu.visible
 		if pause_menu_visible:
 			return
-		_menu_controller.open_pause_menu()
+		if _menu_controller:
+			_menu_controller.open_pause_menu()
 	else:
-		_menu_controller.open_main_menu()
+		if _menu_controller:
+			_menu_controller.open_main_menu()
 
 func hide_pause_menu() -> void:
 	if _pause_menu:
@@ -606,30 +619,32 @@ func _start_ui_dedicated_host() -> void:
 	# Update main menu to show hosting status + stop button
 	var main_menu_node := _menu_layer.get_node_or_null("MainMenu")
 	if main_menu_node:
-		var container := main_menu_node.get_node("%Quit").get_parent()
-		
-		# Show server address for host to share
-		var server_addr := NetworkManager.get_server_address()
-		var addr_lbl := Label.new()
-		addr_lbl.name = "ServerAddressLabel"
-		addr_lbl.text = "Server Address: %s" % server_addr
-		addr_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		addr_lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
-		addr_lbl.add_theme_font_size_override("font_size", 14)
-		container.add_child(addr_lbl)
-		
-		var lbl := Label.new()
-		lbl.name = "HostStatusLabel"
-		lbl.text = "Hosting on port %d â€” waiting for players..." % _multiplayer_controller.get_server_port()
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.add_theme_color_override("font_color", Color(0.4, 0.7, 0.4))
-		container.add_child(lbl)
+		var quit_node = main_menu_node.get_node_or_null("%Quit")
+		if quit_node:
+			var container := quit_node.get_parent()
+			
+			# Show server address for host to share
+			var server_addr := NetworkManager.get_server_address()
+			var addr_lbl := Label.new()
+			addr_lbl.name = "ServerAddressLabel"
+			addr_lbl.text = "Server Address: %s" % server_addr
+			addr_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			addr_lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+			addr_lbl.add_theme_font_size_override("font_size", 14)
+			container.add_child(addr_lbl)
+			
+			var lbl := Label.new()
+			lbl.name = "HostStatusLabel"
+			lbl.text = "Hosting on port %d — waiting for players..." % _multiplayer_controller.get_server_port()
+			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lbl.add_theme_color_override("font_color", Color(0.4, 0.7, 0.4))
+			container.add_child(lbl)
 
-		var stop_btn := Button.new()
-		stop_btn.name = "StopHostingButton"
-		stop_btn.text = "Stop Hosting"
-		stop_btn.pressed.connect(_on_stop_hosting_pressed)
-		container.add_child(stop_btn)
+			var stop_btn := Button.new()
+			stop_btn.name = "StopHostingButton"
+			stop_btn.text = "Stop Hosting"
+			stop_btn.pressed.connect(_on_stop_hosting_pressed)
+			container.add_child(stop_btn)
 
 		# Hide the Host Server button while hosting
 		var host_btn := main_menu_node.get_node_or_null("DedicatedHost")
@@ -647,19 +662,25 @@ func _on_stop_hosting_pressed() -> void:
 	_is_ui_dedicated_host = false
 	_race_controller_peer_id = 1
 	game_started = false
+	# Re-initialize daily challenge card for main menu display
+	if _daily_challenge_card and _daily_challenge_card.has_method("set_main_menu_mode"):
+		_daily_challenge_card.set_main_menu_mode()
 	# Restore main menu UI
 	var main_menu_node := _menu_layer.get_node_or_null("MainMenu")
 	if main_menu_node:
-		var container := main_menu_node.get_node("%Quit").get_parent()
-		var lbl := container.get_node_or_null("HostStatusLabel")
-		if lbl:
-			lbl.queue_free()
-		var addr_lbl := container.get_node_or_null("ServerAddressLabel")
-		if addr_lbl:
-			addr_lbl.queue_free()
-		var stop_btn := container.get_node_or_null("StopHostingButton")
-		if stop_btn:
-			stop_btn.queue_free()
+		var quit_node = main_menu_node.get_node_or_null("%Quit")
+		if quit_node:
+			var container := quit_node.get_parent()
+			var lbl := container.get_node_or_null("HostStatusLabel")
+			if lbl:
+				lbl.queue_free()
+			var addr_lbl := container.get_node_or_null("ServerAddressLabel")
+			if addr_lbl:
+				addr_lbl.queue_free()
+			var stop_btn := container.get_node_or_null("StopHostingButton")
+			if stop_btn:
+				stop_btn.queue_free()
+		
 		var host_btn := main_menu_node.get_node_or_null("DedicatedHost")
 		if host_btn:
 			host_btn.visible = true
@@ -720,6 +741,9 @@ func _input(event: InputEvent) -> void:
 				_pause_game()  # Open pause menu
 			else:
 				_menu_controller.open_main_menu()  # Open main menu if not in game
+				# Show daily challenge card on main menu
+				if _daily_challenge_card and _daily_challenge_card.has_method("set_main_menu_mode"):
+					_daily_challenge_card.set_main_menu_mode()
 			get_viewport().set_input_as_handled()
 
 		if Input.is_action_just_pressed("show_fps"):
@@ -1413,12 +1437,16 @@ func _on_network_server_disconnected() -> void:
 	_multiplayer_controller.end_multiplayer_session()
 	if _daily_challenge_card and _daily_challenge_card.has_method("set_multiplayer_mode"):
 		_daily_challenge_card.set_multiplayer_mode(false)
+	if _daily_challenge_card and _daily_challenge_card.has_method("set_main_menu_mode"):
+		_daily_challenge_card.set_main_menu_mode()
 	_menu_controller.open_main_menu()
 
 func _on_quit_requested() -> void:
 	if _multiplayer_controller.is_multiplayer_game():
 		NetworkManager.disconnect_from_game()
 		_multiplayer_controller.end_multiplayer_session()
+		if _daily_challenge_card and _daily_challenge_card.has_method("set_main_menu_mode"):
+			_daily_challenge_card.set_main_menu_mode()
 		_menu_controller.open_main_menu()
 	else:
 		get_tree().quit()

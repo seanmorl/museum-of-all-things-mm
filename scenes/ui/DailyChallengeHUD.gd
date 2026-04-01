@@ -106,10 +106,10 @@ func _build_modal() -> void:
 
 	_panel = PanelContainer.new()
 	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.offset_left   = -300.0
-	_panel.offset_top    = -220.0
-	_panel.offset_right  = 300.0
-	_panel.offset_bottom = 220.0
+	_panel.offset_left   = -200.0
+	_panel.offset_top    = -150.0
+	_panel.offset_right  = 200.0
+	_panel.offset_bottom = 150.0
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_panel.grow_vertical   = Control.GROW_DIRECTION_BOTH
 	_modal_root.add_child(_panel)
@@ -118,10 +118,10 @@ func _build_modal() -> void:
 	_panel.add_theme_stylebox_override("panel", _panel_style)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   30)
-	margin.add_theme_constant_override("margin_right",  30)
-	margin.add_theme_constant_override("margin_top",    24)
-	margin.add_theme_constant_override("margin_bottom", 20)
+	margin.add_theme_constant_override("margin_left",   20)
+	margin.add_theme_constant_override("margin_right",  20)
+	margin.add_theme_constant_override("margin_top",    16)
+	margin.add_theme_constant_override("margin_bottom", 16)
 	_panel.add_child(margin)
 
 	var vbox := VBoxContainer.new()
@@ -136,12 +136,12 @@ func _build_modal() -> void:
 	header.add_child(_title_lbl)
 	_info_btn = Button.new()
 	_info_btn.text = "ⓘ"
-	_info_btn.custom_minimum_size = Vector2(36, 36)
+	_info_btn.custom_minimum_size = Vector2(28, 28)
 	_info_btn.pressed.connect(_show_help)
 	header.add_child(_info_btn)
 	_close_btn = Button.new()
 	_close_btn.text = "✕"
-	_close_btn.custom_minimum_size = Vector2(36, 36)
+	_close_btn.custom_minimum_size = Vector2(28, 28)
 	_close_btn.pressed.connect(close)
 	header.add_child(_close_btn)
 
@@ -523,13 +523,13 @@ func _refresh_theme() -> void:
 	if not ThemeManager.is_dark_mode:
 		subtext_clr = Color(0.3, 0.3, 0.3, 1.0)
 
-	_slbl(_title_lbl,         text_clr,    26)
-	_slbl(_date_lbl,          subtext_clr, 13)
-	_slbl(_streak_lbl,        subtext_clr, 13)
-	_slbl(_target_header_lbl, Color(accent_color.r, accent_color.g, accent_color.b, 0.9), 10)
-	_slbl(_target_lbl,        text_clr,    22)
-	_slbl(_best_lbl,          subtext_clr, 13)
-	_slbl(_status_lbl,        subtext_clr, 14)
+	_slbl(_title_lbl,         text_clr,    20)
+	_slbl(_date_lbl,          subtext_clr, 11)
+	_slbl(_streak_lbl,        subtext_clr, 11)
+	_slbl(_target_header_lbl, Color(accent_color.r, accent_color.g, accent_color.b, 0.9), 9)
+	_slbl(_target_lbl,        text_clr,    16)
+	_slbl(_best_lbl,          subtext_clr, 11)
+	_slbl(_status_lbl,        subtext_clr, 12)
 
 	_slbl(_res_grade_lbl,  accent_color,                52)
 	_slbl(_res_time_lbl,   text_clr,    42)
@@ -557,7 +557,7 @@ func _style_btn(btn: Button, primary: bool) -> void:
 	if not btn: return
 	if _font: btn.add_theme_font_override("font", _font)
 	if not primary:
-		btn.add_theme_font_size_override("font_size", 14)
+		btn.add_theme_font_size_override("font_size", 12)
 		btn.add_theme_color_override("font_color",       ThemeManager.subtext_color)
 		btn.add_theme_color_override("font_hover_color", Color(0.85, 0.3, 0.3))
 		for state in ["normal","hover","pressed"]:
@@ -567,20 +567,20 @@ func _style_btn(btn: Button, primary: bool) -> void:
 			s.set_corner_radius_all(4)
 			btn.add_theme_stylebox_override(state, s)
 		return
-	btn.add_theme_font_size_override("font_size", 17)
+	btn.add_theme_font_size_override("font_size", 14)
 	for c in ["font_color","font_hover_color","font_pressed_color"]:
 		btn.add_theme_color_override(c, ThemeManager.text_color)
 	var sn := StyleBoxFlat.new()
 	sn.bg_color = Color(0,0,0,0)
-	sn.content_margin_left = 16; sn.content_margin_right  = 16
-	sn.content_margin_top  = 9;  sn.content_margin_bottom = 9
+	sn.content_margin_left = 12; sn.content_margin_right  = 12
+	sn.content_margin_top  = 7;  sn.content_margin_bottom = 7
 	btn.add_theme_stylebox_override("normal", sn)
 	var sh := StyleBoxFlat.new()
 	sh.bg_color = Color(1,1,1,0.06) if ThemeManager.is_dark_mode \
 		else Color(ThemeManager.border_color, 0.5)
 	sh.set_corner_radius_all(5)
-	sh.content_margin_left = 16; sh.content_margin_right  = 16
-	sh.content_margin_top  = 9;  sh.content_margin_bottom = 9
+	sh.content_margin_left = 12; sh.content_margin_right  = 12
+	sh.content_margin_top  = 7;  sh.content_margin_bottom = 7
 	btn.add_theme_stylebox_override("hover", sh)
 	var sp: StyleBoxFlat = sh.duplicate()
 	sp.bg_color = Color(1,1,1,0.12) if ThemeManager.is_dark_mode \

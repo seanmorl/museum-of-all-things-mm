@@ -103,6 +103,10 @@ func fetch_scores(date_key: String, force: bool = false) -> void:
 func get_cached_entries() -> Array:
 	return _cached_entries.duplicate()
 
+## Return the most recent cached entries (alias for get_cached_entries).
+func get_scores() -> Array:
+	return _cached_entries.duplicate()
+
 ## Format seconds as "M:SS"
 static func format_time(seconds: float) -> String:
 	var s := int(seconds)

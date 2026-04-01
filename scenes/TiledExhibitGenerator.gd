@@ -58,6 +58,9 @@ var _no_props: bool = false
 var _exit_limit: int = 1000000
 var _min_room_dimension: int = 2
 var _max_room_dimension: int = 5
+var _min_rooms: int = 2
+var _debug_mode: bool = false
+var _debug_meshes: Array[MeshInstance3D] = []
 var _mood: int = ExhibitMood.Mood.DEFAULT
 var _secret_room_count: int = 0
 var _secret_item_slots: Array = []
@@ -115,6 +118,8 @@ func generate(params: Dictionary) -> void:
 	var step_start = Time.get_ticks_msec()
 	_min_room_dimension = params.min_room_dimension
 	_max_room_dimension = params.max_room_dimension
+	_min_rooms = params.get("min_rooms", 2)
+	_debug_mode = params.get("debug_mode", false)
 
 	var start_pos: Vector3 = params.start_pos
 	title = params.title
@@ -180,10 +185,25 @@ func generate(params: Dictionary) -> void:
 	_decorate_room(room_obj)
 	Log.info("TiledExhibitGenerator", "Step 5 - Create first room: %dms" % (Time.get_ticks_msec() - room_step_start))
 
+	# Ensure minimum room count
+	_validate_generation_progress()
+	
+	# Final validation
+	validate_final_generation()
+	
+	Log.info("TiledExhibitGenerator", "=== Generation complete: %d rooms, %dms ===" % [
+		_room_list.size(), Time.get_ticks_msec() - total_start])
+
 
 func _create_next_room_candidate(last_room: Dictionary) -> void:
 	var room_width: int = _rand_dim()
 	var room_length: int = _rand_dim()
+	
+	# Mood-biased dimensions
+	if ExhibitMood.prefers_symmetry(_mood) and _rng.randf() < 0.15:
+		room_width = _rng.randi_range(5, 7)
+		room_length = _rng.randi_range(4, 6)
+		
 	var room_center: Vector3
 	var room_bounds: Array
 	var next_room_dir: Vector3
@@ -227,6 +247,89 @@ func _create_next_room_candidate(last_room: Dictionary) -> void:
 	_next_room_candidates.append(room_obj)
 
 
+func _validate_generation_progress() -> void:
+	## Monitors room count and ensures minimum rooms are generated
+	var attempts: int = 0
+	var max_attempts: int = 3
+	
+	while _room_list.size() < _min_rooms and attempts < max_attempts:
+		if _next_room_candidates.is_empty():
+			Log.warn("TiledExhibitGenerator", "No candidates left, attempting fallback (attempt %d/%d)" % [attempts + 1, max_attempts])
+			_try_fallback_generation()
+			attempts += 1
+			continue
+		
+		add_room()
+	
+	if _room_list.size() < _min_rooms:
+		Log.error("TiledExhibitGenerator", "Failed to reach min_rooms (%d/%d) after %d fallback attempts" % [
+			_room_list.size(), _min_rooms, attempts])
+
+
+func _try_fallback_generation() -> void:
+	## Relaxes constraints to find new room candidates when stuck
+	# 1. Try smaller dimensions
+	_min_room_dimension = maxi(1, _min_room_dimension - 1)
+	_max_room_dimension = maxi(2, _max_room_dimension - 1)
+	
+	# 2. Try creating candidates from all existing rooms
+	var existing_rooms: Array = _room_list.values()
+	CollectionUtils.shuffle(_rng, existing_rooms)
+	
+	for room: Dictionary in existing_rooms:
+		_create_next_room_candidate(room)
+		if not _next_room_candidates.is_empty():
+			break
+			
+	Log.info("TiledExhibitGenerator", "Fallback: Reduced dimensions to %d-%d" % [_min_room_dimension, _max_room_dimension])
+
+
+func validate_final_generation() -> bool:
+	## Performs post-generation checks
+	if _room_list.is_empty():
+		Log.error("TiledExhibitGenerator", "Final validation FAILED: No rooms generated")
+		return false
+	
+	if entry == null:
+		Log.error("TiledExhibitGenerator", "Final validation FAILED: No entry hall")
+		return false
+		
+	Log.info("TiledExhibitGenerator", "Validation PASSED: %d rooms generated" % _room_list.size())
+	return true
+
+
+func _debug_draw_box(c1: Vector3, c2: Vector3, y: int, height: int, color: Color) -> void:
+	var mesh_instance := MeshInstance3D.new()
+	var box_mesh := BoxMesh.new()
+	
+	# Calculate size and center in world coordinates
+	var size := (c2 - c1) + Vector3(1, 0, 1)
+	size.y = height
+	
+	var center := (c1 + c2) / 2.0
+	center.y = y + (height / 2.0) - 0.5
+	
+	box_mesh.size = size * Constants.GRID_CELL_SIZE
+	mesh_instance.mesh = box_mesh
+	
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.albedo_color.a = 0.3
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mesh_instance.material_override = material
+	
+	add_child(mesh_instance)
+	mesh_instance.global_position = GridUtils.grid_to_world(center)
+	_debug_meshes.append(mesh_instance)
+
+
+func clear_debug_meshes() -> void:
+	for mesh in _debug_meshes:
+		if is_instance_valid(mesh):
+			mesh.queue_free()
+	_debug_meshes.clear()
+
+
 func _add_to_room_list(c: Vector3, w: int, l: int) -> Dictionary:
 	var room_obj: Dictionary = {
 		"center": c,
@@ -251,8 +354,35 @@ func add_room() -> void:
 	_grid.free_reserved_zone(room.center)
 
 	_add_to_room_list(room.center, room.width, room.length)
+	
+	# Determine room type and height
+	var room_type: String = "ROOM"
+	var height: int = 2
+	var debug_color: Color = Color.GREEN
+	
+	if _room_count > 2:
+		if ExhibitMood.prefers_verticality(_mood) and _rng.randf() < 0.15:
+			room_type = "ATRIUM"
+			height = 3
+			debug_color = Color.PURPLE
+			Log.info("TiledExhibitGenerator", "Created ATRIUM at %s" % str(room.center))
+		elif ExhibitMood.prefers_symmetry(_mood) and (room.width >= 5 or room.length >= 5):
+			room_type = "GRAND_HALL"
+			debug_color = Color.GOLD
+			Log.info("TiledExhibitGenerator", "Created GRAND_HALL at %s" % str(room.center))
+		elif room.width > room.length * 1.5 or room.length > room.width * 1.5:
+			debug_color = Color.BLUE # Rectangular
+		elif room.width == room.length:
+			debug_color = Color.GREEN # Square
+		else:
+			debug_color = Color.ORANGE # Hallway-ish
+
 	_carve_room(room.hall[0], room.hall[1], _y)
-	_carve_room(room.bounds[0], room.bounds[1], _y)
+	_carve_room(room.bounds[0], room.bounds[1], _y, height)
+	
+	if _debug_mode:
+		_debug_draw_box(room.bounds[0], room.bounds[1], _y, height, debug_color)
+	
 	_create_next_room_candidate(room)
 
 	# branch sometimes
@@ -260,8 +390,8 @@ func add_room() -> void:
 		_create_next_room_candidate(room)
 
 	_decorate_room(room)
-	Log.info("TiledExhibitGenerator", "  add_room(): %dms (total rooms: %d)" % [
-		Time.get_ticks_msec() - step_start, _room_list.size()])
+	Log.info("TiledExhibitGenerator", "  add_room(): %dms (total rooms: %d, type: %s)" % [
+		Time.get_ticks_msec() - step_start, _room_list.size(), room_type])
 
 
 func _clear_scenery_in_area(h1: Vector3, h2: Vector3) -> void:
@@ -475,7 +605,7 @@ func _room_to_bounds(center: Vector3, width: int, length: int) -> Array:
 	]
 
 
-func _carve_room(corner1: Vector3, corner2: Vector3, y: int) -> void:
+func _carve_room(corner1: Vector3, corner2: Vector3, y: int, height: int = 2) -> void:
 	var step_start = Time.get_ticks_msec()
 	var lx: int = int(corner1.x)
 	var gx: int = int(corner2.x)
@@ -495,15 +625,22 @@ func _carve_room(corner1: Vector3, corner2: Vector3, y: int) -> void:
 				elif _grid.get_cell_item(Vector3(x, y - 1, z)) == -1:
 					_grid.set_cell_item(Vector3(x, y, z), WALL, 0)
 					_grid.set_cell_item(Vector3(x, y + 1, z), WALL, 0)
-					_grid.set_cell_item(Vector3(x, y + 2, z), -1, 0)
+					# Clear air levels for the wall
+					for i in range(2, height + 1):
+						_grid.set_cell_item(Vector3(x, y + i, z), -1, 0)
 			else:
 				if c == WALL:
-					_grid.set_cell_item(Vector3(x, y, z), -1, 0)
-					_grid.set_cell_item(Vector3(x, y + 1, z), -1, 0)
-				_grid.set_cell_item(Vector3(x, y + 2, z), CEILING, 0)
+					for i in range(height):
+						_grid.set_cell_item(Vector3(x, y + i, z), -1, 0)
+				
+				# Ceiling at the very top
+				_grid.set_cell_item(Vector3(x, y + height, z), CEILING, 0)
+				
+				# Floor at the bottom
 				_grid.set_cell_item(Vector3(x, y - 1, z), _floor, 0)
 	
-	Log.info("TiledExhibitGenerator", "  _carve_room(): %dms" % (Time.get_ticks_msec() - step_start))
+	Log.info("TiledExhibitGenerator", "  _carve_room(): %dms (height: %d)" % [
+		Time.get_ticks_msec() - step_start, height])
 
 
 func _overlaps_room(corner1: Vector3, corner2: Vector3, y: int) -> bool:

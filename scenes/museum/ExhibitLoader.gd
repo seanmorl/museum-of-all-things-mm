@@ -246,6 +246,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 		"hall_type": hall_type,
 		"exit_limit": doors.size(),
 		"mood": mood,
+		"min_rooms": _min_rooms_per_exhibit,
 	})
 
 	Log.info("ExhibitLoader", "Generated '%s': exit_limit=%d, doors=%d, items=%d" % [

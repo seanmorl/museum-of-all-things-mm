@@ -1,80 +1,72 @@
 extends Control
-## MinimapController — redesigned minimap HUD.
+## MinimapController — redesigned minimap HUD (matches moat-ui.html design).
 ##
-## Architecture:
-##   A rounded square panel sits in the top-right corner.
-##   Inside: a SubViewport texture (top-down orthographic camera from Player.tscn),
-##   overlaid with a compass rose, a pulsing player-dot, the current room label,
-##   and +/- zoom buttons.
-##
-## Player.tscn requirements (unchanged from original):
-##   MapCameraContainer  (Node3D, top_level=true)
-##     MapViewport       (SubViewport, world_3d shared with main scene)
-##       MapCamera       (Camera3D, orthographic, looks straight down)
-##   MapMarker           (MeshInstance3D on render layer 24 — player dot)
-##
-## Public API:
-##   init(player)         — call once after the player is spawned
-##   cycle()              — toggle off → on (M key)
-##   show_hud()           — force on
-##   set_hidden()         — force off
-##   restore_after_pause()
-##   reset_zoom()
-##   set_zoom(z)
-##   set_room_label(text) — update the room name shown on the minimap
+## A clean topological map showing visited rooms as dots with connection lines.
+## Features:
+##   - Pulsing player dot at center
+##   - Room nodes positioned relative to player
+##   - Connection lines showing paths between rooms
+##   - Compass rose with north indicator
+##   - Room name label at bottom
+##   - Zoom controls (+/- buttons and scroll wheel)
+##   - Theme-aware colors (dark/light mode)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-const CAM_HEIGHT  : float = 40.0
-const CAM_SIZE_1X : float = 22.0
-const ZOOM_MIN    : float = 0.5
-const ZOOM_MAX    : float = 4.0
-const ZOOM_STEP   : float = 0.25
+const PANEL_SIZE      : float = 160.0
+const PANEL_MARGIN    : float = 12.0
+const PANEL_RADIUS    : float = 12.0
+const DOT_RADIUS      : float = 5.0
+const ROOM_DOT_RADIUS : float = 4.0
+const LINE_WIDTH      : float = 1.5
+const COMPASS_RADIUS  : float = 10.0
 
-## Panel geometry
-const PANEL_SIZE   : float = 220.0
-const PANEL_MARGIN : float = 16.0
-const PANEL_RADIUS : float = 14.0
+# Zoom settings
+const ZOOM_MIN : float = 0.5
+const ZOOM_MAX : float = 3.0
+const ZOOM_STEP: float = 0.25
 
-## Player-dot pulse
-const DOT_RADIUS_BASE  : float = 6.0
-const DOT_PULSE_RANGE  : float = 3.0
-const DOT_PULSE_SPEED  : float = 2.2
+# Pulse animation
+const PULSE_SPEED : float = 2.0
+const PULSE_RANGE : float = 3.0
 
-## Colors — these respond to ThemeManager dark/light via _apply_theme()
-var _col_panel_bg   : Color = Color(0.08, 0.08, 0.10, 0.82)
-var _col_panel_rim  : Color = Color(0.30, 0.32, 0.38, 0.90)
-var _col_dot        : Color = Color(0.25, 0.70, 1.00, 1.00)
-var _col_dot_ring   : Color = Color(1.00, 1.00, 1.00, 0.55)
-var _col_compass    : Color = Color(1.00, 1.00, 1.00, 0.55)
-var _col_north      : Color = Color(1.00, 0.35, 0.35, 0.90)
+# ── State ──────────────────────────────────────────────────────────────────────
+
+var _player        : Node   = null
+var _pulse         : float  = 0.0
+var _room_label    : String = ""
+var _zoom          : float  = 1.0
+var _visited_rooms : Array[String] = []  # List of visited room names
+var _connections   : Array[Dictionary] = []  # [{from, to}, ...]
+
+# ── Colors (theme-aware) ───────────────────────────────────────────────────────
+
+var _col_bg         : Color = Color(0.08, 0.08, 0.10, 0.85)
+var _col_border     : Color = Color(0.30, 0.32, 0.38, 0.90)
+var _col_player     : Color = Color(0.23, 0.58, 0.85, 1.00)
+var _col_player_ring: Color = Color(0.23, 0.58, 0.85, 0.30)
+var _col_room       : Color = Color(0.40, 0.42, 0.48, 0.80)
+var _col_line       : Color = Color(0.50, 0.52, 0.58, 0.50)
+var _col_compass    : Color = Color(1.00, 1.00, 1.00, 0.50)
+var _col_north      : Color = Color(0.95, 0.30, 0.30, 0.90)
 var _col_label_bg   : Color = Color(0.00, 0.00, 0.00, 0.50)
 var _col_label_text : Color = Color(1.00, 1.00, 1.00, 0.90)
 var _col_btn_bg     : Color = Color(0.18, 0.18, 0.22, 0.85)
 var _col_btn_text   : Color = Color(0.85, 0.85, 0.90, 1.00)
 
-# ── State ──────────────────────────────────────────────────────────────────────
+# ── Sub-nodes ──────────────────────────────────────────────────────────────────
 
-var _mode   : int   = 0   # 0 = off, 1 = on
-var _zoom   : float = 1.0
-var _player : Node  = null
-var _pulse  : float = 0.0
-var _room_label : String = ""
+var _panel        : Panel          = null
+var _overlay      : Control        = null
+var _label_bg     : PanelContainer = null
+var _label        : Label          = null
+var _zoom_in_btn  : Button         = null
+var _zoom_out_btn : Button         = null
+var _zoom_label   : Label          = null
 
-var _container : Node3D      = null
-var _viewport  : SubViewport = null
-var _cam       : Camera3D    = null
+# ── Visibility state ───────────────────────────────────────────────────────────
 
-# ── Sub-nodes (built in _build_ui) ────────────────────────────────────────────
-
-var _panel        : Panel           = null   # outer rounded card
-var _map_rect     : TextureRect     = null   # SubViewport texture display
-var _overlay      : Control         = null   # transparent layer for canvas drawing
-var _label_bg     : PanelContainer  = null   # room-name pill at bottom
-var _label        : Label           = null
-var _zoom_in_btn  : Button          = null
-var _zoom_out_btn : Button          = null
-var _zoom_label   : Label           = null
+var _mode : int = 0  # 0 = off, 1 = on
 
 
 # =============================================================================
@@ -87,26 +79,14 @@ func _ready() -> void:
 	_build_ui()
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(func(_e): _apply_theme())
-	_set_panel_visible(false)
+	_set_visible(false)
 
 
 func _process(delta: float) -> void:
-	if _mode == 0 or not is_instance_valid(_player):
+	if _mode == 0:
 		return
-
-	# Advance pulse timer
-	_pulse = fmod(_pulse + delta * DOT_PULSE_SPEED, TAU)
-
-	# Keep camera above player
-	if _cam and is_instance_valid(_cam):
-		var p : Vector3 = _player.global_position
-		_cam.global_position = Vector3(p.x, CAM_HEIGHT, p.z)
-
-	# Push viewport texture into the TextureRect
-	if _viewport:
-		_map_rect.texture = _viewport.get_texture()
-
-	# Redraw canvas overlay (dot + compass)
+	
+	_pulse += delta * PULSE_SPEED
 	_overlay.queue_redraw()
 
 
@@ -126,15 +106,7 @@ func _input(event: InputEvent) -> void:
 # =============================================================================
 
 func init(player: Node) -> void:
-	_player    = player
-	_container = player.get_node_or_null("MapCameraContainer")
-	_viewport  = player.get_node_or_null("MapCameraContainer/MapViewport")
-	_cam       = player.get_node_or_null("MapCameraContainer/MapViewport/MapCamera")
-
-	if _viewport:
-		_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-
-	_configure_camera()
+	_player = player
 
 
 func cycle() -> void:
@@ -173,6 +145,23 @@ func set_room_label(text: String) -> void:
 		_label_bg.visible = text != ""
 
 
+func add_visited_room(room_name: String) -> void:
+	if room_name not in _visited_rooms:
+		_visited_rooms.append(room_name)
+		_overlay.queue_redraw()
+
+
+func add_connection(from_room: String, to_room: String) -> void:
+	_connections.append({"from": from_room, "to": to_room})
+	_overlay.queue_redraw()
+
+
+func clear_visited() -> void:
+	_visited_rooms.clear()
+	_connections.clear()
+	_overlay.queue_redraw()
+
+
 # =============================================================================
 # UI Construction
 # =============================================================================
@@ -184,29 +173,14 @@ func _build_ui() -> void:
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.custom_minimum_size = Vector2(PANEL_SIZE, PANEL_SIZE)
 	_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_panel.offset_left   = -PANEL_SIZE  - PANEL_MARGIN
+	_panel.offset_left   = -PANEL_SIZE - PANEL_MARGIN
 	_panel.offset_right  = -PANEL_MARGIN
 	_panel.offset_top    =  PANEL_MARGIN
-	_panel.offset_bottom =  PANEL_SIZE  + PANEL_MARGIN
+	_panel.offset_bottom =  PANEL_SIZE + PANEL_MARGIN
 	add_child(_panel)
-
 	_style_panel(_panel)
 
-	# Viewport texture — fills panel with a small inset
-	const INSET : float = 8.0
-	_map_rect = TextureRect.new()
-	_map_rect.name = "MapRect"
-	_map_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_map_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_map_rect.stretch_mode = TextureRect.STRETCH_SCALE
-	_map_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_map_rect.offset_left   =  INSET
-	_map_rect.offset_right  = -INSET
-	_map_rect.offset_top    =  INSET
-	_map_rect.offset_bottom = -INSET
-	_panel.add_child(_map_rect)
-
-	# Canvas overlay (compass + dot) — same size as panel
+	# Canvas overlay (all drawing)
 	_overlay = Control.new()
 	_overlay.name = "Overlay"
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -214,13 +188,13 @@ func _build_ui() -> void:
 	_overlay.draw.connect(_draw_overlay)
 	_panel.add_child(_overlay)
 
-	# Room-name label pill at the bottom of the panel
+	# Room-name label pill at the bottom
 	_label_bg = PanelContainer.new()
 	_label_bg.name = "LabelBg"
 	_label_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_label_bg.visible = false
 	_label_bg.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_label_bg.offset_top    = -30
+	_label_bg.offset_top    = -28
 	_label_bg.offset_bottom = -6
 	_label_bg.offset_left   =  6
 	_label_bg.offset_right  = -6
@@ -231,38 +205,38 @@ func _build_ui() -> void:
 	_label.name = "RoomLabel"
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_label.add_theme_font_size_override("font_size", 11)
+	_label.add_theme_font_size_override("font_size", 10)
 	_label_bg.add_child(_label)
 
-	# Zoom buttons — top-right corner of the panel
+	# Zoom buttons
 	_zoom_in_btn  = _make_zoom_btn("+", Vector2(-6, 6))
-	_zoom_out_btn = _make_zoom_btn("−", Vector2(-6, 30))
+	_zoom_out_btn = _make_zoom_btn("−", Vector2(-6, 28))
 	_panel.add_child(_zoom_in_btn)
 	_panel.add_child(_zoom_out_btn)
 	_zoom_in_btn.pressed.connect(func(): _set_zoom(_zoom + ZOOM_STEP))
 	_zoom_out_btn.pressed.connect(func(): _set_zoom(_zoom - ZOOM_STEP))
 
-	# Zoom-level readout (tiny text top-left corner)
+	# Zoom-level readout
 	_zoom_label = Label.new()
 	_zoom_label.name = "ZoomLabel"
 	_zoom_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_zoom_label.text = "1.0×"
-	_zoom_label.add_theme_font_size_override("font_size", 10)
+	_zoom_label.add_theme_font_size_override("font_size", 9)
 	_zoom_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_zoom_label.offset_left = 8
-	_zoom_label.offset_top  = 8
+	_zoom_label.offset_left = 6
+	_zoom_label.offset_top  = 6
 	_panel.add_child(_zoom_label)
 
 
 func _make_zoom_btn(icon: String, offset_from_tr: Vector2) -> Button:
 	var btn := Button.new()
 	btn.text = icon
-	btn.custom_minimum_size = Vector2(20, 20)
+	btn.custom_minimum_size = Vector2(18, 18)
 	btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	btn.offset_right  = -offset_from_tr.x
-	btn.offset_left   = -offset_from_tr.x - 20
+	btn.offset_left   = -offset_from_tr.x - 18
 	btn.offset_top    =  offset_from_tr.y
-	btn.offset_bottom =  offset_from_tr.y + 20
+	btn.offset_bottom =  offset_from_tr.y + 18
 	_style_zoom_btn(btn)
 	return btn
 
@@ -272,52 +246,68 @@ func _make_zoom_btn(icon: String, offset_from_tr: Vector2) -> Button:
 # =============================================================================
 
 func _draw_overlay() -> void:
-	var sz  : Vector2 = _overlay.size
-	var ctr : Vector2 = sz * 0.5
+	var size : Vector2 = _overlay.size * _zoom
+	var center : Vector2 = size * 0.5
+
+	# --- Draw connection lines first (behind dots) ---
+	for conn in _connections:
+		var from_idx = _visited_rooms.find(conn.from)
+		var to_idx = _visited_rooms.find(conn.to)
+		if from_idx >= 0 and to_idx >= 0:
+			var from_pos = _get_room_position(from_idx, center)
+			var to_pos = _get_room_position(to_idx, center)
+			_overlay.draw_line(from_pos, to_pos, _col_line, LINE_WIDTH * _zoom)
+
+	# --- Draw room dots ---
+	for i in range(_visited_rooms.size()):
+		var pos = _get_room_position(i, center)
+		var radius = ROOM_DOT_RADIUS * _zoom
+		_overlay.draw_circle(pos, radius, _col_room)
+
+	# --- Player dot with pulse ring at center ---
+	var pulse_t = (sin(_pulse) + 1.0) * 0.5
+	var ring_r = (DOT_RADIUS + PULSE_RANGE) * pulse_t * _zoom
+	var ring_a = (1.0 - pulse_t) * 0.5
+	var ring_col = Color(_col_player_ring.r, _col_player_ring.g, _col_player_ring.b, ring_a)
+	
+	# Pulse ring
+	_overlay.draw_circle(center, ring_r, ring_col)
+	# Player dot
+	_overlay.draw_circle(center, DOT_RADIUS * _zoom, _col_player)
 
 	# --- Compass rose ---
-	const COMPASS_R  : float = 10.0
-	const TICK_OUTER : float = 9.0
-	const TICK_INNER : float = 5.0
-	const N_SIZE     : float = 13.0
-	var compass_pos := Vector2(ctr.x, 18.0)
-
-	# Player heading (yaw), so north marker rotates with map
-	var heading : float = _player.rotation.y if is_instance_valid(_player) else 0.0
-
+	var heading : float = _player.rotation.y if _player else 0.0
+	var compass_pos := Vector2(center.x, 18.0 * _zoom)
+	
+	# Draw 8 compass points
 	for i in 8:
 		var angle : float = heading + i * (TAU / 8.0)
-		var outer : Vector2 = compass_pos + Vector2(sin(angle), -cos(angle)) * TICK_OUTER
-		var inner : Vector2 = compass_pos + Vector2(sin(angle), -cos(angle)) * TICK_INNER
-		var col   : Color   = _col_north if i == 0 else _col_compass
-		_overlay.draw_line(inner, outer, col, 1.5 if i % 2 == 0 else 1.0)
+		var outer_r = COMPASS_RADIUS * _zoom
+		var inner_r = (COMPASS_RADIUS - 5) * _zoom
+		var outer : Vector2 = compass_pos + Vector2(sin(angle), -cos(angle)) * outer_r
+		var inner : Vector2 = compass_pos + Vector2(sin(angle), -cos(angle)) * inner_r
+		var col : Color = _col_north if i == 0 else _col_compass
+		var width : float = 1.5 if i % 2 == 0 else 1.0
+		_overlay.draw_line(inner, outer, col, width)
 
 	# "N" label
-	var north_tip := compass_pos + Vector2(sin(heading), -cos(heading)) * (TICK_OUTER + 5.0)
+	var north_tip := compass_pos + Vector2(sin(heading), -cos(heading)) * (outer_r + 6 * _zoom)
 	_overlay.draw_string(
 		_overlay.get_theme_default_font(),
-		north_tip - Vector2(4, 5),
-		"N", HORIZONTAL_ALIGNMENT_CENTER, -1, 10, _col_north
+		north_tip - Vector2(4 * _zoom, 4 * _zoom),
+		"N", HORIZONTAL_ALIGNMENT_CENTER, -1, int(10 * _zoom), _col_north
 	)
 
-	# --- Panel rim circle (inner crop indicator) ---
-	var rim_r : float = (sz.x * 0.5) - 8.0
-	_overlay.draw_arc(ctr, rim_r, 0, TAU, 64, _col_panel_rim, 1.0)
 
-	# --- Player dot + pulse ring ---
-	var pulse_t  : float = (sin(_pulse) + 1.0) * 0.5                 # 0..1
-	var dot_r    : float = DOT_RADIUS_BASE + pulse_t * DOT_PULSE_RANGE
-	var ring_r   : float = dot_r + 4.0
-	var ring_a   : float = (1.0 - pulse_t) * 0.6
-
-	var ring_col := Color(_col_dot_ring.r, _col_dot_ring.g, _col_dot_ring.b, ring_a)
-	_overlay.draw_circle(ctr, ring_r, ring_col)
-	_overlay.draw_circle(ctr, DOT_RADIUS_BASE, _col_dot)
-
-	# Heading arrow on dot
-	var arrow_tip  := ctr + Vector2(sin(-heading), -cos(-heading)) * (DOT_RADIUS_BASE + 5.0)
-	var arrow_col  := Color(1.0, 1.0, 1.0, 0.9)
-	_overlay.draw_line(ctr, arrow_tip, arrow_col, 2.0)
+func _get_room_position(index: int, center: Vector2) -> Vector2:
+	# Arrange rooms in a spiral pattern from center
+	if index == 0:
+		return center
+	
+	var angle = index * 0.8  # Radians between rooms
+	var distance = 25 + (index * 8)  # Increasing distance from center
+	var pos = center + Vector2(cos(angle), sin(angle)) * distance * _zoom
+	return pos
 
 
 # =============================================================================
@@ -326,23 +316,31 @@ func _draw_overlay() -> void:
 
 func _apply_theme() -> void:
 	if ThemeManager.is_dark_mode:
-		_col_panel_bg   = Color(0.08, 0.08, 0.10, 0.85)
-		_col_panel_rim  = Color(0.30, 0.32, 0.38, 0.90)
+		_col_bg         = Color(0.08, 0.08, 0.10, 0.88)
+		_col_border     = Color(0.35, 0.38, 0.45, 0.85)
+		_col_player     = Color(0.23, 0.58, 0.85, 1.00)
+		_col_player_ring= Color(0.23, 0.58, 0.85, 0.30)
+		_col_room       = Color(0.50, 0.52, 0.58, 0.70)
+		_col_line       = Color(0.50, 0.52, 0.58, 0.40)
+		_col_compass    = Color(1.00, 1.00, 1.00, 0.45)
+		_col_north      = Color(0.95, 0.30, 0.30, 0.90)
 		_col_label_bg   = Color(0.00, 0.00, 0.00, 0.55)
 		_col_label_text = Color(1.00, 1.00, 1.00, 0.90)
 		_col_btn_bg     = Color(0.18, 0.18, 0.22, 0.90)
 		_col_btn_text   = Color(0.85, 0.85, 0.90, 1.00)
-		_col_compass    = Color(1.00, 1.00, 1.00, 0.45)
-		_col_dot        = Color(0.25, 0.70, 1.00, 1.00)
 	else:
-		_col_panel_bg   = Color(0.95, 0.96, 0.98, 0.88)
-		_col_panel_rim  = Color(0.60, 0.62, 0.68, 0.80)
-		_col_label_bg   = Color(0.90, 0.91, 0.95, 0.80)
-		_col_label_text = Color(0.10, 0.10, 0.15, 0.90)
-		_col_btn_bg     = Color(0.88, 0.89, 0.93, 0.90)
-		_col_btn_text   = Color(0.15, 0.15, 0.20, 1.00)
-		_col_compass    = Color(0.20, 0.20, 0.25, 0.60)
-		_col_dot        = Color(0.10, 0.50, 0.90, 1.00)
+		_col_bg         = Color(0.96, 0.97, 0.98, 0.90)
+		_col_border     = Color(0.65, 0.68, 0.72, 0.75)
+		_col_player     = Color(0.15, 0.45, 0.75, 1.00)
+		_col_player_ring= Color(0.15, 0.45, 0.75, 0.25)
+		_col_room       = Color(0.60, 0.62, 0.68, 0.65)
+		_col_line       = Color(0.60, 0.62, 0.68, 0.35)
+		_col_compass    = Color(0.30, 0.30, 0.35, 0.55)
+		_col_north      = Color(0.85, 0.20, 0.20, 0.90)
+		_col_label_bg   = Color(0.92, 0.93, 0.96, 0.75)
+		_col_label_text = Color(0.15, 0.15, 0.20, 0.90)
+		_col_btn_bg     = Color(0.88, 0.89, 0.93, 0.85)
+		_col_btn_text   = Color(0.20, 0.20, 0.25, 1.00)
 
 	if _panel:
 		_style_panel(_panel)
@@ -360,14 +358,14 @@ func _apply_theme() -> void:
 
 func _style_panel(p: Panel) -> void:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color              = _col_panel_bg
-	sb.border_color          = _col_panel_rim
+	sb.bg_color = _col_bg
+	sb.border_color = _col_border
 	for s in ["left", "right", "top", "bottom"]:
 		sb.set("border_width_" + s, 1)
 	for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
 		sb.set("corner_radius_" + c, int(PANEL_RADIUS))
-	sb.shadow_color  = Color(0, 0, 0, 0.35)
-	sb.shadow_size   = 10
+	sb.shadow_color = Color(0, 0, 0, 0.30)
+	sb.shadow_size = 10
 	sb.shadow_offset = Vector2(0, 4)
 	p.add_theme_stylebox_override("panel", sb)
 
@@ -385,27 +383,26 @@ func _style_zoom_btn(btn: Button) -> void:
 	sb.bg_color = _col_btn_bg
 	for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
 		sb.set("corner_radius_" + c, 4)
-	btn.add_theme_stylebox_override("normal",  sb)
-	btn.add_theme_stylebox_override("hover",   sb)
+	btn.add_theme_stylebox_override("normal", sb)
+	btn.add_theme_stylebox_override("hover", sb)
 	btn.add_theme_stylebox_override("pressed", sb)
 	btn.add_theme_color_override("font_color", _col_btn_text)
-	btn.add_theme_font_size_override("font_size", 13)
+	btn.add_theme_font_size_override("font_size", 12)
 
 
 # =============================================================================
-# Visibility / animation
+# Visibility / Animation
 # =============================================================================
 
 func _refresh_visibility() -> void:
 	if _mode == 0:
 		_animate_out()
 	else:
-		_set_panel_visible(true)
+		_set_visible(true)
 		_animate_in()
-		_apply_zoom()
 
 
-func _set_panel_visible(v: bool) -> void:
+func _set_visible(v: bool) -> void:
 	if _panel:
 		_panel.visible = v
 
@@ -413,37 +410,23 @@ func _set_panel_visible(v: bool) -> void:
 func _animate_in() -> void:
 	if not _panel: return
 	_panel.modulate.a = 0.0
-	_panel.scale      = Vector2(0.88, 0.88)
+	_panel.scale = Vector2(0.88, 0.88)
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_panel, "modulate:a", 1.0, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_panel, "scale",      Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_panel, "modulate:a", 1.0, 0.20).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_panel, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _animate_out() -> void:
 	if not _panel: return
 	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_panel, "modulate:a", 0.0,              0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_property(_panel, "scale",      Vector2(0.88, 0.88), 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.chain().tween_callback(func(): _set_panel_visible(false); _panel.modulate.a = 1.0; _panel.scale = Vector2.ONE)
+	tw.tween_property(_panel, "modulate:a", 0.0, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(_panel, "scale", Vector2(0.88, 0.88), 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(func(): _set_visible(false); _panel.modulate.a = 1.0; _panel.scale = Vector2.ONE)
 
 
 # =============================================================================
-# Camera + zoom
+# Zoom
 # =============================================================================
-
-func _configure_camera() -> void:
-	if not _cam: return
-	_cam.transform = Transform3D(
-		Vector3(1, 0, 0),
-		Vector3(0, 0, 1),
-		Vector3(0, 1, 0),
-		Vector3(0, CAM_HEIGHT, 0))
-	_cam.projection  = Camera3D.PROJECTION_ORTHOGONAL
-	_cam.near        = CAM_HEIGHT - 10.0
-	_cam.far         = CAM_HEIGHT + 15.0
-	_cam.size        = CAM_SIZE_1X
-	_cam.keep_aspect = Camera3D.KEEP_HEIGHT
-
 
 func _set_zoom(z: float) -> void:
 	_zoom = clampf(z, ZOOM_MIN, ZOOM_MAX)
@@ -451,7 +434,6 @@ func _set_zoom(z: float) -> void:
 
 
 func _apply_zoom() -> void:
-	if _cam:
-		_cam.size = CAM_SIZE_1X / _zoom
 	if _zoom_label:
 		_zoom_label.text = "%.1f×" % _zoom
+	_overlay.queue_redraw()

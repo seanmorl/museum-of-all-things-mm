@@ -33,12 +33,40 @@ func _ready() -> void:
 		$Arrow.visible = false
 	else:
 		left = arrow_left
-	
+
+	SettingsEvents.accessibility_changed.connect(_on_accessibility_changed)
 	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
 	_on_dark_mode_changed(ThemeManager.is_dark_mode)
+	_on_accessibility_changed()
 
 var _tween: Tween = null
 var _setup_complete: bool = false
+
+func _on_accessibility_changed(key: String = "", value: Variant = null) -> void:
+	# Check if floating signs mode is enabled
+	if key != "" and key != "floating_signs":
+		return
+	
+	var saved = SettingsManager.get_settings("accessibility")
+	var floating_signs: bool = saved.get("floating_signs", false) if saved else false
+	
+	# Hide physical board mesh, keep text visible in same position
+	if $MeshInstance3D:
+		$MeshInstance3D.visible = not floating_signs
+	
+	# Make text larger and add outline when floating, but keep same orientation
+	if floating_signs:
+		$Text.pixel_size = 0.008  # 4x larger than physical sign
+		$Text.outline_size = 4
+		$Text.outline_modulate = Color(0, 0, 0, 0.5)
+		$Arrow.pixel_size = 0.008
+		$Arrow.outline_size = 4
+		$Arrow.outline_modulate = Color(0, 0, 0, 0.5)
+	else:
+		$Text.pixel_size = 0.002
+		$Text.outline_size = 0
+		$Arrow.pixel_size = 0.002
+		$Arrow.outline_size = 6
 
 func _on_dark_mode_changed(is_dark: bool) -> void:
 	var target_text_color = Color(0.9, 0.9, 0.9) if is_dark else Color(0, 0, 0)

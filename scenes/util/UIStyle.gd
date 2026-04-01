@@ -14,22 +14,22 @@ class_name UIStyle
 # ── Design Tokens ─────────────────────────────────────────────────────────────
 
 ## Corner radius for large panels (main menu, pause menu, modals)
-const CORNER_RADIUS_PANEL: float = 12.0
+const CORNER_RADIUS_PANEL: float = 14.0
 
 ## Corner radius for buttons and small controls
-const CORNER_RADIUS_BUTTON: float = 6.0
+const CORNER_RADIUS_BUTTON: float = 8.0
 
 ## Corner radius for small elements (chips, tags)
-const CORNER_RADIUS_SMALL: float = 4.0
+const CORNER_RADIUS_SMALL: float = 6.0
 
 ## Standard content margin (buttons, panels)
 const MARGIN_STANDARD: float = 16.0
 
 ## Large content margin (modals, cards)
-const MARGIN_LARGE: float = 24.0
+const MARGIN_LARGE: float = 32.0
 
 ## Button internal padding
-const BUTTON_PADDING: float = 10.0
+const BUTTON_PADDING: float = 12.0
 
 ## Panel internal padding
 const PANEL_PADDING: float = 20.0
@@ -49,19 +49,19 @@ const HOVER_OFFSET: float = 6.0
 # ── Animation Timings ─────────────────────────────────────────────────────────
 
 ## Standard fade in/out duration
-const FADE_DURATION: float = 0.35
+const FADE_DURATION: float = 0.30
 
 ## Quick fade for toasts and notifications
-const FADE_QUICK: float = 0.18
+const FADE_QUICK: float = 0.15
 
 ## Slide animation duration
-const SLIDE_DURATION: float = 0.40
+const SLIDE_DURATION: float = 0.35
 
 ## Button hover transition
-const HOVER_DURATION: float = 0.15
+const HOVER_DURATION: float = 0.18
 
 ## Button hover return (slightly slower for smooth feel)
-const HOVER_RETURN_DURATION: float = 0.18
+const HOVER_RETURN_DURATION: float = 0.20
 
 ## Panel entrance animation
 const ENTRANCE_DURATION: float = 0.45

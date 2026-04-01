@@ -17,7 +17,7 @@ surface_material_override/1 = ExtResource("4_t7w8m")
 
 [node name="Text" type="Label3D" parent="." groups=["render_distance"]]
 transform = Transform3D(1, 0, 0, 0, 0.975149, 0.221548, 0, -0.221548, 0.975149, 0, 1.65964, 0.00901261)
-visibility_range_end = 10.0
+visibility_range_end = 30.0
 visibility_range_end_margin = 1.0
 visibility_range_fade_mode = 1
 pixel_size = 0.002
@@ -27,10 +27,12 @@ font = ExtResource("5_02wvy")
 outline_size = 0
 autowrap_mode = 3
 width = 225.0
+billboard_mode = 0
+fixed_size = false
 
 [node name="Arrow" type="Label3D" parent="." groups=["render_distance"]]
 transform = Transform3D(1, 0, 0, 0, 0.975149, 0.221548, 0, -0.221548, 0.975149, 0, 1.36368, 0.0782965)
-visibility_range_end = 10.0
+visibility_range_end = 30.0
 visibility_range_end_margin = 1.0
 visibility_range_fade_mode = 1
 pixel_size = 0.002
@@ -40,3 +42,5 @@ text = "←"
 font = ExtResource("5_02wvy")
 font_size = 165
 outline_size = 6
+billboard_mode = 0
+fixed_size = false

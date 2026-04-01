@@ -15,19 +15,20 @@ var text_color:    Color = Color(0.0,   0.0,   0.0,  1.0)
 var subtext_color: Color = Color(0.4,   0.4,   0.4,  1.0)
 
 const _LIGHT := {
-	"bg":      Color(1.0,   1.0,   1.0,  0.95),
-	"border":  Color(0.635, 0.663, 0.694, 1.0),
-	"text":    Color(0.0,   0.0,   0.0,  1.0),
-	"subtext": Color(0.4,   0.4,   0.4,  1.0),
+	"bg":      Color(0.965, 0.957, 0.937, 0.96), # #F6F4EF
+	"border":  Color(0, 0, 0, 0.10),
+	"text":    Color(0.102, 0.094, 0.078, 1.0), # #1A1814
+	"subtext": Color(0.353, 0.337, 0.314, 1.0), # #5A5650
 }
 const _DARK := {
-	"bg":      Color(0.13,  0.13,  0.15, 0.97),
-	"border":  Color(0.32,  0.32,  0.37, 1.0),
-	"text":    Color(0.92,  0.92,  0.92, 1.0),
-	"subtext": Color(0.55,  0.55,  0.60, 1.0),
+	"bg":      Color(0.055, 0.051, 0.043, 0.97), # #0E0D0B
+	"border":  Color(1, 1, 1, 0.08),
+	"text":    Color(0.941, 0.929, 0.910, 1.0), # #F0EDE8
+	"subtext": Color(0.659, 0.643, 0.612, 1.0), # #A8A49C
 }
 
 const FONT_PATHS := [
+	"res://assets/fonts/DM_Sans/static/DMSans-Regular.ttf",
 	"res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf",
 	"res://assets/fonts/OpenDyslexic/OpenDyslexic-Regular.otf",
 	"res://assets/fonts/AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf",

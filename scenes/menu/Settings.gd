@@ -581,6 +581,18 @@ func _build_accessibility_settings() -> Control:
 	container.add_child(ts_row)
 	container.add_child(_hint.call("Scales the font size of Wikipedia article text on exhibit walls."))
 
+	# Floating exhibit signs (race-friendly mode)
+	var fs_on: bool = saved.get("floating_signs", false)
+	container.add_child(_toggle.call("Floating exhibit signs", fs_on,
+		func(on: bool):
+			_save_accessibility("floating_signs", on)
+			_emit_accessibility_event("floating_signs", on)
+	))
+	container.add_child(_hint.call(
+		"Replaces physical sign boards with floating text. " +
+		"Text remains visible but the board mesh is hidden. " +
+		"Makes exhibit names easier to read during races."))
+
 	# ── Colour & Contrast ─────────────────────────────────────────────────────
 	container.add_child(_h.call("Colour & Contrast"))
 

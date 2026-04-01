@@ -192,15 +192,21 @@ func _apply_theme() -> void:
 	var dark := ThemeManager.is_dark_mode
 
 	if _pause_panel:
-		# Use centralized panel style helper
-		_panel_style = UIStyle.create_panel_style(
-			ThemeManager.bg_color,
-			ThemeManager.border_color,
-			dark,
-			UIStyle.CORNER_RADIUS_PANEL,
-			UIStyle.PANEL_PADDING
-		)
-		_pause_panel.add_theme_stylebox_override("panel", _panel_style)
+		# Create panel style once, then just update colors
+		if _panel_style == null:
+			_panel_style = UIStyle.create_panel_style(
+				ThemeManager.bg_color,
+				ThemeManager.border_color,
+				dark,
+				UIStyle.CORNER_RADIUS_PANEL,
+				UIStyle.PANEL_PADDING
+			)
+			_pause_panel.add_theme_stylebox_override("panel", _panel_style)
+		else:
+			# Just update colors, don't recreate the stylebox
+			_panel_style.bg_color = ThemeManager.bg_color
+			_panel_style.border_color = ThemeManager.border_color
+			_panel_style.shadow_color = Color(0, 0, 0, 0.30 if dark else 0.10)
 
 	if vbox:
 		var title = vbox.get_node_or_null("Title")

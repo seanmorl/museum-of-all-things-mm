@@ -2,39 +2,21 @@
 
 [ext_resource type="Script" uid="uid://dvi1pswxc3j03" path="res://scenes/menu/MainMenu.gd" id="1_cmhx0"]
 [ext_resource type="Theme" uid="uid://dgt5fjkytx07d" path="res://assets/resources/menu_theme.tres" id="1_dwey2"]
-[ext_resource type="Texture2D" uid="uid://dgfyxj62mioye" path="res://assets/logo/moat_logo_large_funky.png" id="3_vuiv8"]
+[ext_resource type="Script" uid="uid://b6tasdshal1ch" path="res://scenes/menu/MainMenuBackground.gd" id="2_bg"]
 [ext_resource type="FontFile" uid="uid://dof0vurnku5bv" path="res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf" id="5_serif"]
+[ext_resource type="FontFile" uid="uid://celp44v5a27vl" path="res://assets/fonts/DM_Sans/static/DMSans-Regular.ttf" id="6_sans"]
 
-[sub_resource type="LabelSettings" id="LabelSettings_46gfj"]
-font = ExtResource("5_serif")
-font_size = 48
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-content_margin_left = 40.0
-content_margin_top = 30.0
-content_margin_right = 40.0
-content_margin_bottom = 30.0
-bg_color = Color(1, 1, 1, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.635, 0.663, 0.694, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-
-[node name="MainMenu" type="Control" unique_id=1948110404]
+[node name="MainMenu" type="Control" unique_id=1976607565]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("1_dwey2")
 script = ExtResource("1_cmhx0")
 
-[node name="Background" type="ColorRect" parent="." unique_id=1173342466]
+[node name="Background" type="Control" parent="." unique_id=760857317]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -42,47 +24,151 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(1, 1, 1, 0)
+script = ExtResource("2_bg")
 
-[node name="MarginContainer" type="MarginContainer" parent="." unique_id=1877874735]
+[node name="MainLayout" type="HBoxContainer" parent="." unique_id=1451030325]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme = ExtResource("1_dwey2")
+theme_override_constants/separation = 0
+
+[node name="LeftCol" type="MarginContainer" parent="MainLayout" unique_id=1539093809]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/margin_left = 100
-theme_override_constants/margin_top = 60
+theme_override_constants/margin_top = 80
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 80
+
+[node name="BrandingVBox" type="VBoxContainer" parent="MainLayout/LeftCol" unique_id=137404229]
+layout_mode = 2
+
+[node name="LogoLabel" type="RichTextLabel" parent="MainLayout/LeftCol/BrandingVBox" unique_id=1528687497]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/normal_font = ExtResource("5_serif")
+theme_override_font_sizes/normal_font_size = 72
+bbcode_enabled = true
+text = "[color=#F0EDE8]M[/color][color=#6BA3E8]·[/color][color=#F0EDE8]AT[/color]"
+fit_content = true
+autowrap_mode = 0
+
+[node name="SubtitleLabel" type="Label" parent="MainLayout/LeftCol/BrandingVBox" unique_id=1502556675]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.5)
+theme_override_fonts/font = ExtResource("5_serif")
+theme_override_font_sizes/font_size = 18
+text = "The Museum of All Things"
+
+[node name="Spacer" type="Control" parent="MainLayout/LeftCol/BrandingVBox" unique_id=1521059499]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+
+[node name="ButtonContainer" type="VBoxContainer" parent="MainLayout/LeftCol/BrandingVBox" unique_id=240212156]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Footer" type="VBoxContainer" parent="MainLayout/LeftCol/BrandingVBox" unique_id=1211904979]
+layout_mode = 2
+size_flags_vertical = 10
+theme_override_constants/separation = 16
+
+[node name="Sep" type="ColorRect" parent="MainLayout/LeftCol/BrandingVBox/Footer" unique_id=1925865853]
+custom_minimum_size = Vector2(160, 1)
+layout_mode = 2
+size_flags_horizontal = 0
+color = Color(1, 1, 1, 0.1)
+
+[node name="ModeDesc" type="Label" parent="MainLayout/LeftCol/BrandingVBox/Footer" unique_id=1461663036]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.3)
+theme_override_fonts/font = ExtResource("6_sans")
+theme_override_font_sizes/font_size = 13
+text = "SELECT GAME MODE"
+
+[node name="RightCol" type="MarginContainer" parent="MainLayout" unique_id=694181012]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 80
 theme_override_constants/margin_right = 100
-theme_override_constants/margin_bottom = 60
+theme_override_constants/margin_bottom = 80
 
-[node name="CenterContainer" type="CenterContainer" parent="MarginContainer" unique_id=2133196568]
+[node name="WidgetVBox" type="VBoxContainer" parent="MainLayout/RightCol" unique_id=2069211665]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 2
+
+[node name="FactPanel" type="PanelContainer" parent="MainLayout/RightCol/WidgetVBox" unique_id=1541718473]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 8
+
+[node name="MarginContainer" type="MarginContainer" parent="MainLayout/RightCol/WidgetVBox/FactPanel" unique_id=1514125460]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainLayout/RightCol/WidgetVBox/FactPanel/MarginContainer" unique_id=1936755451]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Icon" type="Label" parent="MainLayout/RightCol/WidgetVBox/FactPanel/MarginContainer/HBoxContainer" unique_id=688043696]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_font_sizes/font_size = 18
+text = "💡"
+
+[node name="FactText" type="Label" parent="MainLayout/RightCol/WidgetVBox/FactPanel/MarginContainer/HBoxContainer" unique_id=1508932715]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.6)
+theme_override_fonts/font = ExtResource("6_sans")
+theme_override_font_sizes/font_size = 14
+text = "The Museum generates rooms from real Wikipedia articles — no two visits are the same!"
+autowrap_mode = 2
+
+[node name="TagContainer" type="HBoxContainer" parent="MainLayout/RightCol/WidgetVBox" unique_id=1157972771]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 8
+theme_override_constants/separation = 10
+
+[node name="DCPlaceholder" type="Control" parent="MainLayout/RightCol/WidgetVBox" unique_id=1781815504]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(340, 260)
 layout_mode = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/CenterContainer" unique_id=1619204762]
-layout_mode = 2
-alignment = 1
+[node name="EscHint" type="Label" parent="." unique_id=807843162]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -140.0
+offset_top = -60.0
+offset_right = -40.0
+offset_bottom = -40.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 1, 0.4)
+theme_override_fonts/font = ExtResource("6_sans")
+theme_override_font_sizes/font_size = 12
+text = "Back + ESC"
+horizontal_alignment = 2
 
-[node name="TextureRect" type="TextureRect" parent="MarginContainer/CenterContainer/VBoxContainer" unique_id=1357616785]
-z_index = 1
-layout_mode = 2
-texture = ExtResource("3_vuiv8")
-stretch_mode = 3
-
-[node name="Label3" type="Label" parent="MarginContainer/CenterContainer/VBoxContainer" unique_id=1063798843]
-layout_mode = 2
-text = " "
-label_settings = SubResource("LabelSettings_46gfj")
-
-[node name="PanelContainer" type="PanelContainer" parent="MarginContainer/CenterContainer/VBoxContainer" unique_id=1319940688]
-custom_minimum_size = Vector2(420, 380)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
-
-[node name="FadeIn" type="ColorRect" parent="." unique_id=1046280955]
-z_index = 2
+[node name="FadeIn" type="ColorRect" parent="." unique_id=1947233698]
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -90,15 +176,4 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0, 0, 0, 0)
-
-[node name="FadeInStage2" type="ColorRect" parent="." unique_id=2117895043]
-z_index = 2
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0, 0, 0, 0)
+color = Color(0.964706, 0.956863, 0.937255, 1)
