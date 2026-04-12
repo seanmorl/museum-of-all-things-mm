@@ -97,12 +97,6 @@ func _update_palette() -> void:
 	subtext_color = p["subtext"]
 
 
-func update_panel_style(style: StyleBoxFlat) -> void:
-	if style:
-		style.bg_color     = bg_color
-		style.border_color = border_color
-
-
 func style_option_button(btn: OptionButton) -> void:
 	## Applies consistent dark-mode-aware styling to an OptionButton and its popup.
 	if not btn:
@@ -176,11 +170,4 @@ func _save_preference(key: String, value: Variant) -> void:
 	var cfg := ConfigFile.new()
 	cfg.load("user://ui_settings.cfg")
 	cfg.set_value("ui", key, value)
-	cfg.save("user://ui_settings.cfg")
-
-
-func _save_preference_glass(enabled: bool) -> void:
-	var cfg := ConfigFile.new()
-	cfg.load("user://ui_settings.cfg")
-	cfg.set_value("ui", "glassmorphic_ui", enabled)
 	cfg.save("user://ui_settings.cfg")

@@ -51,7 +51,7 @@ static func apply() -> void:
 		EventManager.EventType.SILENCE:
 			SilenceEvent.apply()
 
-	print("[RouletteEvent] Applied: Random event selected - %s" % EventManager.EVENT_NAMES.get(_applied_event, "Unknown"))
+	Log.info("RouletteEvent", "Applied: Random event selected - %s" % EventManager.EVENT_NAMES.get(_applied_event, "Unknown"))
 
 static func end() -> void:
 	# End the applied event if it has duration
@@ -83,7 +83,7 @@ static func end() -> void:
 				SilenceEvent.end()
 
 	_applied_event = -1
-	print("[RouletteEvent] Ended")
+	Log.info("RouletteEvent", "Roulette ended")
 
 static func get_duration() -> float:
 	return 0.0  # Instant - applies another event

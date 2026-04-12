@@ -117,7 +117,7 @@ func _make_divider() -> ColorRect:
 	var d := ColorRect.new()
 	d.custom_minimum_size = Vector2(0, 1)
 	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	d.color = Color(1, 1, 1, 0.15)
+	d.color = ThemeManager.border_color
 	return d
 
 
@@ -331,7 +331,7 @@ func _populate_path(path: Array[String]) -> void:
 
 
 func _scroll_path_to_bottom() -> void:
-	if not _path_scroll:
+	if not is_instance_valid(_path_scroll):
 		return
 	await get_tree().process_frame
 	await get_tree().process_frame

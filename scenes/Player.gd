@@ -64,8 +64,6 @@ var _painting_system: PlayerPaintingSystem = null
 var _pointing_system: PlayerPointingSystem = null
 var _journal_system: PlayerJournalSystem = null
 var _footprint_system: PlayerFootprintSystem = null
-# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-# var _powerup_system: PlayerPowerupSystem = null
 
 ## Void detection - teleport player back to safety if they fall too far
 var _void_check_timer: float = 0.0
@@ -152,11 +150,6 @@ func _ready() -> void:
 	add_child(_footprint_system)
 	_footstep_player.footstep_played.connect(_on_footstep_played)
 
-	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-	# _powerup_system = PlayerPowerupSystem.new()
-	# _powerup_system.init(self)
-	# add_child(_powerup_system)
-
 
 # =============================================================================
 # PUBLIC API - Facade methods that delegate to subsystems
@@ -194,18 +187,6 @@ var starting_height: float:
 var crouching_height: float:
 	get: return _crouch_system.get_crouching_height() if _crouch_system else 0.45
 
-# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-# Powerup API (delegates to PlayerPowerupSystem)
-# var has_gun: bool:
-# 	get: return _powerup_system.has_gun() if _powerup_system else false
-# var has_trap: bool:
-# 	get: return _powerup_system.has_trap() if _powerup_system else false
-# var has_perfect_knowledge: bool:
-# 	get: return _powerup_system.has_perfect_knowledge() if _powerup_system else false
-# var has_magnet: bool:
-# 	get: return _powerup_system.has_magnet() if _powerup_system else false
-
-
 func pause() -> void:
 	_enabled = false
 
@@ -240,7 +221,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("mount") and is_local and not DebugConsole.is_active():
 		if _mount_system.is_mounted():
 			# Always allow dismount regardless of _enabled or mouse mode
-			print("Player: Dismount requested (E key pressed while seated)")
+			Log.debug("Player", "Dismount requested (E key pressed while seated)")
 			request_dismount()
 			get_viewport().set_input_as_handled()
 			return
@@ -254,13 +235,31 @@ func _unhandled_input(event: InputEvent) -> void:
 			# E while carrying = place item down
 			_painting_system.try_place_item()
 		else:
-			# E while not carrying = interact (play gramophone, sit on bench, etc.)
 			var collider: Node = _get_interactable_collider()
+			Log.debug("Player", "E pressed, collider=%s" % [collider.name if collider else "null"])
+
 			if collider:
-				if collider.has_method("interact"):
-					collider.interact()
-				elif collider.get_parent() and collider.get_parent().has_method("interact"):
-					collider.get_parent().interact()
+				# Walk up to find the actual interactive node
+				var target = _find_interactive_parent(collider)
+				Log.debug("Player", "Interactive target=%s type=%s" % [target.name if target else "null", target.get_class() if target else "null"])
+
+				# Check if target is an audio item (Gramophone or SoundItem)
+				var is_audio_item = target is Gramophone or target is SoundItem
+
+				if target:
+					if is_audio_item and target.has_method("interact"):
+						# E on audio items = play/pause (don't steal)
+						Log.debug("Player", "Calling interact() on audio item: %s" % target.name)
+						target.interact()
+					elif _is_stealable_item(collider) and _painting_system:
+						# E on paintings = steal them
+						Log.debug("Player", "Detected stealable painting, attempting steal")
+						if _painting_system.try_steal_target():
+							get_viewport().set_input_as_handled()
+							return
+					else:
+						# E on other items = mount or interact
+						_mount_system.try_mount_target()
 				else:
 					_mount_system.try_mount_target()
 			else:
@@ -268,36 +267,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	# Steal handling (left mouse click) - pick up paintings and gramophones
+	# Left-click = pick up paintings and gramophones (without playing audio)
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED and _painting_system and not _painting_system.is_carrying():
 			if _painting_system.try_steal_target():
 				get_viewport().set_input_as_handled()
 				return
-
-	# Interact handling (equip skin, etc.) — skip if carrying a painting (right-click is eat)
-	if event.is_action_pressed("interact") and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
-		if _painting_system and _painting_system.is_carrying():
-			pass  # Eat is handled in _process via process_eat()
-		else:
-			var collider: Node = _get_interactable_collider()
-			if collider:
-				if collider.has_method("interact"):
-					collider.interact()
-				elif collider.get_parent() and collider.get_parent().has_method("interact"):
-					collider.get_parent().interact()
-
-	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-	# Powerup handling - Gun fire and Trap placement
-	# if event.is_action_pressed("point") and (Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED or Input.get_connected_joypads().size() > 0):
-	# 	if _powerup_system and _powerup_system.has_gun():
-	# 		_powerup_system.fire_gun()
-	# 	elif _powerup_system and _powerup_system.has_trap():
-	# 		_powerup_system.place_trap()
-	# 	elif _powerup_system and _powerup_system.has_magnet():
-	# 		_powerup_system.activate_magnet()
-	# 	elif _powerup_system and _powerup_system.has_grapple():
-	# 		_powerup_system.fire_grapple()
 
 	var is_mouse: bool = event is InputEventMouseMotion
 	if is_mouse and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED and _enabled:
@@ -471,7 +446,7 @@ func _physics_process(delta: float) -> void:
 				# Additional jumps (double/triple)
 				velocity.y = jump_impulse
 				_jump_count += 1
-				print("[Player] Jump %d/%d" % [_jump_count, _max_jumps])
+				Log.debug("Player", "Jump %d/%d" % [_jump_count, _max_jumps])
 
 		# Process remaining systems only when enabled
 		if _enabled:
@@ -504,6 +479,16 @@ func _physics_process(delta: float) -> void:
 # INTERACTION HELPERS
 # =============================================================================
 
+func _is_stealable_item(collider: Node) -> bool:
+	var node: Node = collider
+	while node:
+		# Check for ImageItem or SoundItem (NOT Gramophone - left-click steals those)
+		if node is ImageItem or node is SoundItem:
+			if node.has_method("get_interaction_text") and node.get_interaction_text() != "":
+				return true
+		node = node.get_parent()
+	return false
+
 func _get_interactable_collider() -> Node:
 	# Check forward raycast first (for benches, items at eye level)
 	if _raycast.is_colliding():
@@ -511,6 +496,27 @@ func _get_interactable_collider() -> Node:
 	# Fall back to floor raycast (for plaques on floor/wall)
 	if _floor_raycast and _floor_raycast.is_colliding():
 		return _floor_raycast.get_collider()
+	return null
+
+
+func _find_interactive_parent(node: Node) -> Node:
+	## Walk up from collider to find the actual interactive node (Gramophone, SoundItem, etc.)
+	var current: Node = node
+	while current:
+		# Only return specific interactive types, not generic nodes with interact()
+		if current is Gramophone or current is SoundItem or current is Bench or current is Terminal:
+			return current
+		current = current.get_parent()
+	return null
+
+
+func _find_gramophone_node(node: Node) -> Node:
+	## Walk up from collider to find a Gramophone node
+	var current: Node = node
+	while current:
+		if current is Gramophone:
+			return current
+		current = current.get_parent()
 	return null
 
 
@@ -534,9 +540,9 @@ func request_mount(target: Node) -> void:
 
 func request_dismount() -> void:
 	var main_node: Node = get_tree().current_scene
-	print("Player.request_dismount() called, main_node=", main_node)
+	Log.debug("Player", "request_dismount() called, main_node=%s" % [main_node])
 	if main_node and main_node.has_method("_request_dismount"):
-		print("Player: Calling main._request_dismount()")
+		Log.debug("Player", "Calling main._request_dismount()")
 		main_node._request_dismount()
 
 
@@ -551,7 +557,7 @@ func execute_mount(target: Node, target_peer_id: int = -1) -> void:
 
 
 func execute_dismount() -> void:
-	print("Player.execute_dismount() called, _mount_system=", _mount_system)
+	Log.debug("Player", "execute_dismount() called, _mount_system=%s" % [_mount_system])
 	_mount_system.execute_dismount()
 	if is_local:
 		_enabled = true
@@ -767,20 +773,20 @@ func _add_outline_effect(base_material: StandardMaterial3D, player_color: Color)
 func set_double_jump_enabled(enabled: bool) -> void:
 	_double_jump_enabled = enabled
 	_update_max_jumps()
-	print("[Player] Double jump: %s" % ["ENABLED" if enabled else "DISABLED"])
+	Log.info("Player", "Double jump: %s" % ["ENABLED" if enabled else "DISABLED"])
 
 func set_triple_jump_enabled(enabled: bool) -> void:
 	_triple_jump_enabled = enabled
 	_update_max_jumps()
-	print("[Player] Triple jump: %s" % ["ENABLED" if enabled else "DISABLED"])
+	Log.info("Player", "Triple jump: %s" % ["ENABLED" if enabled else "DISABLED"])
 
 func set_controls_inverted(enabled: bool) -> void:
 	_controls_inverted = enabled
-	print("[Player] Controls: %s" % ["INVERTED" if enabled else "NORMAL"])
+	Log.info("Player", "Controls: %s" % ["INVERTED" if enabled else "NORMAL"])
 
 func set_gravity_modifier(modifier: float) -> void:
 	_gravity_modifier = modifier
-	print("[Player] Gravity modifier: %.1f%% (0.3 = moon gravity!)" % (modifier * 100))
+	Log.info("Player", "Gravity modifier: %.1f%% (0.3 = moon gravity!)" % (modifier * 100))
 
 func _update_max_jumps() -> void:
 	if _triple_jump_enabled:
@@ -924,35 +930,35 @@ func apply_network_pointing(pointing: bool, target: Vector3) -> void:
 
 func _teleport_to_safety() -> void:
 	"""Teleport player back to their last valid position when they fall into void."""
-	print("Player: Fell into void! Teleporting to safety...")
-	
+	Log.warn("Player", "Fell into void! Teleporting to safety...")
+
 	# Determine where to teleport player
 	var teleport_pos: Vector3
 	var message: String
-	
+
 	# Check if there's an active race - use race start line if so
 	var race_manager = get_node_or_null("/root/RaceManager")
 	var is_race_active = false
 	if race_manager and race_manager.has_method("is_race_active"):
 		is_race_active = race_manager.is_race_active()
-	
+
 	if is_race_active:
 		# During race, spawn at the race start line (same as teleport_all_players_to_start_line)
 		teleport_pos = Vector3(0, 5.0, 23.0)
 		message = "You fell into the void!\n\nTeleported back to race start line."
-		print("Player: Active race, teleporting to race start line: ", teleport_pos)
+		Log.info("Player", "Active race, teleporting to race start line: %s" % [teleport_pos])
 		if "current_room" in self:
 			current_room = "Lobby"
 	elif _last_valid_position.y > VOID_Y_THRESHOLD:
 		# Use last valid position with small Y offset to prevent immediate re-fall
 		teleport_pos = Vector3(_last_valid_position.x, _last_valid_position.y + 2.0, _last_valid_position.z)
 		message = "You fell through the floor!\n\nTeleported back to where you were."
-		print("Player: Returning to last valid position: ", teleport_pos)
+		Log.info("Player", "Returning to last valid position: %s" % [teleport_pos])
 	else:
 		# Fallback to start line if no valid position tracked
 		teleport_pos = Vector3(VOID_SPAWN_XZ.x, VOID_SPAWN_Y, VOID_SPAWN_XZ.y)
 		message = "You fell into the void!\n\nTeleported back to start line."
-		print("Player: No valid position tracked, using start line: ", teleport_pos)
+		Log.info("Player", "No valid position tracked, using start line: %s" % [teleport_pos])
 		if "current_room" in self:
 			current_room = "Lobby"
 	

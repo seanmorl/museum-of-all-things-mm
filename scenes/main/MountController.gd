@@ -49,10 +49,10 @@ func request_mount(target: Node, local_player: Node) -> void:
 
 
 func request_dismount(local_player: Node) -> void:
-	print("MountController.request_dismount() called, local_player=", local_player, ", is_multiplayer=", NetworkManager.is_multiplayer_active(), ", is_multiplayer_game=", _multiplayer_controller.is_multiplayer_game())
+	Log.debug("MountController", "request_dismount() called, local_player=%s, is_multiplayer=%s, is_multiplayer_game=%s" % [local_player, NetworkManager.is_multiplayer_active(), _multiplayer_controller.is_multiplayer_game()])
 	if not _multiplayer_controller.is_multiplayer_game() or not NetworkManager.is_multiplayer_active():
 		# Single player - dismount directly
-		print("MountController: Single player mode, calling execute_dismount()")
+		Log.debug("MountController", "Single player mode, calling execute_dismount()")
 		local_player.execute_dismount()
 		return
 
@@ -60,33 +60,33 @@ func request_dismount(local_player: Node) -> void:
 	if NetworkManager.is_server():
 		handle_dismount_request(NetworkManager.get_unique_id(), local_player)
 	else:
-		print("MountController: Sending dismount RPC to server")
+		Log.debug("MountController", "Sending dismount RPC to server")
 		_main._request_dismount_rpc.rpc_id(1, NetworkManager.get_unique_id())
 
 
 func handle_mount_request(rider_peer_id: int, mount_peer_id: int, local_player: Node) -> void:
 	# Server-side validation and execution
-	print("MountController.handle_mount_request() rider_peer_id=", rider_peer_id, ", mount_peer_id=", mount_peer_id)
+	Log.debug("MountController", "handle_mount_request() rider_peer_id=%d, mount_peer_id=%d" % [rider_peer_id, mount_peer_id])
 	var rider: Node = _multiplayer_controller.get_player_by_peer_id(rider_peer_id, local_player)
 	var mount: Node = _multiplayer_controller.get_player_by_peer_id(mount_peer_id, local_player)
-	print("  rider=", rider, ", mount=", mount)
+	Log.debug("MountController", "  rider=%s, mount=%s" % [rider, mount])
 
 	if not is_instance_valid(rider) or not is_instance_valid(mount):
-		print("  INVALID: rider or mount is null")
+		Log.debug("MountController", "  INVALID: rider or mount is null")
 		return
 	if mount.has_rider:
-		print("  INVALID: mount already has rider")
+		Log.debug("MountController", "  INVALID: mount already has rider")
 		return  # Mount already has a rider
 	if rider.is_mounted:
-		print("  INVALID: rider already mounted")
+		Log.debug("MountController", "  INVALID: rider already mounted")
 		return  # Rider is already mounted
 	if "in_h" in rider and rider.in_hall:
-		print("  INVALID: rider in hallway")
+		Log.debug("MountController", "  INVALID: rider in hallway")
 		return  # Can't mount in a hallway
 
 	# Store mount state
 	_mount_state[rider_peer_id] = mount_peer_id
-	print("  VALID: Storing mount state, executing mount")
+	Log.debug("MountController", "  VALID: Storing mount state, executing mount")
 
 	# Execute locally if this is the server's player
 	if rider_peer_id == NetworkManager.get_unique_id():
@@ -100,18 +100,18 @@ func handle_mount_request(rider_peer_id: int, mount_peer_id: int, local_player: 
 
 func handle_dismount_request(rider_peer_id: int, local_player: Node) -> void:
 	# Server-side validation and execution
-	print("MountController.handle_dismount_request() rider_peer_id=", rider_peer_id)
+	Log.debug("MountController", "handle_dismount_request() rider_peer_id=%d" % rider_peer_id)
 
 	# Check if rider is actually mounted (for player mounts)
 	if not _mount_state.has(rider_peer_id) or _mount_state[rider_peer_id] == -1:
 		# Not in mount state - check if mounted on a static seat (bench)
-		print("  Not in mount_state, checking if mounted on static seat")
+		Log.debug("MountController", "  Not in mount_state, checking if mounted on static seat")
 		# For static seats, we don't track state - just execute dismount directly
 		if rider_peer_id == NetworkManager.get_unique_id():
-			print("  Executing local player dismount (static seat)")
+			Log.debug("MountController", "  Executing local player dismount (static seat)")
 			local_player.execute_dismount()
 		elif _multiplayer_controller.get_network_players().has(rider_peer_id):
-			print("  Executing network player dismount (static seat)")
+			Log.debug("MountController", "  Executing network player dismount (static seat)")
 			_multiplayer_controller.get_network_players()[rider_peer_id].execute_dismount()
 		_main._execute_dismount_sync.rpc(rider_peer_id)
 		return

@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://j6d4ggn4fflw"]
+
+[ext_resource type="Script" path="res://scenes/items/MultiSegmentTextItem.gd" id="1_seg"]
+[ext_resource type="FontFile" uid="uid://g7ngd4oyyd5d" path="res://assets/fonts/CormorantGaramond/CormorantGaramond-Regular.ttf" id="2_font"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_interaction"]
+size = Vector3(5, 5, 0.5)
+
+[node name="MultiSegmentTextItem" type="Node3D"]
+script = ExtResource("1_seg")
+
+[node name="Label" type="Label3D" parent="."]
+visibility_range_end = 18.0
+visibility_range_end_margin = 5.0
+visibility_range_fade_mode = 1
+pixel_size = 0.001
+texture_filter = 5
+modulate = Color(0, 0, 0, 1)
+font = ExtResource("2_font")
+font_size = 64
+autowrap_mode = 3
+justification_flags = 171
+width = 2400.0
+billboard_mode = 0
+
+[node name="InteractionBody" type="StaticBody3D" parent="."]
+collision_layer = 1048576
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="InteractionBody"]
+shape = SubResource("BoxShape3D_interaction")

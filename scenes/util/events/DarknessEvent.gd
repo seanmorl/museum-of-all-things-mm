@@ -45,7 +45,7 @@ static func apply() -> void:
 		var tween = _world_env.create_tween()
 		tween.tween_property(_world_env.environment, "ambient_light_energy", 0.02, 1.0)  # VERY dark
 
-	print("[DarknessEvent] Applied: Lights dimmed to 5%%, ambient reduced to 2%% (found %d managed lights)" % lights_found)
+	Log.info("DarknessEvent", "Applied: Lights dimmed to 5%%, ambient reduced to 2%% (found %d managed lights)" % lights_found)
 
 static func end() -> void:
 	# Restore original light energies
@@ -61,7 +61,7 @@ static func end() -> void:
 		tween.tween_property(_world_env.environment, "ambient_light_energy", _original_ambient_energy, 1.0)
 
 	_original_light_states.clear()
-	print("[DarknessEvent] Ended: Lights restored")
+	Log.info("DarknessEvent", "Lights restored")
 
 static func get_duration() -> float:
 	return randf_range(20.0, 35.0)

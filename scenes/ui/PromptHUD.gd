@@ -2,8 +2,6 @@ extends Control
 ## A center-bottom prompt that shows "Press E to [Action]" for interactables.
 
 const FADE_TIME := 0.2
-const PANEL_COLOR := Color(0, 0, 0, 0.6)
-const TEXT_COLOR := Color(1, 1, 1, 0.9)
 
 var _target: Node = null
 var _player: Node = null
@@ -17,11 +15,14 @@ func _ready() -> void:
 	_font = ThemeManager.get_reading_font()
 	ThemeManager.reading_font_changed.connect(_on_font_changed)
 	ThemeManager.is_dark_mode # Ensure theme manager is active
-	
+
+	if not _panel or not _label:
+		return
+
 	modulate.a = 0.0
 	visible = false
 	_refresh_theme()
-	
+
 	# Initial setup of label
 	_label.bbcode_enabled = true
 	_label.fit_content = true
@@ -55,17 +56,20 @@ func _process(_delta: float) -> void:
 
 func _update_prompt() -> void:
 	var interactable: Node = null
-	if _target:
-		if _target.has_method("interact") or _target.has_method("get_interaction_text"):
-			interactable = _target
-		elif _target.get_parent() and (_target.get_parent().has_method("interact") or _target.get_parent().has_method("get_interaction_text")):
-			interactable = _target.get_parent()
-	
+
+	# Walk up from the target through all parents to find an interactable node
+	var node: Node = _target
+	while node:
+		if node.has_method("interact") or node.has_method("get_interaction_text"):
+			interactable = node
+			break
+		node = node.get_parent()
+
 	if interactable:
 		var action_text := "Interact"
 		if interactable.has_method("get_interaction_text"):
 			action_text = interactable.get_interaction_text()
-		
+
 		# Show prompt
 		var key_text := "[b][color=#FFCC00]E[/color][/b]"
 		_label.text = "[center]Press %s to %s[/center]" % [key_text, action_text]
@@ -79,8 +83,8 @@ func _fade_in() -> void:
 	visible = true
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 1.0, FADE_TIME)
-	# Slide PanelContainer from bottom
-	tw.parallel().tween_property(_panel, "position:y", size.y - 120, FADE_TIME).from(size.y - 0)
+	# Slide PanelContainer from bottom using offset
+	tw.parallel().tween_property(_panel, "offset_bottom", -120, FADE_TIME).from(0)
 
 func _fade_out() -> void:
 	if not _is_visible: return
@@ -88,7 +92,7 @@ func _fade_out() -> void:
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 0.0, FADE_TIME)
 	# Slide PanelContainer out
-	tw.parallel().tween_property(_panel, "position:y", size.y - 0, FADE_TIME)
+	tw.tween_property(_panel, "offset_bottom", 0, FADE_TIME)
 	tw.tween_callback(func(): if not _is_visible: visible = false)
 
 func _refresh_theme() -> void:

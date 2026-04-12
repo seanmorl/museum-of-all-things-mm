@@ -10,6 +10,7 @@ var _tween: Tween = null
 var _history: Array[String] = []
 var _history_index: int = -1
 var _toggle_cooldown: bool = false
+var _stats_timer: float = 0.0
 
 ## Static method safe for export builds
 static func is_active() -> bool:
@@ -67,7 +68,7 @@ func _ready() -> void:
 	if _output_label:
 		_output_label.text = "[color=#5599ff]System ready.[/color] Type [color=#aaccff]help[/color] for commands.\n"
 
-	print("[DebugConsole] Console initialized")
+	Log.debug("DebugConsole", "Console initialized")
 
 
 func _build_console() -> void:
@@ -251,6 +252,7 @@ func _style_label(lbl: Label, size: int, primary: bool) -> void:
 
 func _apply_full_theme() -> void:
 	if not ThemeManager: return
+	if not is_instance_valid(_panel): return
 	var dark:  bool  = ThemeManager.is_dark_mode
 	var accent        := Color(0.30, 0.55, 1.00) if dark else Color(0.12, 0.32, 0.82)
 
@@ -413,9 +415,12 @@ func _process(_delta: float) -> void:
 	if _toggle_cooldown and not Input.is_key_pressed(KEY_QUOTELEFT) and not Input.is_key_pressed(KEY_F12):
 		_toggle_cooldown = false
 
-	# Update stats if visible and on stats tab
+	# Update stats if visible and on stats tab (throttled to 0.5s intervals)
 	if _console_visible and _tab_container and _tab_container.current_tab == 2:
-		_update_stats()
+		_stats_timer += _delta
+		if _stats_timer >= 0.5:
+			_stats_timer = 0.0
+			_update_stats()
 
 
 func toggle_console() -> void:

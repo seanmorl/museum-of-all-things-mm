@@ -46,13 +46,13 @@ func set_hill_zone(zone: Area3D, pos: Vector3, radius: float) -> void:
 	_hill_zone = zone
 	_hill_pos = pos
 	_hill_radius = radius
-	print("[RaceManager] Hill zone set at %s (radius %.1f)" % [pos, radius])
+	Log.debug("RaceManager", "Hill zone set at %s (radius %.1f)" % [pos, radius])
 
 func clear_hill_zone() -> void:
 	_hill_zone = null
 	_hill_pos = Vector3.ZERO
 	_hill_radius = 0.0
-	print("[RaceManager] Hill zone cleared")
+	Log.debug("RaceManager", "Hill zone cleared")
 
 ## Time (Unix seconds) when the race started, set on every peer for accuracy.
 var _race_start_time: float = 0.0
@@ -134,10 +134,17 @@ func _on_player_room_changed(peer_id: int, room: String) -> void:
 		return
 	if room == "Lobby":
 		return  # Don't track lobby
-	
+
 	if not _player_room_history.has(peer_id):
 		_player_room_history[peer_id] = []
 	_player_room_history[peer_id].append(room)
+
+
+func _on_player_disconnect(peer_id: int) -> void:
+	"""Clean up player data when they disconnect"""
+	_player_room_history.erase(peer_id)
+	# _local_visited_pages is local-only (tracks THIS client's path), no cleanup needed
+	# Note: Don't cancel race if someone disconnects - let remaining players continue
 
 
 func _process(delta: float) -> void:
@@ -280,12 +287,16 @@ func _finish_vote() -> void:
 	winners.shuffle()
 	var winning_idx: int = winners[0]
 	var winning_article: String = _vote_candidates[winning_idx]
-	if OS.is_debug_build():
-		print("RaceManager: Vote ended, winning target: ", winning_article)
+	Log.debug("RaceManager", "Vote ended, winning target: %s" % winning_article)
 	_sync_vote_end.rpc(winning_idx)
 	## winning_article = what players voted for = the race target
 	## _vote_start_article = random article = where the door opens
-	start_race(winning_article, _vote_start_article)
+	## Fallback: if start article is empty, use the winning article as both target and start
+	var start_article: String = _vote_start_article
+	if start_article == "":
+		Log.warn("RaceManager", "Vote start_article empty, falling back to winning article")
+		start_article = winning_article
+	start_race(winning_article, start_article)
 
 func get_vote_candidates() -> Array:
 	return _vote_candidates
@@ -396,8 +407,7 @@ func _receive_vote(peer_id: int, candidate_index: int) -> void:
 	if candidate_index < 0 or candidate_index >= _vote_candidates.size():
 		return
 	_votes[peer_id] = candidate_index
-	if OS.is_debug_build():
-		print("RaceManager: Vote from peer ", peer_id, " for ", _vote_candidates[candidate_index])
+	Log.debug("RaceManager", "Vote from peer %d for %s" % [peer_id, _vote_candidates[candidate_index]])
 
 func start_race(target_article: String, start_article: String) -> void:
 	if not NetworkManager.is_server():
@@ -421,9 +431,8 @@ func start_race(target_article: String, start_article: String) -> void:
 	# Pre-fetch backlinks for hint system (non-blocking, improves hint success rate)
 	# Note: Backlinks are now fetched by Main.gd at race start, not here
 
-	if OS.is_debug_build():
-		print("RaceManager: Starting countdown to race...")
-		print("RaceManager: Pre-fetching backlinks for hints...")
+	Log.debug("RaceManager", "Starting countdown to race...")
+	Log.debug("RaceManager", "Pre-fetching backlinks for hints...")
 
 	# Start countdown on server
 	_start_countdown(target_article, start_article)
@@ -437,14 +446,13 @@ func _start_countdown(target_article: String, start_article: String) -> void:
 	# Signal that countdown is starting (VoteHUD should hide)
 	race_countdown_started.emit()
 	EventBus.publish_countdown_started()
-	print("RaceManager: Starting countdown: 3...")
+	Log.debug("RaceManager", "Starting countdown: 3...")
 
 	while countdown >= 0:
 		# Always emit locally so single-player and the server itself receive the signal.
 		race_countdown.emit(countdown)
 		EventBus.publish_countdown_tick(countdown)
-		if OS.is_debug_build():
-			print("RaceManager: Countdown emit: ", countdown)
+		Log.debug("RaceManager", "Countdown emit: %d" % countdown)
 		# Only RPC to clients when multiplayer is actually running.
 		# (Previously race_countdown.emit + _sync_countdown.rpc(call_local) fired twice
 		# on the server in multiplayer — now we guard the rpc behind is_multiplayer_active.)
@@ -460,7 +468,7 @@ func _start_countdown(target_article: String, start_article: String) -> void:
 	_state = State.ACTIVE
 	_race_start_time = Time.get_unix_time_from_system()
 
-	print("RaceManager: GO! Race started to '", target_article, "'")
+	Log.info("RaceManager", "GO! Race started to '%s'" % target_article)
 
 	_sync_race_start.rpc(target_article, start_article, _race_start_time)
 	race_started.emit(target_article, start_article)
@@ -480,6 +488,10 @@ func notify_article_reached(peer_id: int, article_title: String, visited_path: A
 
 	# Server-side: validate path against tracked room history
 	if NetworkManager.is_server():
+		# Atomic guard: prevent double-win if two players finish simultaneously
+		if _state != State.ACTIVE:
+			return
+
 		# Dictionary.get() returns untyped Array — assign via explicit typed local
 		var raw_server_path: Array = _player_room_history.get(peer_id, [])
 		var server_path: Array[String] = []
@@ -496,21 +508,18 @@ func notify_article_reached(peer_id: int, article_title: String, visited_path: A
 			# Client provided a path (multiplayer client win RPC)
 			for item in visited_path:
 				path.append(str(item))
-			if OS.is_debug_build():
-				print("RaceManager: Using client-provided path (server tracking unavailable)")
+			Log.debug("RaceManager", "Using client-provided path (server tracking unavailable)")
 		else:
 			# Single player: NetworkManager.is_multiplayer_active() is false so
 			# set_local_player_room is never called and _player_room_history stays empty.
 			# Use _local_visited_pages which is populated via SettingsEvents.set_current_room.
 			for item in _local_visited_pages:
 				path.append(item)
-			if OS.is_debug_build():
-				print("RaceManager: Using local visited pages (single player path)")
+			Log.debug("RaceManager", "Using local visited pages (single player path)")
 
 		# Require at least one room visited to prevent teleport/void exploits.
 		if path.is_empty():
-			if OS.is_debug_build():
-				print("RaceManager: Blocked win — empty path for '%s'" % article_title)
+			Log.debug("RaceManager", "Blocked win — empty path for '%s'" % article_title)
 			return
 
 		var winner_path_copy: Array[String] = []
@@ -536,8 +545,7 @@ func _handle_win(peer_id: int) -> void:
 	_elapsed_time = 0.0
 	_timer_signal_accumulator = 0.0
 
-	if OS.is_debug_build():
-		print("RaceManager: Winner is ", _winner_name, " (peer ", peer_id, ") in ", "%.1f" % final_time, "s")
+	Log.debug("RaceManager", "Winner is %s (peer %d) in %.1fs" % [_winner_name, peer_id, final_time])
 
 	# Emit race_won signal for victory sound
 	race_won.emit(_winner_name, final_time)
@@ -575,11 +583,26 @@ func cancel_race() -> void:
 
 func _on_server_disconnected() -> void:
 	if _state == State.ACTIVE:
-		cancel_race()
+		# Host is gone — we can't send an RPC, so reset locally immediately.
+		# All clients will independently reach this conclusion and reset.
+		_state = State.IDLE
+		_target_article = ""
+		_start_article = ""
+		_winner_peer_id = -1
+		_winner_name = ""
+		_elapsed_time = 0.0
+		_timer_signal_accumulator = 0.0
+		_player_room_history.clear()
+		_local_visited_pages.clear()
+		race_cancelled.emit()
 
 func _on_peer_connected(peer_id: int) -> void:
-	if NetworkManager.is_server() and _state == State.ACTIVE:
+	if not NetworkManager.is_server():
+		return
+	if _state == State.ACTIVE:
 		_sync_race_state_to_peer.rpc_id(peer_id, _target_article, _start_article, _race_start_time)
+	if _vote_active:
+		_sync_vote_state_to_peer.rpc_id(peer_id, _vote_candidates, _vote_timer)
 
 @rpc("authority", "call_local", "reliable")
 func _sync_race_start(target_article: String, start_article: String, start_time: float) -> void:
@@ -593,8 +616,7 @@ func _sync_race_start(target_article: String, start_article: String, start_time:
 	_elapsed_time = 0.0
 	_timer_signal_accumulator = 0.0
 
-	if OS.is_debug_build():
-		print("RaceManager: Race started, target: ", target_article)
+	Log.debug("RaceManager", "Race started, target: %s" % target_article)
 
 	if not NetworkManager.is_server():
 		race_started.emit(target_article, start_article)
@@ -608,8 +630,7 @@ func _sync_race_end(winner_peer_id: int, winner_name: String, final_time: float,
 	_elapsed_time = final_time
 	_timer_signal_accumulator = 0.0
 
-	if OS.is_debug_build():
-		print("RaceManager: Race ended, winner: ", winner_name, " in ", "%.1f" % final_time, "s")
+	Log.debug("RaceManager", "Race ended, winner: %s in %.1fs" % [winner_name, final_time])
 
 	# Clear hint cache to prevent memory leak
 	_clear_hint_cache()
@@ -638,8 +659,7 @@ func _clear_hint_cache() -> void:
 	var hint_manager = get_node_or_null("/root/HintManager")
 	if hint_manager and hint_manager.has_method("clear_all_hints"):
 		hint_manager.clear_all_hints()
-		if OS.is_debug_build():
-			print("RaceManager: Hint cache cleared")
+		Log.debug("RaceManager", "Hint cache cleared")
 
 @rpc("authority", "call_remote", "reliable")
 func _sync_race_state_to_peer(target_article: String, start_article: String, start_time: float) -> void:
@@ -653,10 +673,16 @@ func _sync_race_state_to_peer(target_article: String, start_article: String, sta
 	_elapsed_time = Time.get_unix_time_from_system() - start_time
 	_timer_signal_accumulator = 0.0
 
-	if OS.is_debug_build():
-		print("RaceManager: Late join - synced to race for '", target_article, "' (already ", "%.1f" % _elapsed_time, "s in)")
+	Log.debug("RaceManager", "Late join - synced to race for '%s' (already %.1fs in)" % [target_article, _elapsed_time])
 
-	race_started.emit(target_article, start_article)
+@rpc("authority", "call_local", "reliable")
+func _sync_vote_state_to_peer(candidates: Array, timer: float) -> void:
+	"""Sync active vote state to late-joining peer"""
+	_vote_candidates = candidates
+	_vote_timer = timer
+	_vote_active = true
+	_vote_timer_paused = false
+	vote_started.emit(candidates)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_win_validation(peer_id: int, article_title: String, visited_path: Array = []) -> void:
@@ -719,9 +745,31 @@ func _request_race_cancel() -> void:
 # === Host Menu Support Methods ===
 
 func skip_countdown() -> void:
-	"""Skip countdown and start race immediately"""
-	# Just emit race started directly to skip remaining countdown
+	"""Skip countdown and start race immediately.
+	Properly initializes race state, syncs to all clients, and starts the timer."""
+	if not NetworkManager.is_server():
+		Log.error("RaceManager", "skip_countdown: Only the server can skip countdown")
+		return
+	if _state != State.IDLE or _target_article == "" or _start_article == "":
+		Log.error("RaceManager", "skip_countdown: Race not ready (state=%s, target='%s', start='%s')" % [_state, _target_article, _start_article])
+		return
+
+	_state = State.ACTIVE
+	_race_start_time = Time.get_unix_time_from_system()
+	_winner_peer_id = -1
+	_winner_name = ""
+	_winner_path.clear()
+	_local_visited_pages.clear()
+	_player_room_history.clear()
+	_elapsed_time = 0.0
+	_timer_signal_accumulator = 0.0
+
+	# Sync to all clients
+	_sync_race_start.rpc(_target_article, _start_article, _race_start_time)
 	race_started.emit(_target_article, _start_article)
+	EventBus.publish_race_started(_target_article, _start_article)
+
+	Log.debug("RaceManager", "skip_countdown() — race started immediately to '%s'" % _target_article)
 
 func extend_vote_timer(seconds: int) -> void:
 	"""Extend vote timer by specified seconds"""
@@ -747,7 +795,7 @@ func set_global_speed_modifier(modifier: float) -> void:
 	_global_speed_modifier = modifier
 	# Broadcast to all clients so they apply the same modifier
 	_rpc_set_speed_modifier.rpc(modifier)
-	print("[RaceManager] Global speed modifier set to: %.2fx" % modifier)
+	Log.info("RaceManager", "Global speed modifier set to: %.2fx" % modifier)
 
 func get_global_speed_modifier() -> float:
 	"""Get current global speed modifier"""
@@ -761,7 +809,7 @@ func _rpc_set_speed_modifier(modifier: float) -> void:
 func set_gravity_modifier(modifier: float) -> void:
 	"""Set gravity modifier for all players (1.0 = normal, 0.3 = moon gravity)"""
 	_rpc_set_gravity_modifier.rpc(modifier)
-	print("[RaceManager] Gravity modifier set to: %.2f (MOON GRAVITY!)" % modifier)
+	Log.info("RaceManager", "Gravity modifier set to: %.2f (MOON GRAVITY!)" % modifier)
 
 @rpc("authority", "call_local", "reliable")
 func _rpc_set_gravity_modifier(modifier: float) -> void:
@@ -773,7 +821,7 @@ func _rpc_set_gravity_modifier(modifier: float) -> void:
 func set_double_jump_enabled(enabled: bool) -> void:
 	"""Enable double jump for all players"""
 	_rpc_set_double_jump.rpc(enabled)
-	print("[RaceManager] Double jump: %s" % ["ENABLED" if enabled else "DISABLED"])
+	Log.info("RaceManager", "Double jump: %s" % ["ENABLED" if enabled else "DISABLED"])
 
 @rpc("authority", "call_local", "reliable")
 func _rpc_set_double_jump(enabled: bool) -> void:
@@ -784,7 +832,7 @@ func _rpc_set_double_jump(enabled: bool) -> void:
 func set_triple_jump_enabled(enabled: bool) -> void:
 	"""Enable triple jump for all players"""
 	_rpc_set_triple_jump.rpc(enabled)
-	print("[RaceManager] Triple jump: %s" % ["ENABLED" if enabled else "DISABLED"])
+	Log.info("RaceManager", "Triple jump: %s" % ["ENABLED" if enabled else "DISABLED"])
 
 @rpc("authority", "call_local", "reliable")
 func _rpc_set_triple_jump(enabled: bool) -> void:
@@ -796,7 +844,7 @@ func set_timer_scale(scale: float) -> void:
 	"""Set race timer scale (1.0 = normal, 0.5 = half speed, 2.0 = double speed)"""
 	_timer_scale = scale
 	_rpc_set_timer_scale.rpc(scale)
-	print("[RaceManager] Timer scale set to: %.2fx" % scale)
+	Log.info("RaceManager", "Timer scale set to: %.2fx" % scale)
 
 func get_timer_scale() -> float:
 	return _timer_scale
@@ -809,7 +857,7 @@ func set_dash_enabled(enabled: bool) -> void:
 	"""Enable or disable dashing (for events)"""
 	_dash_enabled = enabled
 	_rpc_set_dash_enabled.rpc(enabled)
-	print("[RaceManager] Dash %s" % ("disabled" if not enabled else "enabled"))
+	Log.info("RaceManager", "Dash %s" % ("disabled" if not enabled else "enabled"))
 
 func is_dash_enabled() -> bool:
 	return _dash_enabled
@@ -821,7 +869,7 @@ func _rpc_set_dash_enabled(enabled: bool) -> void:
 
 func set_sudden_death(enabled: bool) -> void:
 	_sudden_death = enabled
-	print("[RaceManager] Sudden Death %s" % ("enabled" if enabled else "disabled"))
+	Log.info("RaceManager", "Sudden Death %s" % ("enabled" if enabled else "disabled"))
 
 func is_sudden_death_active() -> bool:
 	return _sudden_death

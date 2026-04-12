@@ -12,7 +12,7 @@ var COMMON_HEADERS = [
 # TODO: a version where we reuse the http client
 func request(url, headers=COMMON_HEADERS, verbose=true):
 	if OS.is_debug_build() and verbose:
-		print("fetching url ", url)
+		Log.debug("RequestSync", "fetching url %s" % url)
 
 	var http_client = HTTPClient.new()
 	var host_idx = url.find("/", len(protocol)) # first slash after protocol
@@ -59,7 +59,7 @@ class ResponseAsync:
 
 func request_async(url, headers=COMMON_HEADERS, verbose=true):
 	if OS.is_debug_build() and verbose:
-		print("fetching url ", url)
+		Log.debug("RequestSync", "fetching url %s" % url)
 
 	if Platform.is_web():
 		# Headers don't always work from the web, let's just not send any.

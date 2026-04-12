@@ -7,23 +7,23 @@ static func apply() -> void:
 	var local_player = Engine.get_main_loop().get_first_node_in_group("local_player")
 	if local_player and local_player.has_method("set_controls_inverted"):
 		local_player.set_controls_inverted(true)
-		print("[BackwardsControlsEvent] Applied: Controls reversed on player!")
+		Log.info("BackwardsControlsEvent", "Applied: Controls reversed on player!")
 	else:
-		print("[BackwardsControlsEvent] WARNING: Could not find player or set_controls_inverted method!")
+		Log.warn("BackwardsControlsEvent", "Could not find player or set_controls_inverted method!")
 		# Fallback: try Player group
 		var players = Engine.get_main_loop().get_nodes_in_group("Player")
 		if players.size() > 0:
 			var player = players[0]
 			if player.has_method("set_controls_inverted"):
 				player.set_controls_inverted(true)
-				print("[BackwardsControlsEvent] Applied via Player group!")
+				Log.info("BackwardsControlsEvent", "Applied via Player group!")
 
 static func end() -> void:
 	# Restore normal controls
 	var local_player = Engine.get_main_loop().get_first_node_in_group("local_player")
 	if local_player and local_player.has_method("set_controls_inverted"):
 		local_player.set_controls_inverted(false)
-		print("[BackwardsControlsEvent] Ended: Controls restored to normal")
+		Log.info("BackwardsControlsEvent", "Controls restored to normal")
 
 static func get_duration() -> float:
 	return randf_range(45.0, 90.0)

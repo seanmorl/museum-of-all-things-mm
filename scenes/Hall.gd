@@ -38,9 +38,6 @@ func _ready() -> void:
 	ThemeManager.reading_font_changed.connect(_on_font_changed)
 	_on_dark_mode_changed(ThemeManager.is_dark_mode)
 	_on_font_changed(ThemeManager.get_reading_font())
-	# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-	# Apply perfect knowledge visibility if powerup is active
-	# _apply_perfect_knowledge()
 	# Ensure markers are invisible (they're for minimap only)
 	_hide_markers()
 
@@ -69,26 +66,6 @@ func _on_font_changed(font: Font) -> void:
 		exit_label.font = font
 		exit_label.hide()
 
-# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-# func _apply_perfect_knowledge() -> void:
-# 	# Check if any player has perfect knowledge powerup
-# 	var powerup_manager = get_node_or_null("/root/Main/PowerupManager")
-# 	if not powerup_manager:
-# 		return
-# 	var local_player_id = NetworkManager.get_unique_id()
-# 	var has_pk = powerup_manager.has_powerup(local_player_id, PowerupManager.PowerupType.PERFECT_KNOWLEDGE)
-# 	if entry_label:
-# 		entry_label.visible = has_pk
-# 	if exit_label:
-# 		exit_label.visible = has_pk
-# 	if from_sign:
-# 		var label = from_sign.get_node_or_null("Label3D")
-# 		if label:
-# 			label.visible = has_pk
-# 	if to_sign:
-# 		var label = to_sign.get_node_or_null("Label3D")
-# 		if label:
-# 			label.visible = has_pk
 
 func _hide_markers() -> void:
 	# Entry/Exit markers are for minimap rendering only - keep them invisible in 3D world
@@ -165,6 +142,10 @@ static func valid_hall_types(grid: Node, hall_start: Vector3, hall_dir: Vector3)
 
 	var valid_halls: Array = []
 
+	# DISABLED: UP/DOWN stairs are not functional — the exhibit generator
+	# operates on a single Y level and there is no multi-floor connectivity.
+	# Stairs would lead to void space above/below the generated rooms.
+	# Re-enable these if a multi-level generation system is added.
 	if (
 		not (
 			grid.get_cell_item(past_hall_exit_right - Vector3.UP) != -1 and
@@ -177,8 +158,6 @@ static func valid_hall_types(grid: Node, hall_start: Vector3, hall_dir: Vector3)
 		GridUtils.safe_overwrite(grid, hall_exit_right)
 	):
 		valid_halls.append([true, FLAT])
-		valid_halls.append([true, UP])
-		valid_halls.append([true, DOWN])
 
 	return valid_halls
 
@@ -239,6 +218,9 @@ func init(grid: Variant, p_from_title: String, p_to_title: String, hall_start: V
 	loader.position = center_pos
 
 	ExhibitFetcher.wikitext_failed.connect(_on_fetch_failed)
+
+	# Add mood-based hallway decorations (columns, arches) — purely visual
+	_try_add_hallway_decor(hall_start, hall_dir)
 
 
 func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool = true, level: int = FLAT) -> void:
@@ -329,3 +311,76 @@ func _on_direction_changed(direction: String) -> void:
 		on_player_toward_exit.emit()
 	else:
 		on_player_toward_entry.emit()
+
+
+## Add decorative columns to hallways based on exhibit mood.
+## These are purely visual — they don't modify the grid or affect collision.
+func _try_add_hallway_decor(_hall_start: Vector3, _hall_dir: Vector3) -> void:
+	# Only 30% of hallways get decorative columns
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(to_title + str(to_pos))
+	if rng.randi_range(0, 99) >= 30:
+		return
+
+	# Determine if this hallway qualifies based on mood
+	var decor_mood: int = ExhibitMood.Mood.DEFAULT
+	var main_node := get_tree().current_scene
+	if main_node and main_node.has_node("Museum"):
+		var museum := main_node.get_node("Museum")
+		if museum.has_method("_get_exhibit_mood"):
+			decor_mood = museum._get_exhibit_mood(to_title)
+
+	# Only grand moods get columns
+	var column_color := Color.WHITE
+	var column_height := 3.5
+	match decor_mood:
+		ExhibitMood.Mood.HISTORY:
+			column_color = Color(0.92, 0.88, 0.82)  # Marble
+		ExhibitMood.Mood.ART:
+			column_color = Color(0.95, 0.93, 0.9)   # White gallery
+		ExhibitMood.Mood.POLITICS:
+			column_color = Color(0.85, 0.82, 0.85)  # Granite
+		ExhibitMood.Mood.ECONOMY:
+			column_color = Color(0.9, 0.87, 0.75)   # Sandstone
+		_:
+			return  # Other moods: no columns
+
+	# Place columns along the hallway center
+	var hall_center := GridUtils.grid_to_world((from_pos + to_pos) / 2.0)
+	var hall_vec := to_pos - from_pos
+	var hall_len := hall_vec.length()
+	if hall_len < 3.0:
+		return  # Too short for columns
+
+	var perp_dir := Vector3(-hall_vec.z, 0, hall_vec.x).normalized()
+
+	# Two columns flanking the hallway
+	for side_idx: int in range(2):
+		var side: float = -1.0 if side_idx == 0 else 1.0
+		var col := MeshInstance3D.new()
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.15
+		cyl.bottom_radius = 0.2
+		cyl.height = column_height
+		col.mesh = cyl
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = column_color
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		col.material_override = mat
+
+		# Position column at hallway center, offset perpendicular
+		var offset := perp_dir * side * 1.5
+		col.position = offset + Vector3(0, column_height / 2.0 - 0.5, 0)
+		add_child(col)
+
+		# Column capital
+		var cap := MeshInstance3D.new()
+		var cbox := BoxMesh.new()
+		cbox.size = Vector3(0.5, 0.15, 0.5)
+		cap.mesh = cbox
+		var cmat := StandardMaterial3D.new()
+		cmat.albedo_color = column_color
+		cmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		cap.material_override = cmat
+		cap.position = offset + Vector3(0, column_height - 0.5, 0)
+		add_child(cap)

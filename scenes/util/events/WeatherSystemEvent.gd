@@ -29,8 +29,8 @@ static func apply() -> void:
 			# Spawn rain at player head height + 2m (so it falls ON them)
 			spawn_pos = Vector3(player.global_position.x, player.global_position.y + 2.0, player.global_position.z)
 			player_found = true
-			print("[WeatherSystemEvent] ✓ Found player via Museum.Player: %s" % player.global_position)
-	
+			Log.debug("WeatherSystemEvent", "Found player via Museum.Player: %s" % player.global_position)
+
 	# Method 2: Search for local_player group
 	if not player_found:
 		var players = Engine.get_main_loop().get_nodes_in_group("local_player")
@@ -38,8 +38,8 @@ static func apply() -> void:
 			var player = players[0]
 			spawn_pos = Vector3(player.global_position.x, player.global_position.y + 2.0, player.global_position.z)
 			player_found = true
-			print("[WeatherSystemEvent] ✓ Found player via local_player: %s" % player.global_position)
-	
+			Log.debug("WeatherSystemEvent", "Found player via local_player: %s" % player.global_position)
+
 	# Method 3: Search for Player group
 	if not player_found:
 		var players = Engine.get_main_loop().get_nodes_in_group("Player")
@@ -47,15 +47,14 @@ static func apply() -> void:
 			var player = players[0]
 			spawn_pos = Vector3(player.global_position.x, player.global_position.y + 2.0, player.global_position.z)
 			player_found = true
-			print("[WeatherSystemEvent] ✓ Found player via Player group: %s" % player.global_position)
-	
+			Log.debug("WeatherSystemEvent", "Found player via Player group: %s" % player.global_position)
+
 	if not player_found:
-		print("[WeatherSystemEvent] ✗ WARNING: Could not find player! Spawning at origin!")
-	
+		Log.warn("WeatherSystemEvent", "Could not find player! Spawning at origin!")
+
 	_weather_particles.position = spawn_pos
-	
-	print("[WeatherSystemEvent] Rain spawning at: %s (2m above player head!)" % spawn_pos)
-	print("[WeatherSystemEvent] Look up - rain should be falling on you!")
+
+	Log.info("WeatherSystemEvent", "Rain spawning at: %s (2m above player head!)" % spawn_pos)
 	
 	# Configure for rain
 	var process_material = ParticleProcessMaterial.new()
@@ -92,17 +91,16 @@ static func apply() -> void:
 	marker.material_override = marker_mat
 	marker.position = spawn_pos
 	Engine.get_main_loop().root.add_child(marker)
-	
-	print("[WeatherSystemEvent] SPAWNED at: %s" % spawn_pos)
-	print("[WeatherSystemEvent] Look for the HUGE GLOWING RED BOX!")
-	print("[WeatherSystemEvent] Player position was: %s" % (museum.get_node_or_null("Player").global_position if museum and museum.get_node_or_null("Player") else "Unknown"))
-	
+
+	Log.debug("WeatherSystemEvent", "SPAWNED at: %s" % spawn_pos)
+	Log.debug("WeatherSystemEvent", "Player position was: %s" % (museum.get_node_or_null("Player").global_position if museum and museum.get_node_or_null("Player") else "Unknown"))
+
 	# Remove marker after 10 seconds
 	marker.create_tween().tween_property(marker, "scale", Vector3.ZERO, 5.0).set_delay(5.0)
 	marker.call_deferred("queue_free")  # No arguments!
 
 	_original_weather_active = true
-	print("[WeatherSystemEvent] Applied: HEAVY RAIN at %s (5000 particles!)" % spawn_pos)
+	Log.info("WeatherSystemEvent", "Applied: HEAVY RAIN at %s (5000 particles!)" % spawn_pos)
 
 static func end() -> void:
 	# Remove weather particles
@@ -113,7 +111,7 @@ static func end() -> void:
 		_weather_particles = null
 
 	_original_weather_active = false
-	print("[WeatherSystemEvent] Ended: Weather cleared")
+	Log.debug("WeatherSystemEvent", "Weather cleared")
 
 static func get_duration() -> float:
 	return randf_range(60.0, 120.0)

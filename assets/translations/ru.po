@@ -1,0 +1,607 @@
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Museum of All Things\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ru\n"
+
+msgid "Enter the Museum"
+msgstr "Войти в Музей"
+
+msgid "Settings"
+msgstr "Настройки"
+
+msgid "Quit"
+msgstr "Выйти"
+
+msgid "The museum is currently unstaffed. Please refer to signage for information."
+msgstr "В музее сейчас нет персонала. Пожалуйста, обратитесь к указателям для получения информации."
+
+msgid "English"
+msgstr "English"
+
+msgid "Spanish"
+msgstr "Español"
+
+msgid "Portuguese"
+msgstr "Português"
+
+msgid "French"
+msgstr "Français"
+
+msgid "Japanese"
+msgstr "日本語"
+
+msgid "Chinese"
+msgstr "中文"
+
+msgid "German"
+msgstr "Deutsch"
+
+msgid "Bengali"
+msgstr "বাংলা"
+
+msgid "Russian"
+msgstr "Русский"
+
+msgid "Are you sure you want to Quit?"
+msgstr "Вы уверены, что хотите выйти?"
+
+msgid "Yes"
+msgstr "Да"
+
+msgid "No"
+msgstr "Нет"
+
+msgid "Open Page in Browser"
+msgstr "Открыть страницу в браузере"
+
+msgid "Paused"
+msgstr "Пауза"
+
+msgid " - Paused"
+msgstr " — Пауза"
+
+msgid "Lobby"
+msgstr "Фойе"
+
+msgid "Resume"
+msgstr "Продолжить"
+
+msgid "Return to Lobby"
+msgstr "Вернуться в фойе"
+
+msgid "Enter Exhibit Name"
+msgstr "Ввести название экспозиции"
+
+msgid "Go to Random Exhibit"
+msgstr "Случайная экспозиция"
+
+msgid "Enter exhibit title"
+msgstr "Введите название экспозиции"
+
+msgid "Confirm"
+msgstr "Подтвердить"
+
+msgid "Back"
+msgstr "Назад"
+
+msgid "Exhibit Found: \"\""
+msgstr "Экспозиция найдена: \"\""
+
+msgid "OK / Exit"
+msgstr "ОК / Выход"
+
+msgid "VR Controls"
+msgstr "Управление в VR"
+
+msgid "Restore Default Settings"
+msgstr "Восстановить настройки по умолчанию"
+
+msgid "Movement Style"
+msgstr "Стиль перемещения"
+
+msgid "Teleportation (Left Trigger)"
+msgstr "Телепортация (левый триггер)"
+
+msgid "Direct Movement (Left Analog Stick)"
+msgstr "Прямое перемещение (левый стик)"
+
+msgid "Direct Movement Speed"
+msgstr "Скорость прямого перемещения"
+
+msgid "Camera Rotation Increment (Right Stick)"
+msgstr "Шаг поворота камеры (правый стик)"
+
+msgid "Smooth Camera Rotation"
+msgstr "Плавный поворот камеры"
+
+msgid "Preparing Exhibit..."
+msgstr "Подготовка экспозиции..."
+
+msgid "Error Loading Exhibit."
+msgstr "Ошибка загрузки экспозиции."
+
+msgid "Graphics"
+msgstr "Графика"
+
+msgid "Audio"
+msgstr "Звук"
+
+msgid "Data"
+msgstr "Данные"
+
+msgid "Controls"
+msgstr "Управление"
+
+msgid "Data Settings"
+msgstr "Настройки данных"
+
+msgid "Cache"
+msgstr "Кэш"
+
+msgid "Clear Cache"
+msgstr "Очистить кэш"
+
+msgid "Cache Size Limit"
+msgstr "Ограничение размера кэша"
+
+msgid "Automatically limit cache size (on quit)"
+msgstr "Автоматически ограничивать размер кэша (при выходе)"
+
+msgid "Graphics Settings"
+msgstr "Настройки графики"
+
+msgid "Render Scale"
+msgstr "Масштаб рендера"
+
+msgid "Fullscreen"
+msgstr "Полный экран"
+
+msgid "Reflection Quality"
+msgstr "Качество отражений"
+
+msgid "Enable Reflections"
+msgstr "Включить отражения"
+
+msgid "Ambient Light Level"
+msgstr "Уровень окружающего света"
+
+msgid "Enable Indirect Lighting (SSIL)"
+msgstr "Включить непрямое освещение (SSIL)"
+
+msgid "Render Distance"
+msgstr "Дальность прорисовки"
+
+msgid "Fog"
+msgstr "Туман"
+
+msgid "Maximum FPS"
+msgstr "Максимальный FPS"
+
+msgid "Enable Fog"
+msgstr "Включить туман"
+
+msgid "Enable V-Sync"
+msgstr "Включить вертикальную синхронизацию"
+
+msgid "Limit FPS"
+msgstr "Ограничить FPS"
+
+msgid "Post-Processing Effect"
+msgstr "Эффект постобработки"
+
+msgid "None"
+msgstr "Нет"
+
+msgid "CRT Filter"
+msgstr "CRT-фильтр"
+
+msgid "Control Settings"
+msgstr "Настройки управления"
+
+msgid "Mouse Sensitivity"
+msgstr "Чувствительность мыши"
+
+msgid "Invert Y-axis"
+msgstr "Инвертировать ось Y"
+
+msgid "Remap Inputs"
+msgstr "Переназначить входы"
+
+msgid "Move Forward"
+msgstr "Вперёд"
+
+msgid "Move Back"
+msgstr "Назад"
+
+msgid "Strafe Left"
+msgstr "Шаг влево"
+
+msgid "Strafe Right"
+msgstr "Шаг вправо"
+
+msgid "Jump"
+msgstr "Прыжок"
+
+msgid "Crouch"
+msgstr "Присесть"
+
+msgid "Interact"
+msgstr "Взаимодействовать"
+
+msgid "Joypad Camera Deadzone"
+msgstr "Мёртвая зона камеры геймпада"
+
+msgid "Audio Settings"
+msgstr "Настройки звука"
+
+msgid "Global Volume"
+msgstr "Общая громкость"
+
+msgid "Sound Effects Volume"
+msgstr "Громкость звуковых эффектов"
+
+msgid "Ambience Volume"
+msgstr "Громкость атмосферы"
+
+msgid "Music Volume"
+msgstr "Громкость музыки"
+
+msgid "Enter VR"
+msgstr "Войти в VR"
+
+msgid "Snap turning:"
+msgstr "Поворот щелчками:"
+
+msgid "Y axis dead zone"
+msgstr "Мёртвая зона оси Y"
+
+msgid "X axis dead zone"
+msgstr "Мёртвая зона оси X"
+
+msgid "Haptics Scale"
+msgstr "Интенсивность вибрации"
+
+msgid "Apply"
+msgstr "Применить"
+
+msgid "Reset"
+msgstr "Сбросить"
+
+msgid "Height adjust:"
+msgstr "Регулировка высоты:"
+
+msgid "WebXR primary:"
+msgstr "WebXR основной:"
+
+msgid "Auto"
+msgstr "Авто"
+
+msgid "Thumbstick"
+msgstr "Стик"
+
+msgid "Trackpad"
+msgstr "Трекпад"
+
+msgid "Technology"
+msgstr "Технологии"
+
+msgid "Featured Technology Exhibits"
+msgstr "Избранные экспозиции: Технологии"
+
+msgid "Science"
+msgstr "Наука"
+
+msgid "Featured Science Exhibits"
+msgstr "Избранные экспозиции: Наука"
+
+msgid "Geography"
+msgstr "География"
+
+msgid "Featured Geography Exhibits"
+msgstr "Избранные экспозиции: География"
+
+msgid "Culture"
+msgstr "Культура"
+
+msgid "Featured Culture Exhibits"
+msgstr "Избранные экспозиции: Культура"
+
+msgid "Art"
+msgstr "Искусство"
+
+msgid "Featured Art Exhibits"
+msgstr "Избранные экспозиции: Искусство"
+
+msgid "People"
+msgstr "Люди"
+
+msgid "Featured People Exhibits"
+msgstr "Избранные экспозиции: Люди"
+
+msgid "History"
+msgstr "История"
+
+msgid "Featured History Exhibits"
+msgstr "Избранные экспозиции: История"
+
+msgid "Media"
+msgstr "Медиа"
+
+msgid "Featured Media Exhibits"
+msgstr "Избранные экспозиции: Медиа"
+
+msgid "Search"
+msgstr "Поиск"
+
+msgid "Featured Search Exhibits"
+msgstr "Поиск экспозиций"
+
+msgid ""
+"[b]Welcome to the Museum of All Things![/b]\n"
+"\n"
+"[fill]This museum is different from any you've visited in the physical world, so it may take a moment to get your bearings.[/fill]\n"
+"\n"
+"[b]The Lobby[/b]\n"
+"\n"
+"[fill]Right now you are in the museum's lobby, tailored to give you a pleasant starting point on your visit. If you ever wish to return here, you may simply open your museum menu (via \"Escape,\" \"Start,\" or by hitting \"Y\" on your right-hand controller in Virtual Reality) and select \"Return to Lobby.\"\n"
+"\n"
+"The lobby is divided into areas by subject, which are marked by signs and indicated on the maps in the entry hall behind you. In each of these areas, you will find many hallways into a range of fascinating exhibits.[/fill]"
+msgstr ""
+"[b]Добро пожаловать в Музей Всего![/b]\n"
+"\n"
+"[fill]Этот музей отличается от любых, которые вы посещали в реальном мире, поэтому может потребоваться время, чтобы сориентироваться.[/fill]\n"
+"\n"
+"[b]Фойе[/b]\n"
+"\n"
+"[fill]Сейчас вы находитесь в фойе музея, созданном, чтобы дать вам приятную отправную точку в вашем путешествии. Если вы когда-нибудь захотите вернуться сюда, просто откройте меню музея (через «Escape», «Start» или нажав «Y» на правом контроллере в виртуальной реальности) и выберите «Вернуться в фойе».\n"
+"\n"
+"Фойе разделено на тематические зоны, которые обозначены указателями и указаны на картах в вестибюле позади вас. В каждой из этих зон вы найдёте множество коридоров, ведущих к увлекательным экспозициям.[/fill]"
+
+msgid ""
+"[b]Museum Exhibits[/b]\n"
+"\n"
+"[fill]Exhibits are not made by hand-- they are generated procedurally by pulling images and textual data from Wikipedia and Wikimedia commons. This means any topic with a Wikipedia page can also be accessed as an exhibit in this museum!\n"
+"\n"
+"Furthermore, each exhibit contains many hallways connecting it to other exhibits. These hallways are determined based on the links in the current exhibit's Wikipedia article. You can move from exhibit to exhibit endlessly, following your curiosity.\n"
+"\n"
+"If you prefer to go straight to a particular subject, you may access the search terminal, at the end of the entry hall directly behind you. Simply enter your topic of interest into the terminal's interface, and it will create a hallway for you to walk straight there.[/fill]"
+msgstr ""
+"[b]Экспозиции музея[/b]\n"
+"\n"
+"[fill]Экспозиции не создаются вручную — они генерируются процедурно, извлекая изображения и текст из Википедии и Викисклада. Это означает, что любая тема, имеющая страницу в Википедии, может быть доступна как экспозиция в этом музее!\n"
+"\n"
+"Кроме того, каждая экспозиция содержит множество коридоров, соединяющих её с другими экспозициями. Эти коридоры определяются на основе ссылок в статье Википедии текущей экспозиции. Вы можете бесконечно переходить от одной экспозиции к другой, следуя за своим любопытством.\n"
+"\n"
+"Если вы предпочитаете сразу перейти к конкретной теме, вы можете воспользоваться поисковым терминалом в конце вестибюля позади вас. Просто введите интересующую вас тему в интерфейс терминала, и он создаст коридор, ведущий прямо туда.[/fill]"
+
+msgid ""
+"Welcome to the MoAT Custom Exhibit Terminal\n"
+"\n"
+"You may access a specific exhibit by selecting \"Enter Exhibit Name.\" Alternatively, you may ask for a random exhibit.\n"
+"\n"
+"Hit \"E\" on your keyboard to interact with the terminal, or press Y/△ if you are using a controller.\n"
+"\n"
+msgstr ""
+"Добро пожаловать в терминал поиска экспозиций MoAT\n"
+"\n"
+"Вы можете перейти к конкретной экспозиции, выбрав «Ввести название экспозиции». Также вы можете запросить случайную экспозицию.\n"
+"\n"
+"Нажмите «E» на клавиатуре для взаимодействия с терминалом или Y/△ на контроллере.\n"
+"\n"
+
+msgid "Enter Exhibit Name "
+msgstr "Ввести название экспозиции "
+
+msgid "Go to Random Exhibit "
+msgstr "Случайная экспозиция "
+
+msgid ""
+"Enter the title of the exhibit you would like to acccess. A path will be routed and the door will open to the best matching exhibit.\n"
+"\n"
+msgstr ""
+"Введите название экспозиции, которую хотите посетить. Будет проложен маршрут, и дверь откроется к наиболее подходящей экспозиции.\n"
+"\n"
+
+msgid ""
+"\n"
+"Proceed to your right to access this exhibit, or return to the terminal's main menu to access a different exhibit.\n"
+"\n"
+msgstr ""
+"\n"
+"Пройдите направо, чтобы войти в эту экспозицию, или вернитесь в главное меню терминала для перехода к другой.\n"
+"\n"
+
+msgid ""
+"We were unable to locate the exhibit that you requested. Please try a different exhibit.\n"
+"\n"
+msgstr ""
+"Нам не удалось найти запрошенную экспозицию. Пожалуйста, попробуйте другую.\n"
+"\n"
+
+### Settings UI - Accessibility Tab
+msgid "Interface"
+msgstr ""
+
+msgid "Reset to 100%"
+msgstr ""
+
+msgid "UI Scale"
+msgstr ""
+
+msgid "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
+msgstr ""
+
+msgid "Show chat"
+msgstr ""
+
+msgid "Hides the chat overlay while playing."
+msgstr ""
+
+msgid "Typing sound"
+msgstr ""
+
+msgid "Plays a subtle sound on each keypress in the chat box."
+msgstr ""
+
+msgid "Open chat"
+msgstr ""
+
+msgid "Press the button then press any key to rebind."
+msgstr ""
+
+msgid "Screen Reader"
+msgstr ""
+
+msgid "Enable screen reader (AccessKit)"
+msgstr ""
+
+msgid "Exposes UI elements to OS screen readers via AccessKit. "
+msgstr ""
+
+msgid "Requires Godot's DisplayServer accessibility API (4.3+). "
+msgstr ""
+
+msgid "Changes take effect immediately — no restart needed."
+msgstr ""
+
+msgid "Verbosity"
+msgstr ""
+
+msgid "All controls"
+msgstr ""
+
+msgid "Focused only"
+msgstr ""
+
+msgid "Off"
+msgstr ""
+
+msgid "Vision"
+msgstr ""
+
+msgid "Reading font"
+msgstr ""
+
+msgid "Default (Cormorant Garamond)"
+msgstr ""
+
+msgid "OpenDyslexic"
+msgstr ""
+
+msgid "Atkinson Hyperlegible"
+msgstr ""
+
+msgid "OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. "
+msgstr ""
+
+msgid "Fonts must be present at:"
+msgstr ""
+
+msgid "High-contrast exhibit text"
+msgstr ""
+
+msgid "Renders article wall-card text as black-on-white regardless of dark mode."
+msgstr ""
+
+msgid "Exhibit text size"
+msgstr ""
+
+msgid "Scales the font size of Wikipedia article text on exhibit walls."
+msgstr ""
+
+msgid "Floating exhibit signs"
+msgstr ""
+
+msgid "Replaces physical sign boards with floating text. "
+msgstr ""
+
+msgid "Text remains visible but the board mesh is hidden. "
+msgstr ""
+
+msgid "Makes exhibit names easier to read during races."
+msgstr ""
+
+msgid "Colour & Contrast"
+msgstr ""
+
+msgid "Colourblind filter"
+msgstr ""
+
+msgid "Protanopia  (red-blind)"
+msgstr ""
+
+msgid "Deuteranopia  (green-blind)"
+msgstr ""
+
+msgid "Tritanopia  (blue-blind)"
+msgstr ""
+
+msgid "Applies a full-screen post-processing shader to correct for colour vision deficiency. "
+msgstr ""
+
+msgid "Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a "
+msgstr ""
+
+msgid "CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
+msgstr ""
+
+msgid "Motion"
+msgstr ""
+
+msgid "Reduce motion"
+msgstr ""
+
+msgid "Disables slide/fade animations on menus and the race HUD. Fog transitions remain."
+msgstr ""
+
+msgid "HUD & Hints"
+msgstr ""
+
+msgid "Large HUD text"
+msgstr ""
+
+msgid "Increases font size of the race timer, target name, and hint banners."
+msgstr ""
+
+msgid "Keep hints visible"
+msgstr ""
+
+msgid "Hint banners stay on screen until the race ends instead of fading after a few seconds."
+msgstr ""
+
+msgid "Audio & Visual"
+msgstr ""
+
+msgid "Show playing audio indicator"
+msgstr ""
+
+msgid "Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."
+msgstr ""
+
+msgid "Photosensitivity warning"
+msgstr ""
+
+msgid "Shows a warning before exhibits with flashing or strobing content."
+msgstr ""
+
+msgid "HUD opacity"
+msgstr ""
+
+msgid "Makes the race HUD more transparent to see more of the game world."
+msgstr ""
+
+msgid "Motor"
+msgstr ""
+
+msgid "Hold to activate buttons"
+msgstr ""
+
+msgid "Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."
+msgstr ""
+
+msgid "Accessibility"
+msgstr ""

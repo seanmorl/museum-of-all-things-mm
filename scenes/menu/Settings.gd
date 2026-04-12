@@ -254,7 +254,7 @@ func _build_multiplayer_settings() -> Control:
 	_vbox.add_child(container)
 	
 	var iface_heading := Label.new()
-	iface_heading.text = "Interface"
+	iface_heading.text = tr("Interface")
 	iface_heading.set_meta("settings_role", "heading")
 	iface_heading.add_theme_font_size_override("font_size", 18)
 	container.add_child(iface_heading)
@@ -276,9 +276,9 @@ func _build_multiplayer_settings() -> Control:
 	scale_slider.custom_minimum_size = Vector2(180, 0)
 
 	var reset_btn := Button.new()
-	reset_btn.text = "Reset"
+	reset_btn.text = tr("Reset")
 	reset_btn.custom_minimum_size = Vector2(54, 0)
-	reset_btn.tooltip_text = "Reset to 100%"
+	reset_btn.tooltip_text = tr("Reset to 100%")
 	reset_btn.pressed.connect(func():
 		scale_slider.value = 1.0
 		scale_val_lbl.text = "100%"
@@ -293,7 +293,7 @@ func _build_multiplayer_settings() -> Control:
 	var scale_row := HBoxContainer.new()
 	scale_row.add_theme_constant_override("separation", 8)
 	var scale_lbl := Label.new()
-	scale_lbl.text = "UI Scale"
+	scale_lbl.text = tr("UI Scale")
 	scale_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scale_row.add_child(scale_lbl)
 	scale_row.add_child(scale_slider)
@@ -302,14 +302,14 @@ func _build_multiplayer_settings() -> Control:
 	container.add_child(scale_row)
 
 	var scale_hint := Label.new()
-	scale_hint.text = "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
+	scale_hint.text = tr("Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0")
 	scale_hint.set_meta("settings_role", "hint")
 	scale_hint.add_theme_font_size_override("font_size", 11)
 	scale_hint.autowrap_mode = TextServer.AUTOWRAP_WORD
 	container.add_child(scale_hint)
 
 	var mp_heading := Label.new()
-	mp_heading.text = "Multiplayer"
+	mp_heading.text = tr("Multiplayer")
 	mp_heading.set_meta("settings_role", "heading")
 	mp_heading.add_theme_font_size_override("font_size", 18)
 	container.add_child(mp_heading)
@@ -322,7 +322,7 @@ func _build_multiplayer_settings() -> Control:
 	var chat_row := HBoxContainer.new()
 	container.add_child(chat_row)
 	var lbl := Label.new()
-	lbl.text = "Show chat"
+	lbl.text = tr("Show chat")
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	chat_row.add_child(lbl)
 	var check := CheckButton.new()
@@ -331,7 +331,7 @@ func _build_multiplayer_settings() -> Control:
 	chat_row.add_child(check)
 
 	var hint := Label.new()
-	hint.text = "Hides the chat overlay while playing."
+	hint.text = tr("Hides the chat overlay while playing.")
 	hint.set_meta("settings_role", "hint")
 	container.add_child(hint)
 
@@ -342,7 +342,7 @@ func _build_multiplayer_settings() -> Control:
 	var sound_row := HBoxContainer.new()
 	container.add_child(sound_row)
 	var sound_lbl := Label.new()
-	sound_lbl.text = "Typing sound"
+	sound_lbl.text = tr("Typing sound")
 	sound_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sound_row.add_child(sound_lbl)
 	var sound_check := CheckButton.new()
@@ -351,14 +351,14 @@ func _build_multiplayer_settings() -> Control:
 	sound_row.add_child(sound_check)
 
 	var sound_hint := Label.new()
-	sound_hint.text = "Plays a subtle sound on each keypress in the chat box."
+	sound_hint.text = tr("Plays a subtle sound on each keypress in the chat box.")
 	sound_hint.set_meta("settings_role", "hint")
 	container.add_child(sound_hint)
 
 	var keybind_row := HBoxContainer.new()
 	container.add_child(keybind_row)
 	var key_lbl := Label.new()
-	key_lbl.text = "Open chat"
+	key_lbl.text = tr("Open chat")
 	key_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	keybind_row.add_child(key_lbl)
 	var current_key := _get_chat_key_name()
@@ -370,11 +370,11 @@ func _build_multiplayer_settings() -> Control:
 	SettingsEvents.chat_key_changed.connect(func(name): rebind_btn.text = name)
 
 	var key_hint := Label.new()
-	key_hint.text = "Press the button then press any key to rebind."
+	key_hint.text = tr("Press the button then press any key to rebind.")
 	key_hint.set_meta("settings_role", "hint")
 	container.add_child(key_hint)
 
-	_tab_bar.add_tab("Interface")
+	_tab_bar.add_tab(tr("Interface"))
 
 	return container
 
@@ -478,29 +478,29 @@ func _build_accessibility_settings() -> Control:
 		return row
 
 	# ── Screen Reader (AccessKit) ─────────────────────────────────────────────
-	container.add_child(_h.call("Screen Reader"))
+	container.add_child(_h.call(tr("Screen Reader")))
 
 	var sr_on: bool = saved.get("screen_reader", false)
-	container.add_child(_toggle.call("Enable screen reader (AccessKit)", sr_on,
+	container.add_child(_toggle.call(tr("Enable screen reader (AccessKit)"), sr_on,
 		func(on: bool):
 			_save_accessibility("screen_reader", on)
 			_apply_screen_reader(on)
 	))
 	container.add_child(_hint.call(
-		"Exposes UI elements to OS screen readers via AccessKit. " +
-		"Requires Godot's DisplayServer accessibility API (4.3+). " +
-		"Changes take effect immediately — no restart needed."
+		tr("Exposes UI elements to OS screen readers via AccessKit. ") +
+		tr("Requires Godot's DisplayServer accessibility API (4.3+). ") +
+		tr("Changes take effect immediately — no restart needed.")
 	))
 
 	var sr_verbosity_row := HBoxContainer.new()
 	var sr_v_lbl := Label.new()
-	sr_v_lbl.text = "Verbosity"
+	sr_v_lbl.text = tr("Verbosity")
 	sr_v_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sr_verbosity_row.add_child(sr_v_lbl)
 	var sr_option := OptionButton.new()
-	sr_option.add_item("All controls")
-	sr_option.add_item("Focused only")
-	sr_option.add_item("Off")
+	sr_option.add_item(tr("All controls"))
+	sr_option.add_item(tr("Focused only"))
+	sr_option.add_item(tr("Off"))
 	var sr_verbosity: int = saved.get("screen_reader_verbosity", 0)
 	sr_option.selected = sr_verbosity
 	sr_option.item_selected.connect(func(idx: int):
@@ -512,19 +512,19 @@ func _build_accessibility_settings() -> Control:
 	container.add_child(sr_verbosity_row)
 
 	# ── Vision ────────────────────────────────────────────────────────────────
-	container.add_child(_h.call("Vision"))
+	container.add_child(_h.call(tr("Vision")))
 
 	# Readable font selector
 	var font_row := HBoxContainer.new()
 	font_row.add_theme_constant_override("separation", 8)
 	var font_lbl := Label.new()
-	font_lbl.text = "Reading font"
+	font_lbl.text = tr("Reading font")
 	font_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	font_row.add_child(font_lbl)
 	var font_option := OptionButton.new()
-	font_option.add_item("Default (Cormorant Garamond)")
-	font_option.add_item("OpenDyslexic")
-	font_option.add_item("Atkinson Hyperlegible")
+	font_option.add_item(tr("Default (Cormorant Garamond)"))
+	font_option.add_item(tr("OpenDyslexic"))
+	font_option.add_item(tr("Atkinson Hyperlegible"))
 	# Additional fonts disabled - Godot 4.x font rendering issues
 	# font_option.add_item("Spectral")
 	# font_option.add_item("Satoshi")
@@ -540,21 +540,21 @@ func _build_accessibility_settings() -> Control:
 	font_row.add_child(font_option)
 	container.add_child(font_row)
 	container.add_child(_hint.call(
-		"OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. " +
-		"Fonts must be present at:\n" +
+		tr("OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. ") +
+		tr("Fonts must be present at:") + "\n" +
 		"• res://assets/fonts/OpenDyslexic/OpenDyslexic-Regular.otf\n" +
 		"• res://assets/fonts/AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf"
 	))
 
 	# High-contrast exhibit text
 	var hc_on: bool = saved.get("high_contrast_text", false)
-	container.add_child(_toggle.call("High-contrast exhibit text", hc_on,
+	container.add_child(_toggle.call(tr("High-contrast exhibit text"), hc_on,
 		func(on: bool):
 			_save_accessibility("high_contrast_text", on)
 			_emit_accessibility_event("high_contrast_text", on)
 	))
 	container.add_child(_hint.call(
-		"Renders article wall-card text as black-on-white regardless of dark mode."))
+		tr("Renders article wall-card text as black-on-white regardless of dark mode.")))
 
 	# Exhibit text size
 	var ts: float = saved.get("exhibit_text_size", 1.0)
@@ -565,7 +565,7 @@ func _build_accessibility_settings() -> Control:
 	ts_slider.min_value = 0.5; ts_slider.max_value = 2.0; ts_slider.step = 0.1
 	ts_slider.value = ts; ts_slider.custom_minimum_size = Vector2(180, 0)
 	var ts_reset := Button.new()
-	ts_reset.text = "Reset"; ts_reset.custom_minimum_size = Vector2(54, 0)
+	ts_reset.text = tr("Reset"); ts_reset.custom_minimum_size = Vector2(54, 0)
 	ts_reset.pressed.connect(func(): ts_slider.value = 1.0)
 	ts_slider.value_changed.connect(func(v: float):
 		ts_val.text = "%.0f%%" % (v * 100.0)
@@ -574,39 +574,39 @@ func _build_accessibility_settings() -> Control:
 	)
 	var ts_row := HBoxContainer.new()
 	ts_row.add_theme_constant_override("separation", 8)
-	var ts_lbl := Label.new(); ts_lbl.text = "Exhibit text size"
+	var ts_lbl := Label.new(); ts_lbl.text = tr("Exhibit text size")
 	ts_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ts_row.add_child(ts_lbl); ts_row.add_child(ts_slider)
 	ts_row.add_child(ts_val); ts_row.add_child(ts_reset)
 	container.add_child(ts_row)
-	container.add_child(_hint.call("Scales the font size of Wikipedia article text on exhibit walls."))
+	container.add_child(_hint.call(tr("Scales the font size of Wikipedia article text on exhibit walls.")))
 
 	# Floating exhibit signs (race-friendly mode)
 	var fs_on: bool = saved.get("floating_signs", false)
-	container.add_child(_toggle.call("Floating exhibit signs", fs_on,
+	container.add_child(_toggle.call(tr("Floating exhibit signs"), fs_on,
 		func(on: bool):
 			_save_accessibility("floating_signs", on)
 			_emit_accessibility_event("floating_signs", on)
 	))
 	container.add_child(_hint.call(
-		"Replaces physical sign boards with floating text. " +
-		"Text remains visible but the board mesh is hidden. " +
-		"Makes exhibit names easier to read during races."))
+		tr("Replaces physical sign boards with floating text. ") +
+		tr("Text remains visible but the board mesh is hidden. ") +
+		tr("Makes exhibit names easier to read during races.")))
 
 	# ── Colour & Contrast ─────────────────────────────────────────────────────
-	container.add_child(_h.call("Colour & Contrast"))
+	container.add_child(_h.call(tr("Colour & Contrast")))
 
 	var cb_row := HBoxContainer.new()
 	cb_row.add_theme_constant_override("separation", 8)
 	var cb_lbl := Label.new()
-	cb_lbl.text = "Colourblind filter"
+	cb_lbl.text = tr("Colourblind filter")
 	cb_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cb_row.add_child(cb_lbl)
 	var cb_option := OptionButton.new()
-	cb_option.add_item("None")
-	cb_option.add_item("Protanopia  (red-blind)")
-	cb_option.add_item("Deuteranopia  (green-blind)")
-	cb_option.add_item("Tritanopia  (blue-blind)")
+	cb_option.add_item(tr("None"))
+	cb_option.add_item(tr("Protanopia  (red-blind)"))
+	cb_option.add_item(tr("Deuteranopia  (green-blind)"))
+	cb_option.add_item(tr("Tritanopia  (blue-blind)"))
 	var cb_mode: int = saved.get("colorblind_mode", 0)
 	cb_option.selected = cb_mode
 	cb_option.item_selected.connect(func(idx: int):
@@ -617,9 +617,9 @@ func _build_accessibility_settings() -> Control:
 	cb_row.add_child(cb_option)
 	container.add_child(cb_row)
 	container.add_child(_hint.call(
-		"Applies a full-screen post-processing shader to correct for colour vision deficiency. " +
-		"Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a " +
-		"CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
+		tr("Applies a full-screen post-processing shader to correct for colour vision deficiency. ") +
+		tr("Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a ") +
+		tr("CanvasLayer + ColorRect named ColorblindOverlay in your main scene.")
 	))
 
 	# Apply saved colorblind filter on load
@@ -627,57 +627,57 @@ func _build_accessibility_settings() -> Control:
 		_apply_colorblind_filter(cb_mode)
 
 	# ── Motion ────────────────────────────────────────────────────────────────
-	container.add_child(_h.call("Motion"))
+	container.add_child(_h.call(tr("Motion")))
 
 	var rm_on: bool = saved.get("reduce_motion", false)
-	container.add_child(_toggle.call("Reduce motion", rm_on,
+	container.add_child(_toggle.call(tr("Reduce motion"), rm_on,
 		func(on: bool):
 			_save_accessibility("reduce_motion", on)
 			_emit_accessibility_event("reduce_motion", on)
 	))
 	container.add_child(_hint.call(
-		"Disables slide/fade animations on menus and the race HUD. Fog transitions remain."))
+		tr("Disables slide/fade animations on menus and the race HUD. Fog transitions remain.")))
 
 	# ── HUD & Hints ───────────────────────────────────────────────────────────
-	container.add_child(_h.call("HUD & Hints"))
+	container.add_child(_h.call(tr("HUD & Hints")))
 
 	var lh_on: bool = saved.get("large_hud_text", false)
-	container.add_child(_toggle.call("Large HUD text", lh_on,
+	container.add_child(_toggle.call(tr("Large HUD text"), lh_on,
 		func(on: bool):
 			_save_accessibility("large_hud_text", on)
 			_emit_accessibility_event("large_hud_text", on)
 	))
-	container.add_child(_hint.call("Increases font size of the race timer, target name, and hint banners."))
+	container.add_child(_hint.call(tr("Increases font size of the race timer, target name, and hint banners.")))
 
 	var ph_on: bool = saved.get("persistent_hints", false)
-	container.add_child(_toggle.call("Keep hints visible", ph_on,
+	container.add_child(_toggle.call(tr("Keep hints visible"), ph_on,
 		func(on: bool):
 			_save_accessibility("persistent_hints", on)
 			_emit_accessibility_event("persistent_hints", on)
 	))
 	container.add_child(_hint.call(
-		"Hint banners stay on screen until the race ends instead of fading after a few seconds."))
+		tr("Hint banners stay on screen until the race ends instead of fading after a few seconds.")))
 
 	# ── Audio & Visual ─────────────────────────────────────────────────────────
-	container.add_child(_h.call("Audio & Visual"))
+	container.add_child(_h.call(tr("Audio & Visual")))
 
 	var avi_on: bool = saved.get("audio_visual_indicator", false)
-	container.add_child(_toggle.call("Show playing audio indicator", avi_on,
+	container.add_child(_toggle.call(tr("Show playing audio indicator"), avi_on,
 		func(on: bool):
 			_save_accessibility("audio_visual_indicator", on)
 			_emit_accessibility_event("audio_visual_indicator", on)
 	))
 	container.add_child(_hint.call(
-		"Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."))
+		tr("Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players.")))
 
 	var psw_on: bool = saved.get("photosensitivity_warning", true)
-	container.add_child(_toggle.call("Photosensitivity warning", psw_on,
+	container.add_child(_toggle.call(tr("Photosensitivity warning"), psw_on,
 		func(on: bool):
 			_save_accessibility("photosensitivity_warning", on)
 			_emit_accessibility_event("photosensitivity_warning", on)
 	))
 	container.add_child(_hint.call(
-		"Shows a warning before exhibits with flashing or strobing content."))
+		tr("Shows a warning before exhibits with flashing or strobing content.")))
 
 	# HUD Opacity
 	var ho: float = saved.get("hud_opacity", 1.0)
@@ -688,7 +688,7 @@ func _build_accessibility_settings() -> Control:
 	ho_slider.min_value = 0.3; ho_slider.max_value = 1.0; ho_slider.step = 0.1
 	ho_slider.value = ho; ho_slider.custom_minimum_size = Vector2(180, 0)
 	var ho_reset := Button.new()
-	ho_reset.text = "Reset"; ho_reset.custom_minimum_size = Vector2(54, 0)
+	ho_reset.text = tr("Reset"); ho_reset.custom_minimum_size = Vector2(54, 0)
 	ho_reset.pressed.connect(func(): ho_slider.value = 1.0)
 	ho_slider.value_changed.connect(func(v: float):
 		ho_val.text = "%.0f%%" % (v * 100.0)
@@ -697,24 +697,24 @@ func _build_accessibility_settings() -> Control:
 	)
 	var ho_row := HBoxContainer.new()
 	ho_row.add_theme_constant_override("separation", 8)
-	var ho_lbl := Label.new(); ho_lbl.text = "HUD opacity"
+	var ho_lbl := Label.new(); ho_lbl.text = tr("HUD opacity")
 	ho_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ho_row.add_child(ho_lbl); ho_row.add_child(ho_slider)
 	ho_row.add_child(ho_val); ho_row.add_child(ho_reset)
 	container.add_child(ho_row)
-	container.add_child(_hint.call("Makes the race HUD more transparent to see more of the game world."))
+	container.add_child(_hint.call(tr("Makes the race HUD more transparent to see more of the game world.")))
 
 	# ── Motor ────────────────────────────────────────────────────────────────────
-	container.add_child(_h.call("Motor"))
+	container.add_child(_h.call(tr("Motor")))
 
 	var htc_on: bool = saved.get("hold_to_click", false)
-	container.add_child(_toggle.call("Hold to activate buttons", htc_on,
+	container.add_child(_toggle.call(tr("Hold to activate buttons"), htc_on,
 		func(on: bool):
 			_save_accessibility("hold_to_click", on)
 			_emit_accessibility_event("hold_to_click", on)
 	))
 	container.add_child(_hint.call(
-		"Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."))
+		tr("Buttons require holding for 0.5s instead of clicking. Helps with motor control issues.")))
 
 	# Secret Disco Button
 	var disco_row := HBoxContainer.new()
@@ -730,7 +730,7 @@ func _build_accessibility_settings() -> Control:
 	disco_row.add_child(disco_btn)
 	container.add_child(disco_row)
 
-	_tab_bar.add_tab("Accessibility")
+	_tab_bar.add_tab(tr("Accessibility"))
 	return container
 
 

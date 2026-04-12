@@ -150,7 +150,7 @@ func _revert_to_safe_position(failed_room: String) -> void:
 		RaceManager.cancel_race()
 	
 	# Show error message to player
-	print("Museum: Reverted players to lobby after failed load of '%s'" % failed_room)
+	Log.warn("Museum", "Reverted players to lobby after failed load of '%s'" % failed_room)
 	_show_exhibit_load_error(failed_room)
 
 func _show_exhibit_load_error(failed_room: String) -> void:
@@ -233,6 +233,11 @@ func _ready() -> void:
 	SettingsEvents.language_changed.connect(_on_change_language)
 	ThemeManager.dark_mode_changed.connect(func(_d): _update_lighting())
 
+	# Race blocking: lock non-start lobby halls during races
+	RaceManager.race_started.connect(_on_race_started)
+	RaceManager.race_ended.connect(_on_race_ended)
+	RaceManager.race_cancelled.connect(_on_race_ended)
+
 	# Twitch integration disabled
 	# if TwitchManager:
 	# 	TwitchManager.color_change_requested.connect(_on_twitch_color_requested)
@@ -266,7 +271,7 @@ func _set_up_lobby(lobby: Node) -> void:
 	_exhibit_loader.get_exhibits()["Lobby"] = { "exhibit": lobby, "height": 0 }
 
 	if OS.is_debug_build():
-		print("Setting up lobby with %s exits..." % exits.size())
+		Log.debug("Museum", "Setting up lobby with %s exits..." % exits.size())
 
 	var wing_indices: Dictionary = {}
 
@@ -289,7 +294,7 @@ func _set_up_lobby(lobby: Node) -> void:
 			if _pending_custom_door_title != "":
 				_custom_door.to_title = _pending_custom_door_title
 				_custom_door.entry_door.set_open(true)
-				print("Museum: Applied pending custom door title '", _pending_custom_door_title, "'")
+				Log.info("Museum", "Applied pending custom door title '%s'" % _pending_custom_door_title)
 				_pending_custom_door_title = ""
 
 		if not exit.loader.body_entered.is_connected(_on_loader_body_entered.bind(exit)):
@@ -300,15 +305,51 @@ func _set_custom_door(title: String) -> void:
 	if _custom_door and is_instance_valid(_custom_door):
 		_custom_door.to_title = title
 		_custom_door.entry_door.set_open(true)
-		print("Museum: Custom door set to '", title, "', door opened")
+		Log.info("Museum", "Custom door set to '%s', door opened" % title)
 	else:
-		print("Museum: WARNING - _custom_door is null! Can't set door to '", title, "'")
+		Log.warn("Museum", "_custom_door is null! Can't set door to '%s'" % title)
 		# Store the title for when door becomes available
 		_pending_custom_door_title = title
 
 func _reset_custom_door() -> void:
 	if _custom_door and is_instance_valid(_custom_door):
 		_custom_door.entry_door.set_open(false)
+
+
+# =============================================================================
+# RACE LOBBY BLOCKING
+# =============================================================================
+
+func _on_race_started(_target: String, start_article: String) -> void:
+	## When a race starts, lock all lobby halls except the one leading to the start article.
+	## This herds players through the intended search corridor.
+	var lobby: Node = get_node_or_null("Lobby")
+	if not lobby or not "exits" in lobby:
+		return
+
+	for hall in lobby.exits:
+		if not is_instance_valid(hall):
+			continue
+		# Don't lock a hall while a player is standing in it
+		if hall.player_in_hall:
+			continue
+		# Lock halls that don't lead to the start article
+		if hall.to_title != start_article:
+			hall.set_passable(false)
+		else:
+			# Ensure the start hall is open
+			hall.set_passable(true)
+
+func _on_race_ended() -> void:
+	## When a race ends, restore all lobby halls to unlocked.
+	var lobby: Node = get_node_or_null("Lobby")
+	if not lobby or not "exits" in lobby:
+		return
+
+	for hall in lobby.exits:
+		if not is_instance_valid(hall):
+			continue
+		hall.set_passable(true)
 
 
 func _on_change_language(_lang: String = "") -> void:
@@ -409,9 +450,9 @@ func _set_current_room_title(title: String) -> void:
 				# Exhibit loaded successfully - valid win
 				RaceManager.notify_article_reached(NetworkManager.get_unique_id(), title)
 			else:
-				print("Museum: Blocked false win - exhibit '%s' has no content" % title)
+				Log.warn("Museum", "Blocked false win - exhibit '%s' has no content" % title)
 		else:
-			print("Museum: Blocked false win - exhibit '%s' not loaded" % title)
+			Log.warn("Museum", "Blocked false win - exhibit '%s' not loaded" % title)
 
 	var mood: int = _get_exhibit_mood(_current_room_title)
 	_tween_fog_color(ExhibitStyle.gen_fog(_current_room_title), mood)
@@ -543,7 +584,7 @@ func _on_finished_exhibit(ctx: Dictionary) -> void:
 	if not is_instance_valid(ctx.exhibit):
 		return
 	if OS.is_debug_build():
-		print("finished exhibit. slots=", ctx.exhibit._item_slots.size())
+		Log.debug("Museum", "finished exhibit. slots=%d" % ctx.exhibit._item_slots.size())
 	if ctx.backlink:
 		_exhibit_loader._link_backlink_to_exit(ctx.exhibit, ctx.hall)
 

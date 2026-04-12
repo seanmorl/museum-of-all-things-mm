@@ -50,10 +50,9 @@ var _hints_revealed: int = 0
 # â”€â”€ Tournament nodes (created in _ready) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 var _tournament_setup_menu:    Control = null
 var _tournament_hud:           Control = null
+var _tournament_bracket_hud:   Control = null
 var _tournament_victory_screen: Control = null
 @onready var _trivia_overlay: TriviaOverlay = %TriviaOverlay
-# â”€â”€ Powerup HUD archived v0.5.0 - replaced with Environmental Events
-# @onready var _powerup_hud: Control = %PowerupHUD
 @onready var _guestbook_overlay: GuestbookOverlay = %GuestbookOverlay
 @onready var _prompt_hud: Control = %PromptHUD
 @onready var _menu_layer: CanvasLayer = %MenuLayer
@@ -255,22 +254,6 @@ func _initialize_room_service() -> void:
 		_daily_challenge_manager.challenge_completed.connect(_on_challenge_completed_for_leaderboard)
 
 	# Lobby card — member-var CanvasLayer so it stays alive after _ready() returns
-	# DISABLED: Daily Challenge card not shown on main menu
-	# _daily_challenge_card_layer = CanvasLayer.new()
-	# _daily_challenge_card_layer.name = "DailyChallengeCardLayer"
-	# _daily_challenge_card_layer.layer = 100  # guaranteed above all menus regardless of MenuLayer's layer
-	# add_child(_daily_challenge_card_layer)
-	# _daily_challenge_card = load("res://scenes/ui/DailyChallengeCard.gd").new()
-	# _daily_challenge_card.name = "DailyChallengeCard"
-	# _daily_challenge_card_layer.add_child(_daily_challenge_card)
-	# _daily_challenge_card_layer.visible = false  # <--- Hide by default (redundant on title screen)
-	# # Pre-fetch today's target right away — don't wait for game start
-	# _daily_challenge_manager.start_challenge()
-	# # Show card on main menu immediately (no player yet)
-	# if _daily_challenge_card.has_method("init_for_main_menu"):
-	# 	_daily_challenge_card.init_for_main_menu(_daily_challenge_manager, _daily_challenge_hud, _daily_challenge_leaderboard, _menu_layer)
-	# _daily_challenge_card_layer.visible = true  # Show on main menu
-
 	# Spectator
 	_spectator_controller = load("res://scenes/main/SpectatorController.gd").new()
 	_spectator_controller.name = "SpectatorController"
@@ -285,18 +268,6 @@ func _initialize_room_service() -> void:
 		var ev_t := InputEventKey.new()
 		ev_t.physical_keycode = KEY_K
 		InputMap.action_add_event("toggle_trivia", ev_t)
-
-	# Register powerup HUD toggle (P) at runtime
-	# â”€â”€ ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-	# if not InputMap.has_action("toggle_powerups"):
-	# 	InputMap.add_action("toggle_powerups")
-	# 	var ev_p := InputEventKey.new()
-	# 	ev_p.physical_keycode = KEY_P
-	# 	InputMap.action_add_event("toggle_powerups", ev_p)
-	# 	var ev_p2 := InputEventJoypadButton.new()
-	# 	ev_p2.button_index = JOY_BUTTON_Y
-	# 	ev_p2.device = -1
-	# 	InputMap.action_add_event("toggle_powerups", ev_p2)
 
 	# Register daily challenge keybind (G)
 	if not InputMap.has_action("open_daily_challenge"):
@@ -366,13 +337,12 @@ func _initialize_room_service() -> void:
 	
 	_recreate_player()
 	
-	# Create simple minimap
-	_minimap_controller = load("res://scenes/ui/SimpleMinimap.gd").new()
-	_minimap_controller.name = "SimpleMinimap"
+	# Minimap — MinimapController cycles OFF → Compass → Graph
+	_minimap_controller = load("res://scenes/ui/MinimapController.gd").new()
+	_minimap_controller.name = "MinimapController"
 	add_child(_minimap_controller)
-	_minimap_controller.init(_player)
-
-	# Race Status HUD â€” bottom-left, R key toggles during a race
+	
+	# Race Status HUD — bottom-left, R key toggles during a race
 	# (Tab is already used for the player-list hold overlay)
 	_race_status_hud = load("res://scenes/ui/RaceStatusHUD.gd").new()
 	_race_status_hud.name = "RaceStatusHUD"
@@ -459,9 +429,10 @@ func _recreate_player() -> void:
 		_minimap_controller.init(_player)
 	if _prompt_hud and _prompt_hud.has_method("init"):
 		_prompt_hud.init(_player)
-	# â”€â”€ ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-	# if _powerup_hud and _powerup_hud.has_method("init"):
-	# 	_powerup_hud.init(_player)
+
+	# Initialize voice chat for the local player
+	if VoiceChatManager:
+		VoiceChatManager.init_local_voice(_player)
 
 	# Re-initialise spectator with the new player reference
 	if _spectator_controller:
@@ -513,9 +484,6 @@ func _start_game() -> void:
 	if _daily_challenge_card_layer:
 		_daily_challenge_card_layer.visible = true  # <--- Show now that we are in-game
 	_map_overlay.restore_after_pause()
-	if _minimap_controller and _minimap_controller.has_method("restore_after_pause"):
-		_minimap_controller.restore_after_pause()
-	# PowerupHUD will auto-show when powerups are collected
 	if not game_started:
 		game_started = true
 		_museum.init(_player)
@@ -532,9 +500,6 @@ func _pause_game() -> void:
 	if _player:
 		_player.pause()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-
-	if _minimap_controller and _minimap_controller.has_method("set_hidden"):
-		_minimap_controller.set_hidden()
 
 	if game_started:
 		# Check if pause menu is already visible
@@ -557,22 +522,21 @@ func hide_pause_menu() -> void:
 		if backdrop:
 			backdrop.visible = false
 
+func _cycle_minimap() -> void:
+	if _minimap_controller:
+		_minimap_controller.cycle_mode()
+
 func _use_terminal() -> void:
 	# Block terminal access during daily challenge to prevent cheating
 	if _daily_challenge_manager and _daily_challenge_manager.is_active():
 		if _chat_system:
-			_chat_system._show_system_message("âš  Terminal disabled during Daily Challenge")
+			_chat_system._show_system_message("⚠ Terminal disabled during Daily Challenge")
 		return
-	if _minimap_controller and _minimap_controller.has_method("set_hidden"):
-		_minimap_controller.set_hidden()
-	# Don't hide powerup HUD - players should still see their active powerups
+	
+	# Hide overlay UI during terminal
 	_player.pause()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_menu_controller.open_terminal_menu()
-
-func _cycle_minimap() -> void:
-	if _minimap_controller:
-		_minimap_controller.cycle()
 
 
 # =============================================================================
@@ -692,10 +656,12 @@ func _on_pause_menu_settings() -> void:
 	_menu_controller.on_pause_menu_settings()
 
 func _on_pause_menu_return_to_lobby() -> void:
-	_player.rotation.y = starting_rotation
-	_player.position = starting_point
-	_museum.reset_to_lobby()
-	_start_game()
+	if _player:
+		_player.rotation.y = starting_rotation
+		_player.position = starting_point
+	if _museum:
+		_museum.reset_to_lobby()
+		_start_game()
 
 func _on_settings_back() -> void:
 	_menu_controller.on_settings_back()
@@ -712,12 +678,6 @@ func _input(event: InputEvent) -> void:
 	
 	if Input.is_action_pressed("toggle_fullscreen"):
 		UIEvents.fullscreen_toggled.emit(not GraphicsManager.fullscreen)
-
-	# â”€â”€ ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-	# DEBUG: F10 = spawn powerup near player (multiplayer only)
-	# if event is InputEventKey and event.pressed and event.keycode == KEY_F10:
-	# 	if NetworkManager.is_multiplayer_active():
-	# 		PowerupManager.debug_spawn_powerup_near_player()
 
 	# Don't process game inputs while the chat input or debug console is open
 	var chat_open: bool = _chat_hud != null and _chat_hud.is_input_open()
@@ -766,11 +726,6 @@ func _input(event: InputEvent) -> void:
 
 			if event.is_action_pressed("toggle_map"):
 				_cycle_minimap()
-
-			# â”€â”€ ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-			# if event.is_action_pressed("toggle_powerups"):
-			# 	if _powerup_hud and _powerup_hud.has_method("toggle"):
-			# 		_powerup_hud.toggle()
 
 			if event.is_action_pressed("toggle_trivia"):
 				if _trivia_overlay:
@@ -1109,7 +1064,7 @@ func _spawn_tournament_nodes() -> void:
 	t_layer.layer  = 95
 	add_child(t_layer)
 
-	# Tournament HUD â€” live standings panel, always visible during a tournament
+	# Tournament HUD â€" live standings panel, always visible during a tournament
 	var t_hud_script := load("res://scenes/tournament/TournamentHUD.gd")
 	if t_hud_script:
 		_tournament_hud = Control.new()
@@ -1117,6 +1072,18 @@ func _spawn_tournament_nodes() -> void:
 		_tournament_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		_tournament_hud.name = "TournamentHUD"
 		t_layer.add_child(_tournament_hud)
+
+	# Tournament Bracket HUD â€" visual bracket showing per-round results (Tab to toggle)
+	var t_bracket_script := load("res://scenes/tournament/TournamentBracketHUD.gd")
+	if t_bracket_script:
+		_tournament_bracket_hud = Control.new()
+		_tournament_bracket_hud.set_script(t_bracket_script)
+		_tournament_bracket_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_tournament_bracket_hud.name = "TournamentBracketHUD"
+		t_layer.add_child(_tournament_bracket_hud)
+		# Wire bracket reference into standings HUD for Tab toggle
+		if _tournament_hud and _tournament_hud.has_method("set_bracket_hud"):
+			_tournament_hud.set_bracket_hud(_tournament_bracket_hud)
 
 	# Tournament Victory Screen â€” champion announcement
 	var t_vic_script := load("res://scenes/tournament/TournamentVictoryScreen.gd")
@@ -1152,6 +1119,8 @@ func _spawn_tournament_nodes() -> void:
 	TournamentManager.tournament_cancelled.connect(func():
 		if _tournament_hud:
 			_tournament_hud.visible = false
+		if _tournament_bracket_hud:
+			_tournament_bracket_hud.visible = false
 	)
 
 
@@ -1205,14 +1174,14 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 	# In dedicated host mode there is no local player â€” just sync to clients and return
 	if _is_ui_dedicated_host:
 		if start_article != "" and NetworkManager.is_server():
-			print("Main: Dedicated host - calling _sync_race_start_article.rpc and local")
+			Log.debug("Main", "Dedicated host - calling _sync_race_start_article.rpc and local")
 			_sync_race_start_article.rpc(start_article)
 			_sync_race_start_article(start_article)  # Also run locally
 		GameplayEvents.emit_race_started(target_article)
 		return
 
 	if _player == null:
-		print("Main: _player is null, returning early")
+		Log.error("Main", "_player is null, returning early")
 		return
 
 	# Ensure menus are closed and game is unpaused BEFORE any operations
@@ -1224,11 +1193,12 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 		_player.set_process_input(true)
 
 	# Reset to lobby first
-	_museum.reset_to_lobby()
+	if _museum:
+		_museum.reset_to_lobby()
 
 	# Open the search door to the starting exhibit for all players
 	if start_article != "":
-		print("Main: Calling _sync_race_start_article.rpc and local for start_article=", start_article)
+		Log.debug("Main", "Calling _sync_race_start_article.rpc and local for start_article=%s" % start_article)
 		UIEvents.emit_set_custom_door(start_article)
 		if NetworkManager.is_server():
 			_sync_race_start_article.rpc(start_article)
@@ -1266,7 +1236,7 @@ func _fetch_and_broadcast_start_article(article: String) -> void:
 		Log.debug("Main", "Broadcasting Wikipedia data for '%s' to all clients" % article)
 		_sync_wikipedia_data.rpc(article, result)
 	else:
-		print("Main: ERROR: Wikipedia fetch failed for '", article, "'")
+		Log.error("Main", "Wikipedia fetch failed for '%s'" % article)
 
 func _fetch_and_broadcast_start_article_non_blocking(article: String) -> void:
 	## Fetch Wikipedia data on server and broadcast to all clients (non-blocking)
@@ -1289,7 +1259,7 @@ func _fetch_and_broadcast_start_article_non_blocking(article: String) -> void:
 				Log.debug("Main", "Broadcasting Wikipedia data for '%s' to all clients" % article)
 				_sync_wikipedia_data.rpc(article, result)
 			else:
-				print("Main: ERROR: Wikipedia fetch failed for '", article, "'")
+				Log.error("Main", "Wikipedia fetch failed for '%s'" % article)
 	
 	ExhibitFetcher.wikitext_complete.connect(on_wikitext_complete, CONNECT_ONE_SHOT)
 	
@@ -1312,32 +1282,29 @@ func _on_race_countdown(number: int) -> void:
 
 func _play_countdown_sound() -> void:
 	## Play a short beep for countdown (3-2-1)
-	var player = AudioStreamPlayer.new()
-	player.stream = _COUNTDOWN_SOUND
-	player.volume_db = -5.0
-	add_child(player)
-	player.play()
-	player.finished.connect(func(): player.queue_free())
+	_play_one_shot_audio(_COUNTDOWN_SOUND, Constants.COUNTDOWN_SOUND_VOLUME)
 
 func _play_go_sound() -> void:
 	## Play the "GO!" sound (more emphatic)
-	var player = AudioStreamPlayer.new()
-	player.stream = _GO_SOUND
-	player.volume_db = -3.0  # Slightly louder for emphasis
-	add_child(player)
-	player.play()
-	player.finished.connect(func(): player.queue_free())
+	_play_one_shot_audio(_GO_SOUND, Constants.GO_SOUND_VOLUME)
+
+func _play_victory_sound() -> void:
+	## Play victory fanfare
+	_play_one_shot_audio(_VICTORY_SOUND, Constants.VICTORY_SOUND_VOLUME)
 
 func _on_race_won(winner_name: String, final_time: float) -> void:
 	## Play victory sound when someone wins the race
 	_debug_log("Main: Race won by %s in %.1fs - playing victory sound" % [winner_name, final_time])
 	_play_victory_sound()
 
-func _play_victory_sound() -> void:
-	## Play victory fanfare
+func _play_one_shot_audio(stream: AudioStream, volume_db: float = 0.0) -> void:
+	## Play a sound once and auto-clean up the player
+	## Useful for UI sounds, countdown beeps, victory fanfare, etc.
+	if not stream:
+		return
 	var player = AudioStreamPlayer.new()
-	player.stream = _VICTORY_SOUND
-	player.volume_db = -3.0
+	player.stream = stream
+	player.volume_db = volume_db
 	add_child(player)
 	player.play()
 	player.finished.connect(func(): player.queue_free())
@@ -1383,11 +1350,11 @@ func _on_network_peer_connected(peer_id: int) -> void:
 	])
 
 	if _multiplayer_controller and _multiplayer_controller.is_multiplayer_game() and game_started:
-		print("Main: Spawning network player for peer %d (game started)" % peer_id)
+		Log.info("Main", "Spawning network player for peer %d (game started)" % peer_id)
 		_multiplayer_controller.spawn_network_player(peer_id)
 	elif _multiplayer_controller and _multiplayer_controller.is_multiplayer_game() and not game_started:
 		# Game hasn't started yet, but we should still track the player
-		print("Main: Peer %d connected but game hasn't started yet" % peer_id)
+		Log.debug("Main", "Peer %d connected but game hasn't started yet" % peer_id)
 
 	if NetworkManager.is_server():
 		_notify_game_started.rpc_id(peer_id)
@@ -1456,6 +1423,9 @@ func _on_network_player_info_updated(peer_id: int) -> void:
 
 func get_local_player() -> Node:
 	return _player
+
+func get_network_players() -> Dictionary:
+	return _multiplayer_controller.get_network_players() if _multiplayer_controller else {}
 
 func get_all_players() -> Array:
 	return _multiplayer_controller.get_all_players(_player)
@@ -1769,17 +1739,17 @@ func _sync_race_start_article(start_article: String) -> void:
 		waited += wait_step
 
 	if not ExhibitFetcher.has_result(start_article):
-		print("Main: WARNING: Wikipedia data never arrived for '", start_article, "'")
+		Log.warn("Main", "Wikipedia data never arrived for '%s'" % start_article)
 	else:
-		print("Main: Wikipedia data received for '", start_article, "'")
+		Log.debug("Main", "Wikipedia data received for '%s'" % start_article)
 
 	# SERVER: Generate room and broadcast to all clients
 	if NetworkManager.is_server() and Services.room_service:
-		print("Main: Server generating room for '", start_article, "'")
-		
+		Log.info("Main", "Server generating room for '%s'" % start_article)
+
 		# Get target FIRST - set it in HintManager before room generates
 		var target_article: String = RaceManager.get_target_article()
-		print("Main: Race target set to '%s'" % target_article)
+		Log.info("Main", "Race target set to '%s'" % target_article)
 		
 		# Set target in HintManager immediately so door replacement can work
 		# Hint system disabled
@@ -1795,18 +1765,18 @@ func _sync_race_start_article(start_article: String) -> void:
 		# Get Wikipedia data (or empty dict if failed)
 		var wiki_data: Variant = ExhibitFetcher.get_result(start_article)
 		if wiki_data == null:
-			print("Main: WARNING: No Wikipedia data for '%s', generating room with empty data" % start_article)
+			Log.warn("Main", "No Wikipedia data for '%s', generating room with empty data" % start_article)
 			wiki_data = {}
 
 		Services.room_service.populate_room_data(room_data, wiki_data, [])
 		Services.room_service.broadcast_room(room_data)
 	else:
 		# CLIENT: Wait for room data from server
-		print("Main: Client waiting for room data from server...")
+		Log.debug("Main", "Client waiting for room data from server...")
 
 	# Load the exhibit (will use cached RoomData if available)
 	if _museum.has_method("load_exhibit_for_rider"):
-		print("Main: Loading exhibit '", start_article, "' before opening door...")
+		Log.debug("Main", "Loading exhibit '%s' before opening door..." % start_article)
 		_museum.load_exhibit_for_rider("Lobby", start_article)
 
 	# Wait for exhibit to generate (up to 0.5 seconds)
@@ -1835,14 +1805,14 @@ func _teleport_all_players_to_article(article: String) -> void:
 	## Teleport all connected players to the specified article
 	Log.debug("Main", "[_teleport_all_players_to_article] Called with article=%s" % article)
 	if not _museum:
-		print("Main: ERROR - _museum is null!")
+		Log.error("Main", "_museum is null!")
 		return
 
 	# Check if exhibit exists
 	if not _museum.has_exhibit(article):
 		var exhibits_dict = _museum.get("exhibits") if "exhibits" in _museum else _museum.get("_exhibits")
 		var exhibit_keys = exhibits_dict.keys() if exhibits_dict else []
-		print("Main: ERROR - Exhibit '", article, "' NOT loaded! Available: ", exhibit_keys)
+		Log.error("Main", "Exhibit '%s' NOT loaded! Available: %s" % [article, exhibit_keys])
 		return
 
 	Log.debug("Main", "Exhibit '%s' found" % article)
@@ -1853,13 +1823,13 @@ func _teleport_all_players_to_article(article: String) -> void:
 
 	for player in all_players:
 		if not is_instance_valid(player):
-			print("Main: Skipping invalid player")
+			Log.debug("Main", "Skipping invalid player")
 			continue
 
 		# Find the entry marker - it's inside the Hall node
 		var new_exhibit = _get_exhibit_for_article(article)
 		if not new_exhibit:
-			print("Main: ERROR - Could not get exhibit node for ", article)
+			Log.error("Main", "Could not get exhibit node for %s" % article)
 			continue
 		
 		# Try multiple possible locations for EntryMarker
@@ -1873,25 +1843,33 @@ func _teleport_all_players_to_article(article: String) -> void:
 			entry_marker = new_exhibit.find_child("EntryMarker", true, false)
 		
 		if not entry_marker:
-			print("Main: ERROR - EntryMarker not found in exhibit! Children: ", new_exhibit.get_children())
+			Log.error("Main", "EntryMarker not found in exhibit! Children: %s" % [new_exhibit.get_children()])
 			continue
-		
+
 		var entry_pos = entry_marker.global_transform.origin
-		print("Main: Teleporting ", player.name, " to ", entry_pos)
+		Log.debug("Main", "Teleporting %s to %s" % [player.name, entry_pos])
 		player.global_transform.origin = entry_pos + Vector3(0, 1, 0)
 		if "current_room" in player:
 			player.current_room = article
-			print("Main: Set ", player.name, " current_room to ", article)
+			Log.debug("Main", "Set %s current_room to %s" % [player.name, article])
 
 		# Also teleport mounted riders
-		if "mounted_by" in player and player.mounted_by:
-			var rider = player.mounted_by
-			if is_instance_valid(rider):
-				rider.global_transform.origin = entry_pos + Vector3(0, 2.5, 0)
-				if "current_room" in rider:
-					rider.current_room = article
+		_teleport_mounted_rider(player, entry_pos, article)
 	
 	Log.debug("Main", "<<< Teleport complete for %d players" % all_players.size())
+
+func _teleport_mounted_rider(player: Node, position: Vector3, room: String) -> void:
+	## Teleport a mounted rider to the same location as their mount
+	if not ("mounted_by" in player and player.mounted_by):
+		return
+	
+	var rider = player.mounted_by
+	if not is_instance_valid(rider):
+		return
+	
+	rider.global_transform.origin = position + Vector3(0, Constants.MOUNTED_RIDER_Y_OFFSET, 0)
+	if "current_room" in rider:
+		rider.current_room = room
 
 func teleport_all_players_to_start_line(start_article: String) -> void:
 	"""Teleport all players to the race start line in the lobby."""
@@ -1910,7 +1888,7 @@ func teleport_all_players_to_start_line(start_article: String) -> void:
 	var player_index: int = 0
 	for player in all_players:
 		if not is_instance_valid(player):
-			print("Main: Skipping invalid player")
+			Log.debug("Main", "Skipping invalid player")
 			continue
 
 		# Offset players horizontally along the start line (X axis)
@@ -1925,15 +1903,10 @@ func teleport_all_players_to_start_line(start_article: String) -> void:
 		player_index += 1
 		if "current_room" in player:
 			player.current_room = "Lobby"
-			print("Main: Set ", player.name, " current_room to Lobby")
+			Log.debug("Main", "Set %s current_room to Lobby" % player.name)
 
 		# Also teleport mounted riders
-		if "mounted_by" in player and player.mounted_by:
-			var rider = player.mounted_by
-			if is_instance_valid(rider):
-				rider.global_transform.origin = lobby_start_pos + Vector3(0, 2.5, 0)
-				if "current_room" in rider:
-					rider.current_room = "Lobby"
+		_teleport_mounted_rider(player, lobby_start_pos, "Lobby")
 	
 	Log.debug("Main", "<<< All %d players teleported to race start line!" % all_players.size())
 
@@ -1972,9 +1945,9 @@ func _fetch_and_cache_backlinks(target_article: String) -> void:
 								seen[title] = true
 								backlinks.append(title)
 					_hint_backlinks = backlinks
-					print("Main: Cached %d backlinks for hints" % backlinks.size())
+					Log.debug("Main", "Cached %d backlinks for hints" % backlinks.size())
 				else:
-					print("Main: No backlinks found")
+					Log.debug("Main", "No backlinks found")
 		http.queue_free()
 	
 	http.request_completed.connect(request_completed)
@@ -2026,7 +1999,7 @@ func _validate_backlinks_and_cache(target_article: String, potential_backlinks: 
 									found = extract_lower.find("the " + target_lower) != -1
 								if found:
 									state.validated.append(backlink)
-									print("Main: VALIDATED backlink '%s' contains '%s'" % [backlink, state.target])
+									Log.debug("Main", "VALIDATED backlink '%s' contains '%s'" % [backlink, state.target])
 			
 			state.pending -= 1
 			if state.pending == 0:
@@ -2034,7 +2007,7 @@ func _validate_backlinks_and_cache(target_article: String, potential_backlinks: 
 				var hint_manager = get_node_or_null("/root/HintManager")
 				if hint_manager:
 					hint_manager.set_backlinks(state.target, state.validated)
-					print("Main: Cached %d VALIDATED backlinks for '%s' (filtered from %d)" % [state.validated.size(), state.target, state.original_count])
+					Log.info("Main", "Cached %d VALIDATED backlinks for '%s' (filtered from %d)" % [state.validated.size(), state.target, state.original_count])
 				# Clean up any remaining HTTP requests
 				for child in get_children():
 					if child is HTTPRequest:
@@ -2063,8 +2036,8 @@ func _reveal_host_hint() -> void:
 	var hint_manager = get_node_or_null("/root/HintManager")
 	if hint_manager and hint_manager.has_signal("hint_revealed"):
 		hint_manager.reveal_hint_to_all(hint, "backlink")
-	
-	print("Main: Host revealed hint %d: '%s'" % [_hints_revealed, hint])
+
+	Log.info("Main", "Host revealed hint %d: '%s'" % [_hints_revealed, hint])
 
 func _fetch_categories_for_article(article: String) -> Array[String]:
 	"""Fetch Wikipedia categories for an article."""
@@ -2492,57 +2465,57 @@ func _show_screenshot_toast(filename: String, full_os_path: String) -> void:
 
 func _test_pcm_playback() -> void:
 	"""Test playing Piper TTS audio - Press F10 to test"""
-	print("[Piper Test] F10 pressed - testing WAV playback...")
-	
+	Log.debug("Main", "[Piper Test] F10 pressed - testing WAV playback...")
+
 	# Try loading the WAV file we generated earlier
 	var file_path = "user://piper_voices/test_output.wav"
 	var absolute_path = ProjectSettings.globalize_path(file_path)
-	
+
 	if not FileAccess.file_exists(absolute_path):
-		print("[Piper Test] ERROR: WAV file not found at: ", absolute_path)
+		Log.error("Main", "[Piper Test] WAV file not found at: %s" % absolute_path)
 		return
-	
+
 	# Read raw WAV data
 	var file = FileAccess.open(absolute_path, FileAccess.READ)
 	var wav_data = file.get_buffer(file.get_length())
 	file.close()
-	
-	print("[Piper Test] Loaded %d bytes of WAV data" % wav_data.size())
-	
+
+	Log.debug("Main", "[Piper Test] Loaded %d bytes of WAV data" % wav_data.size())
+
 	# WAV header is 44 bytes - skip it to get raw PCM
 	if wav_data.size() < 44:
-		print("[Piper Test] ERROR: File too small for WAV")
+		Log.error("Main", "[Piper Test] File too small for WAV")
 		return
-	
+
 	# Extract raw PCM (skip 44-byte WAV header)
 	var pcm_data = wav_data.slice(44)
-	print("[Piper Test] Extracted %d bytes of PCM data" % pcm_data.size())
-	
+	Log.debug("Main", "[Piper Test] Extracted %d bytes of PCM data" % pcm_data.size())
+
 	# Read WAV header to get format info
 	# Sample rate is at bytes 24-27 (little-endian)
 	var sample_rate = wav_data[24] | (wav_data[25] << 8) | (wav_data[26] << 16) | (wav_data[27] << 24)
-	print("[Piper Test] Sample rate: %d Hz" % sample_rate)
-	
+	Log.debug("Main", "[Piper Test] Sample rate: %d Hz" % sample_rate)
+
 	# Create AudioStreamWAV and set data directly
 	var stream = AudioStreamWAV.new()
 	stream.data = pcm_data
 	stream.mix_rate = sample_rate
 	stream.format = AudioStreamWAV.FORMAT_16_BITS
 	stream.stereo = false  # Piper outputs mono
-	
-	print("[Piper Test] AudioStreamWAV configured")
-	
+
+	Log.debug("Main", "[Piper Test] AudioStreamWAV configured")
+
 	# Create player
 	var player = AudioStreamPlayer.new()
 	player.stream = stream
 	player.volume_db = -20  # 10% volume (safe!)
 	add_child(player)
-	
+
 	player.play()
-	print("[Piper Test] Playback started")
-	print("[Piper Test] Listen for clear speech (no static)")
-	
+	Log.debug("Main", "[Piper Test] Playback started")
+	Log.debug("Main", "[Piper Test] Listen for clear speech (no static)")
+
 	# Cleanup after playback
 	await player.finished
-	print("[Piper Test] Playback finished")
+	Log.debug("Main", "[Piper Test] Playback finished")
 	player.queue_free()

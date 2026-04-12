@@ -80,21 +80,21 @@ func _start_playing() -> void:
 func _ambience_voice_timer() -> void:
 	var delay: int = randi_range(_ambient_voice_space_min, _ambient_voice_space_max)
 	if OS.is_debug_build():
-		print("ambient voice delay=", delay)
+		Log.debug("AmbienceController", "ambient voice delay=%d" % delay)
 	get_tree().create_timer(delay).timeout.connect(_play_ambience_voice)
 
 
 func _ambience_event_timer() -> void:
 	var delay: int = randi_range(_ambience_event_space_min, _ambience_event_space_max)
 	if OS.is_debug_build():
-		print("ambient event delay=", delay)
+		Log.debug("AmbienceController", "ambient event delay=%d" % delay)
 	get_tree().create_timer(delay).timeout.connect(_play_ambience_event)
 
 
 func _play_ambience_voice() -> void:
 	var player: AudioStreamPlayer = _create_player(_ambient_voices[randi() % _ambient_voices.size()])
 	if OS.is_debug_build():
-		print("playing ambience voice. src=", player.stream.resource_path)
+		Log.debug("AmbienceController", "playing ambience voice. src=%s" % player.stream.resource_path)
 	player.finished.connect(_clean_player.bind(player))
 	player.finished.connect(_ambience_voice_timer)
 
@@ -111,7 +111,7 @@ func _play_ambience_event() -> void:
 			var player: AudioStreamPlayer = _create_player(ev[1])
 			player.finished.connect(_clean_player.bind(player))
 			if OS.is_debug_build():
-				print("playing ambience event. src=", player.stream.resource_path)
+				Log.debug("AmbienceController", "playing ambience event. src=%s" % player.stream.resource_path)
 			break
 
 

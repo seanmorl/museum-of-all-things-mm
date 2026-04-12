@@ -6,13 +6,13 @@ static func apply() -> void:
 	# Tell all players to enable triple jump
 	if RaceManager.has_method("set_triple_jump_enabled"):
 		RaceManager.set_triple_jump_enabled(true)
-	print("[TripleJumpEvent] Applied: Triple jump enabled! WHEEE!")
+	Log.info("TripleJumpEvent", "Applied: Triple jump enabled! WHEEE!")
 
 static func end() -> void:
 	# Disable triple jump
 	if RaceManager.has_method("set_triple_jump_enabled"):
 		RaceManager.set_triple_jump_enabled(false)
-	print("[TripleJumpEvent] Ended: Triple jump disabled")
+	Log.info("TripleJumpEvent", "Triple jump disabled")
 
 static func get_duration() -> float:
 	return randf_range(30.0, 60.0)

@@ -70,7 +70,11 @@ func init(player: CharacterBody3D) -> void:
 	_carry_mesh_fp.rotation_degrees = Vector3(90, 0, 0)
 	_carry_mesh_fp.visible = false
 	_carry_mesh_fp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	player.get_node("Pivot/Camera3D").add_child(_carry_mesh_fp)
+	
+	if player.has_node("Pivot/Camera3D"):
+		player.get_node("Pivot/Camera3D").add_child(_carry_mesh_fp)
+	else:
+		push_warning("PlayerPaintingSystem: Pivot/Camera3D not found for player '%s'" % player.name)
 
 	# Create third-person carry mesh (child of Pivot)
 	_carry_mesh_tp = MeshInstance3D.new()
@@ -83,21 +87,29 @@ func init(player: CharacterBody3D) -> void:
 	_carry_mesh_tp.rotation_degrees = Vector3(90, 0, 0)
 	_carry_mesh_tp.visible = false
 	_carry_mesh_tp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	player.get_node("Pivot").add_child(_carry_mesh_tp)
 	
+	if player.has_node("Pivot"):
+		player.get_node("Pivot").add_child(_carry_mesh_tp)
+	else:
+		push_warning("PlayerPaintingSystem: Pivot not found for player '%s'" % player.name)
+
 	# Create first-person audio carry mesh (gramophone icon)
 	_carry_audio_mesh_fp = _create_audio_carry_mesh()
 	_carry_audio_mesh_fp.name = "CarryAudioFP"
 	_carry_audio_mesh_fp.position = CARRY_AUDIO_FP_POSITION
 	_carry_audio_mesh_fp.visible = false
-	player.get_node("Pivot/Camera3D").add_child(_carry_audio_mesh_fp)
 	
+	if player.has_node("Pivot/Camera3D"):
+		player.get_node("Pivot/Camera3D").add_child(_carry_audio_mesh_fp)
+
 	# Create third-person audio carry mesh
 	_carry_audio_mesh_tp = _create_audio_carry_mesh()
 	_carry_audio_mesh_tp.name = "CarryAudioTP"
 	_carry_audio_mesh_tp.position = CARRY_AUDIO_TP_POSITION
 	_carry_audio_mesh_tp.visible = false
-	player.get_node("Pivot").add_child(_carry_audio_mesh_tp)
+	
+	if player.has_node("Pivot"):
+		player.get_node("Pivot").add_child(_carry_audio_mesh_tp)
 
 	# For local player: hide TP mesh. For network player: hide FP mesh.
 	if player.is_local:
@@ -198,6 +210,19 @@ func try_steal_target() -> bool:
 		if exhibit_title == "":
 			return false
 		steal_requested.emit(exhibit_title, sound_item.title, sound_item.audio_url, Vector2(1, 1), true)
+		return true
+
+	# Walk up from collider to find Gramophone
+	var gramophone: Node = _find_gramophone(collider)
+	if gramophone:
+		# Check that audio is loaded
+		if not gramophone._stream:
+			return false
+		# Walk up to find exhibit parent
+		var exhibit_title: String = _find_exhibit_title(gramophone)
+		if exhibit_title == "":
+			return false
+		steal_requested.emit(exhibit_title, gramophone.title, gramophone.url, Vector2(1, 1), true)
 		return true
 
 	# Walk up from collider to find ImageItem (pictures)
@@ -509,6 +534,22 @@ func _find_sound_item(node: Node) -> Node:
 	if parent:
 		var grandparent: Node = parent.get_parent()
 		if grandparent and "audio_url" in grandparent and "_stream" in grandparent:
+			return grandparent
+	return null
+
+
+func _find_gramophone(node: Node) -> Node:
+	# Check if this node is a Gramophone
+	if node is Gramophone:
+		return node
+	# Check parent
+	var parent: Node = node.get_parent()
+	if parent and parent is Gramophone:
+		return parent
+	# Check grandparent
+	if parent:
+		var grandparent: Node = parent.get_parent()
+		if grandparent and grandparent is Gramophone:
 			return grandparent
 	return null
 

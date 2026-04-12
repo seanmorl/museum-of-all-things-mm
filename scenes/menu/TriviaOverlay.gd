@@ -28,9 +28,14 @@ var _panel_style: StyleBoxFlat = null
 
 func _ready() -> void:
 	visible = false
+	add_to_group("mouse_overlay")
+
+	if not _panel or not _close_btn or not _next_btn:
+		push_error("TriviaOverlay: Missing required nodes in scene tree")
+		return
+
 	_panel.modulate.a = 0.0
 	_panel.position.y = 14.0
-	add_to_group("mouse_overlay")
 	_close_btn.pressed.connect(close)
 	_next_btn.pressed.connect(_on_next_pressed)
 

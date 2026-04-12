@@ -46,7 +46,7 @@ func _setup_cache() -> void:
 
 func _initialize_kokoro() -> void:
 	"""Initialize Kokoro TTS engine"""
-	print("[KokoroService] Initializing...")
+	Log.debug("KokoroService", "Initializing...")
 
 	# Create the KokoroTTS instance (GDScript wrapper around TextToSpeech GDExtension)
 	kokoro = KokoroTTS.new()
@@ -63,27 +63,27 @@ func _initialize_kokoro() -> void:
 	if result:
 		is_ready = true
 		var speaker_count = kokoro.get_speaker_count()
-		print("[KokoroService] ✓ Ready with %d speakers" % speaker_count)
+		Log.info("KokoroService", "Ready with %d speakers" % speaker_count)
 
 		# List available speakers
 		for i in range(speaker_count):
-			print("[KokoroService]   Speaker %d" % i)
+			Log.debug("KokoroService", "Speaker %d" % i)
 	else:
-		print("[KokoroService] ✗ Failed to initialize")
+		Log.error("KokoroService", "Failed to initialize")
 		error_occurred.emit("KokoroTTS initialization failed")
 
 
 func speak(text: String) -> void:
 	"""Generate and speak text using Kokoro TTS"""
 	if not is_ready:
-		print("[KokoroService] Not ready")
+		Log.error("KokoroService", "Not ready")
 		error_occurred.emit("KokoroTTS not ready")
 		return
 
 	if text.is_empty():
 		return
 
-	print("[KokoroService] Speaking: ", text.substr(0, 50))
+	Log.debug("KokoroService", "Speaking: %s" % text.substr(0, 50))
 
 	# Stop any current speech
 	stop()
@@ -91,12 +91,12 @@ func speak(text: String) -> void:
 	# Check cache first
 	var cache_key = _hash(text)
 	if _cache.has(cache_key):
-		print("[KokoroService] Using cached audio")
+		Log.debug("KokoroService", "Using cached audio")
 		_play_audio(_cache[cache_key])
 		return
 
 	# Generate async (non-blocking!)
-	print("[KokoroService] Generating speech (async)...")
+	Log.debug("KokoroService", "Generating speech (async)...")
 	kokoro.speaker_id = current_speaker
 	kokoro.speed = speech_speed
 	kokoro.speak_async(text)
@@ -104,13 +104,13 @@ func speak(text: String) -> void:
 
 func _on_generation_completed(request_id: int, audio: AudioStreamWAV) -> void:
 	"""Called when async generation completes"""
-	print("[KokoroService] Generation complete")
-	
+	Log.debug("KokoroService", "Generation complete")
+
 	if audio:
 		# Cache it
 		var cache_key = _hash(request_id)
 		_cache[cache_key] = audio
-		
+
 		# Play it
 		_play_audio(audio)
 	else:
@@ -123,24 +123,24 @@ func _play_audio(audio: AudioStreamWAV) -> void:
 	_current_player.stream = audio
 	_current_player.volume_db = -10  # -10dB safe volume
 	_current_player.bus = &"TTS"
-	
+
 	add_child(_current_player)
-	
+
 	_current_player.finished.connect(_on_playback_finished)
 	_current_player.play()
-	
+
 	speech_started.emit()
-	print("[KokoroService] Playback started")
+	Log.debug("KokoroService", "Playback started")
 
 
 func _on_playback_finished() -> void:
 	"""Called when playback completes"""
-	print("[KokoroService] Playback finished")
-	
+	Log.debug("KokoroService", "Playback finished")
+
 	if _current_player:
 		_current_player.queue_free()
 		_current_player = null
-	
+
 	speech_finished.emit()
 
 
@@ -150,14 +150,14 @@ func stop() -> void:
 		_current_player.stop()
 		_current_player.queue_free()
 		_current_player = null
-		print("[KokoroService] Stopped")
+		Log.debug("KokoroService", "Stopped")
 
 
 func set_speaker(speaker_id: int) -> bool:
 	"""Set the current speaker (0 to speaker_count-1)"""
 	if kokoro and speaker_id >= 0 and speaker_id < kokoro.get_speaker_count():
 		current_speaker = speaker_id
-		print("[KokoroService] Speaker set to: ", speaker_id)
+		Log.debug("KokoroService", "Speaker set to: %d" % speaker_id)
 		return true
 	return false
 
@@ -172,13 +172,13 @@ func get_speaker_count() -> int:
 func set_speed(speed: float) -> void:
 	"""Set speech speed (0.5 to 2.0)"""
 	speech_speed = clamp(speed, 0.5, 2.0)
-	print("[KokoroService] Speed set to: ", speech_speed)
+	Log.debug("KokoroService", "Speed set to: %.1f" % speech_speed)
 
 
 func clear_cache() -> void:
 	"""Clear the audio cache"""
 	_cache.clear()
-	print("[KokoroService] Cache cleared")
+	Log.debug("KokoroService", "Cache cleared")
 
 
 func get_cache_size() -> int:

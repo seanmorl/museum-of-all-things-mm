@@ -47,7 +47,7 @@ static func only_types_in_cells(grid: Variant, cells: Array, types: Array, debug
 		var v: int = grid.get_cell_item(c)
 		if not types.has(v):
 			if debug_print:
-				print("returning false-- found type ", v)
+				Log.debug("GridUtils", "returning false-- found type %d" % v)
 			return false
 	return true
 

@@ -134,13 +134,13 @@ func can_transition_to(new_state: State) -> bool:
 func enter_state(new_state: State) -> void:
 	"""Safely transition to a new state."""
 	if not can_transition_to(new_state):
-		print("GameState: Invalid transition from ", State.keys()[current_state], " to ", State.keys()[new_state])
+		Log.warn("GameState", "Invalid transition from %s to %s" % [State.keys()[current_state], State.keys()[new_state]])
 		return
-	
+
 	var old_state = current_state
 	current_state = new_state
 	sub_state = SubState.NONE
-	print("GameState: ", State.keys()[old_state], " → ", State.keys()[new_state])
+	Log.info("GameState", "%s → %s" % [State.keys()[old_state], State.keys()[new_state]])
 
 # --- Serialization (for network sync) ---
 

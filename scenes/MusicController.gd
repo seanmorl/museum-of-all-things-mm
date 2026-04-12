@@ -22,7 +22,7 @@ var _last_track: int = -1
 func _ready() -> void:
 	var wait_time: float = randf_range(min_space_start, max_space)
 	if OS.is_debug_build():
-		print("waiting for first track. time=", wait_time)
+		Log.debug("MusicController", "waiting for first track. time=%s" % wait_time)
 	get_tree().create_timer(wait_time).timeout.connect(_play_track)
 	$AudioStreamPlayer.finished.connect(_reset_timer)
 
@@ -36,7 +36,7 @@ func _play_track() -> void:
 	_last_track = track_idx
 
 	if OS.is_debug_build():
-		print("playing music. track #", track_idx)
+		Log.debug("MusicController", "playing music. track #%d" % track_idx)
 
 	$AudioStreamPlayer.stream = _tracks[track_idx]
 	$AudioStreamPlayer.seek(0.0)
@@ -46,5 +46,5 @@ func _play_track() -> void:
 func _reset_timer() -> void:
 	var wait_time: float = randf_range(min_space, max_space)
 	if OS.is_debug_build():
-		print("waiting for next track. time=", wait_time)
+		Log.debug("MusicController", "waiting for next track. time=%s" % wait_time)
 	get_tree().create_timer(wait_time).timeout.connect(_play_track)

@@ -11,9 +11,8 @@ const FULL_MARGIN := 60.0
 const MINIMAP_NODE_RADIUS := 6.0
 const FULL_NODE_RADIUS := 14.0
 
-const BG_MINIMAP := Color(1, 1, 1, 0.8)
-const BG_FULL := Color(0.973, 0.976, 0.98, 0.2)
-
+# NOTE: Background colours are now computed dynamically from ThemeManager so they
+# respect dark mode. The old hardcoded constants are removed.
 const COLOR_CURRENT := Color(0.024, 0.271, 0.678)  # Wikipedia blue
 const COLOR_VISITED := Color(0.420, 0.294, 0.631)  # Wikipedia purple
 const COLOR_UNVISITED := Color(0.784, 0.800, 0.820, 0.5)  # Light gray
@@ -74,8 +73,9 @@ func set_hidden() -> void:
 
 
 func restore_after_pause() -> void:
-	if _mode_before_pause == Mode.MINIMAP:
-		_mode = Mode.MINIMAP
+	## Restores whichever mode (MINIMAP or FULL) was active before the pause.
+	if _mode_before_pause == Mode.MINIMAP or _mode_before_pause == Mode.FULL:
+		_mode = _mode_before_pause
 		visible = true
 		queue_redraw()
 	_mode_before_pause = Mode.HIDDEN
@@ -117,13 +117,14 @@ func _draw() -> void:
 			position = Vector2(MINIMAP_MARGIN, viewport_size.y - MINIMAP_SIZE.y - MINIMAP_MARGIN)
 			size = MINIMAP_SIZE
 			node_radius = MINIMAP_NODE_RADIUS
-			bg_color = BG_MINIMAP
-			show_labels = show_minimap_labels  # Use instance variable
+			# Dark-mode aware: use ThemeManager's bg with high opacity
+			bg_color = Color(ThemeManager.bg_color, 0.88)
+			show_labels = show_minimap_labels
 		Mode.FULL:
 			position = Vector2(FULL_MARGIN, FULL_MARGIN)
 			size = viewport_size - Vector2(FULL_MARGIN * 2, FULL_MARGIN * 2)
 			node_radius = FULL_NODE_RADIUS
-			bg_color = BG_FULL
+			bg_color = Color(ThemeManager.bg_color, 0.92)
 			show_labels = true
 
 	var is_minimap: bool = _mode == Mode.MINIMAP

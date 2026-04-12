@@ -21,7 +21,7 @@ func _ready() -> void:
 	_http_request = HTTPRequest.new()
 	_http_request.request_completed.connect(_on_request_completed)
 	add_child(_http_request)
-	
+
 	# Try to load from cache first
 	_load_from_cache()
 
@@ -167,18 +167,18 @@ func _try_fallback_date() -> void:
 
 
 func _use_hardcoded_fallback() -> void:
-	# If API is completely unavailable, use some interesting articles
+	# If API is completely unavailable, use interesting fallback articles
 	_trending_articles = [
-		"Wikipedia",
-		"Internet",
-		"Artificial Intelligence",
-		"Science",
-		"Technology",
-		"History",
-		"Earth",
-		"Space Exploration",
-		"Culture",
-		"Education"
+		"Octopus",
+		"Honey",
+		"Venus",
+		"Anglo-Zanzibar War",
+		"Shark",
+		"Tree",
+		"Milky Way",
+		"Great Pyramid of Giza",
+		"Nintendo",
+		"University of Oxford",
 	]
 	push_warning("[WikipediaTrending] Using hardcoded fallback articles")
 	trending_updated.emit(_trending_articles)

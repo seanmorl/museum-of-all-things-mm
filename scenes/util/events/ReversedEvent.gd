@@ -20,8 +20,8 @@ static func apply() -> void:
 				hall.set("to_title", temp)
 				# Update labels if they exist
 				hall._update_labels() if hall.has_method("_update_labels") else null
-	
-	print("[ReversedEvent] Applied: All door labels swapped")
+
+	Log.info("ReversedEvent", "Applied: All door labels swapped")
 
 static func end() -> void:
 	# Restore original labels
@@ -33,9 +33,9 @@ static func end() -> void:
 				hall.set("to_title", _original_labels[hall]["to_title"])
 			if hall.has_method("_update_labels"):
 				hall._update_labels()
-	
+
 	_original_labels.clear()
-	print("[ReversedEvent] Ended: Door labels restored")
+	Log.info("ReversedEvent", "Door labels restored")
 
 static func get_duration() -> float:
 	return randf_range(30.0, 60.0)

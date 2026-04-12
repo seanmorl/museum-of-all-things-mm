@@ -52,6 +52,7 @@ var _players        : Dictionary  = {}
 var _local_hops     : int         = 0
 var _local_trail    : Array[String] = []
 var _local_last_room: String      = ""
+var _canvas_dirty   : bool        = false
 
 
 # ── Ready ────────────────────────────────────────────────────────────────────
@@ -248,6 +249,7 @@ func _on_race_started(target_article: String, _start: String) -> void:
 func _on_race_ended(winner_peer_id: int, _winner_name: String) -> void:
 	_race_active = false
 	_winner_peer = winner_peer_id
+	_canvas_dirty = true
 	_update_target_lbl()
 	if _canvas: _canvas.queue_redraw()
 	# Always hide when race ends
@@ -281,6 +283,7 @@ func _on_local_room_changed(room: Variant) -> void:
 		_players[my_id].hops         = _local_hops
 		_players[my_id].trail        = _local_trail.slice(
 			maxi(0, _local_trail.size() - MAX_TRAIL - 5))
+	_canvas_dirty = true
 
 
 func _on_player_joined(_peer_id: int, _name: String) -> void:
@@ -303,6 +306,7 @@ func _refresh_player_list() -> void:
 	for pid : int in NetworkManager.get_player_list():
 		if pid != my_id:
 			_players[pid] = _make_entry(pid)
+	_canvas_dirty = true
 	_resize_canvas()
 	_update_target_lbl()
 
@@ -485,8 +489,10 @@ func _process(delta: float) -> void:
 		_update_timer = 0.0
 		_sync_remote_players()
 
-	if _canvas and _panel and _panel.visible:
+	# Only redraw when data actually changed
+	if _canvas and _panel and _panel.visible and _canvas_dirty:
 		_canvas.queue_redraw()
+		_canvas_dirty = false
 
 
 func _sync_remote_players() -> void:
@@ -500,6 +506,7 @@ func _sync_remote_players() -> void:
 				entry.trail.append(new_room)
 				entry.hops += 1
 			entry.current_room = new_room
+			_canvas_dirty = true
 		entry.name  = NetworkManager.get_player_name(pid)
 		entry.color = NetworkManager.get_player_color(pid)
 

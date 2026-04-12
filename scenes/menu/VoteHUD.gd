@@ -869,7 +869,7 @@ func _on_event_preset_pressed(preset: String) -> void:
 			EventManager.duration_modifier = 0.75
 			EventManager.max_concurrent = 1
 	
-	print("[VoteHUD] Event preset applied: %s" % preset)
+	Log.debug("VoteHUD", "Event preset applied: %s" % preset)
 
 func _on_category_input_changed(text: String) -> void:
 	if text.strip_edges() == "":

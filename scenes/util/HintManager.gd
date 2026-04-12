@@ -32,7 +32,7 @@ func set_backlinks(target: String, backlinks: Array[String]) -> void:
 	"""Store validated backlinks for a target article."""
 	_backlink_cache[target] = backlinks
 	_current_target = target
-	print("HintManager: Emitting hints_loaded for '%s' with %d backlinks" % [target, backlinks.size()])
+	Log.debug("HintManager", "Emitting hints_loaded for '%s' with %d backlinks" % [target, backlinks.size()])
 	hints_loaded.emit(_current_target)
 	Log.info("HintManager", "Stored %d backlinks for '%s'" % [backlinks.size(), target])
 

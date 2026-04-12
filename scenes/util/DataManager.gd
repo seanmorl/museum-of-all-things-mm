@@ -26,7 +26,7 @@ func _ready() -> void:
 			if err != OK:
 				Log.error("DataManager", "Failed to create cache directory '%s': %s" % [cache_dir, error_string(err)])
 			elif OS.is_debug_build():
-				print("cache directory created at '%s'" % cache_dir)
+				Log.debug("DataManager", "cache directory created at '%s'" % cache_dir)
 
 	if Platform.is_using_threads():
 		for _i in range(_texture_load_thread_pool_size):

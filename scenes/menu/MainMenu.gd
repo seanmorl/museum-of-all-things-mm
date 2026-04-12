@@ -6,18 +6,78 @@ signal start_multiplayer
 signal start_dedicated_host
 
 const FACTS := [
+	# ── MOAT Facts ──────────────────────────────────────────────────────
+	"The Museum of All Things is procedurally generated — every exhibit is unique!",
+	"You can explore MOAT with up to 16 players in multiplayer mode.",
+	"Each exhibit hallway is generated from real Wikipedia article links.",
+	"MOAT supports 8 languages: English, Portuguese, French, Spanish, Japanese, German, Bengali, and Chinese.",
+	"Images in exhibits are pulled automatically from Wikimedia Commons.",
+	"The article text you read on plaques is fetched live from Wikipedia.",
+	"MOAT is built in the Godot Engine — a free, open-source game engine.",
+	"You can host your own MOAT server with the --headless --server flags.",
+	"Press ~ or F12 in debug builds to open the developer console.",
+	"Press T in-game to open the chat system.",
+	"You can vote on which article to race to at the start of each round.",
+	"MOAT has a tournament mode with bracket or round-robin formats.",
+	"Player skins can be set to any Wikimedia Commons image URL.",
+	"Press M to toggle the minimap while exploring.",
+	"Press J to open your exploration journal.",
+	"Dash by pressing Shift to move faster between exhibits.",
+	"You can mount other players by pressing E near them!",
+	"Press Q to point at interesting exhibits for other players.",
+	"MOAT features King of the Hill events that pause your timer outside the zone.",
+	"Event warnings flash before environmental effects change the museum.",
+	"The museum has themed architectural features that change per exhibit.",
+	"VR mode is supported via OpenXR with dynamic foveation on Meta Quest.",
+	"Discord Rich Presence shows what exhibit you're exploring.",
+	"The path trail minimap shows your route through the museum.",
+	"Audio exhibits let you listen to music and sounds from Wikimedia.",
+	"Secret walls can sometimes lead to hidden exhibits.",
+	"The Museum of All Things is free and open-source — built with love for the community.",
 	"Wikipedia has over 60 million articles in more than 300 languages.",
-	"Each room door leads to another Wikipedia article — infinite museum!",
-	"Every painting comes from Wikimedia Commons.",
-	"Multiplayer supports up to 16 players exploring together.",
-	"The race mode lets you vote on a target and race to find it first!",
-	"Tournament mode: elimination brackets with multiple rounds.",
-	"This project is open source — built with love for the community.",
-	"Powered by Godot Engine — a free, open-source game engine.",
-	"The Museum uses Wikipedia's API to fetch articles in real-time.",
-	"Articles are converted into navigable 3D gallery spaces.",
-	"Race against friends to see who navigates Wikipedia fastest!",
 	"Originally created by m4ym4y (Maya) — the visionary behind MoAT.",
+
+	# ── Fascinating Facts ───────────────────────────────────────────────
+	"Honey never spoils — archaeologists have found edible 3,000-year-old honey in Egyptian tombs.",
+	"Octopuses have three hearts, nine brains, and blue blood.",
+	"A day on Venus is longer than a year on Venus.",
+	"The shortest war in history lasted 38 minutes — between Britain and Zanzibar in 1896.",
+	"There are more possible iterations of a game of chess than atoms in the observable universe.",
+	"Bananas are berries, but strawberries aren't.",
+	"The inventor of the Pringles can is buried in one.",
+	"Scotland's national animal is the unicorn.",
+	"A cloud can weigh more than a million pounds.",
+	"Venus is the only planet that spins clockwise.",
+	"There are more trees on Earth than stars in the Milky Way.",
+	"Sharks existed before trees — by over 100 million years.",
+	"The Eiffel Tower can be 15 cm taller during summer due to thermal expansion.",
+	"A jiffy is an actual unit of time — 1/100th of a second.",
+	"Nintendo was founded in 1889 as a playing card company.",
+	"Oxford University is older than the Aztec Empire.",
+	"Cleopatra lived closer in time to the Moon landing than to the construction of the Great Pyramid.",
+	"The human brain uses about 20% of the body's total energy.",
+	"Wombat poop is cube-shaped.",
+	"The longest English word without a repeated letter is 'uncopyrightable' (15 letters).",
+	"There are 293 ways to make change for a US dollar.",
+	"A group of flamingos is called a 'flamboyance'.",
+	"The @ symbol has been used for over 500 years — since the 16th century.",
+	"Titanic was the subject of a fictional book in 1898, 14 years before the real ship sank.",
+
+	# ── Gameplay Tips ───────────────────────────────────────────────────
+	"Tip: Follow links from one exhibit to discover entirely new wings of the museum.",
+	"Tip: Use the race system to compete with friends — vote on your destination!",
+	"Tip: The minimap tracks your path — retrace your steps to find your way back.",
+	"Tip: Tournament mode supports both fixed rounds and first-to-N formats.",
+	"Tip: Events can change the rules of the museum — stay alert for warnings!",
+	"Tip: Use the journal to bookmark interesting exhibits for later.",
+	"Tip: The dedicated server lets your friends join even when you're not playing.",
+	"Tip: MOAT scales from low-end to high-end PCs — adjust graphics in settings.",
+	"Tip: Set your pronouns in the multiplayer menu — they appear for all players.",
+	"Tip: Player reactions let you emote with number keys 1-8.",
+	"Tip: The museum generates infinitely — you'll never run out of new exhibits.",
+	"Tip: Every exhibit has a unique mood and atmosphere based on its content.",
+	"Tip: Not all doors lead forward — some lead to surprising side exhibits.",
+	"Tip: Tab shows which players are currently online.",
 ]
 
 var _serif_font: Font = null
@@ -27,11 +87,14 @@ var _menu_nodes: Array[Control] = []
 var _selection_bar: ColorRect = null
 var _current_fact_index: int = 0
 var _fact_timer: Timer = null
+var _fact_order: Array[int] = []  # Shuffled indices to avoid repeats
 var _patch_popup: Control = null
 var _trending_label: Label = null
 var _trending_articles: Array = []
 var _trending_index: int = 0
 var _trending_timer: Timer = null
+var _available_locales: Array[String] = []
+var _current_locale_index: int = 0
 
 @onready var _logo_label: RichTextLabel = %LogoLabel
 @onready var _button_container: VBoxContainer = %ButtonContainer
@@ -50,10 +113,12 @@ func _ready() -> void:
 	_setup_fact_timer()
 	_populate_tags()
 	_setup_trending_ticker()
+	_setup_language_list()
 
 	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
 	ThemeManager.reading_font_changed.connect(_on_reading_font_changed)
 	UIEvents.ui_cancel_pressed.connect(_on_ui_cancel_pressed)
+	SettingsEvents.language_changed.connect(_on_language_changed_from_settings)
 
 	if Platform.is_web():
 		for node in _menu_nodes:
@@ -72,6 +137,26 @@ func _on_reading_font_changed(f: Font) -> void:
 	_apply_theme()
 
 
+func _setup_language_list() -> void:
+	_available_locales = ["en"]
+	for locale in TranslationServer.get_loaded_locales():
+		if locale != "en":
+			_available_locales.append(locale)
+	_current_locale_index = _available_locales.find(LanguageManager.get_locale())
+	if _current_locale_index < 0:
+		_current_locale_index = 0
+
+
+func _on_language_changed_from_settings(language: String) -> void:
+	_current_locale_index = _available_locales.find(language)
+	if _current_locale_index < 0:
+		_current_locale_index = 0
+	_update_language_toggle_ui()
+	# Rebuild main menu to pick up translated button labels
+	_build_ui()
+	_update_selection(true)
+
+
 func _input(event: InputEvent) -> void:
 	if not visible: return
 	
@@ -83,13 +168,16 @@ func _input(event: InputEvent) -> void:
 
 	if event.is_action_pressed("ui_up"):
 		_selected_index = posmod(_selected_index - 1, _menu_nodes.size())
+		UISoundManager._play(UISoundManager.focus_sound)
 		_update_selection()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("ui_down"):
 		_selected_index = posmod(_selected_index + 1, _menu_nodes.size())
+		UISoundManager._play(UISoundManager.focus_sound)
 		_update_selection()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("ui_accept"):
+		UISoundManager._play(UISoundManager.button_press_sound)
 		_on_item_selected(_selected_index)
 		get_viewport().set_input_as_handled()
 
@@ -119,13 +207,14 @@ func _build_ui() -> void:
 		shadow.show()
 
 	var items = [
-		{"label": "Play Game", "icon": "🏛", "callback": _on_start_pressed},
-		{"label": "Multiplayer", "icon": "🌐", "callback": _on_multiplayer_pressed},
-		{"label": "Settings", "icon": "⚙", "callback": _on_settings_pressed},
-		{"label": "Toggle Theme", "icon": "☾", "callback": _on_theme_toggle_pressed},
-		{"label": "Latest Changes", "icon": "📋", "callback": _show_patch_notes},
-		{"label": "DedicatedHost", "icon": "🖥", "callback": _on_dedicated_host_pressed}, # Named for Main.gd compatibility
-		{"label": "Quit", "icon": "✕", "callback": _on_quit_pressed} # Named for Main.gd compatibility
+		{"label": tr("Play Game"), "icon": "🏛", "callback": _on_start_pressed},
+		{"label": tr("Multiplayer"), "icon": "🌐", "callback": _on_multiplayer_pressed},
+		{"label": tr("Settings"), "icon": "⚙", "callback": _on_settings_pressed},
+		{"label": tr("Toggle Theme"), "icon": "☾", "callback": _on_theme_toggle_pressed},
+		{"label": tr("Language"), "icon": "🌍", "callback": _on_language_toggle_pressed},
+		{"label": tr("Latest Changes"), "icon": "📋", "callback": _show_patch_notes},
+		{"label": tr("DedicatedHost"), "icon": "🖥", "callback": _on_dedicated_host_pressed},
+		{"label": tr("Quit"), "icon": "✕", "callback": _on_quit_pressed}
 	]
 
 	for item in items:
@@ -139,7 +228,9 @@ func _build_ui() -> void:
 		if item.label == "Toggle Theme":
 			icon_lbl.text = "☾" if not ThemeManager.is_dark_mode else "☀"
 			icon_lbl.name = "ThemeIcon"
-		
+		elif item.label == "Language":
+			icon_lbl.name = "LanguageIcon"
+
 		icon_lbl.add_theme_font_size_override("font_size", 18)
 		icon_lbl.modulate.a = 0.6
 		btn_hbox.add_child(icon_lbl)
@@ -148,9 +239,12 @@ func _build_ui() -> void:
 		var label_text = item.label
 		if label_text == "DedicatedHost": label_text = "Host Server"
 		elif label_text == "Toggle Theme": label_text = "Light Mode" if ThemeManager.is_dark_mode else "Dark Mode"
-		
+		elif label_text == "Language": label_text = _get_current_language_name()
+
 		lbl.text = label_text
+
 		if item.label == "Toggle Theme": lbl.name = "ThemeLabel"
+		elif item.label == "Language": lbl.name = "LanguageLabel"
 		
 		lbl.add_theme_font_override("font", _serif_font)
 		lbl.add_theme_font_size_override("font_size", 20)
@@ -205,12 +299,14 @@ func _update_selection(instant: bool = false) -> void:
 
 func _on_item_gui_input(event: InputEvent, index: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		UISoundManager._play(UISoundManager.button_press_sound)
 		_on_item_selected(index)
 
 
 func _on_item_mouse_entered(index: int) -> void:
 	if _selected_index != index:
 		_selected_index = index
+		UISoundManager._play(UISoundManager.focus_sound)
 		_update_selection()
 
 
@@ -220,9 +316,10 @@ func _on_item_selected(index: int) -> void:
 		1: _on_multiplayer_pressed()
 		2: _on_settings_pressed()
 		3: _on_theme_toggle_pressed()
-		4: _show_patch_notes()
-		5: _on_dedicated_host_pressed()
-		6: _on_quit_pressed()
+		4: _on_language_toggle_pressed()
+		5: _show_patch_notes()
+		6: _on_dedicated_host_pressed()
+		7: _on_quit_pressed()
 
 # ── Styling ───────────────────────────────────────────────────────────────────
 
@@ -336,7 +433,7 @@ func _setup_trending_ticker() -> void:
 	_trending_timer.wait_time = 4.0
 	_trending_timer.timeout.connect(_on_trending_timer_timeout)
 	add_child(_trending_timer)
-	
+
 	# WikipediaTrending is now an autoload
 	var wt = get_node_or_null("/root/WikipediaTrending")
 	if wt:
@@ -395,12 +492,12 @@ func _on_trending_timer_timeout() -> void:
 func _update_trending_display() -> void:
 	if not _trending_label:
 		return
-	
+
 	if _trending_articles.is_empty():
 		_trending_label.text = "📈 Loading trending articles..."
 		_trending_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
 		return
-	
+
 	var article = _trending_articles[_trending_index]
 	if _trending_articles.size() > 1:
 		_trending_label.text = "📈 Trending: %s (%d/%d)" % [article, _trending_index + 1, _trending_articles.size()]
@@ -415,14 +512,7 @@ func _entrance_animation() -> void:
 	%FactPanel.modulate.a = 0
 	%TagContainer.modulate.a = 0
 	%DCPlaceholder.modulate.a = 0
-	
-	# Reparent Daily Challenge Card if it exists in the tree - DISABLED
-	# var card = get_tree().root.find_child("DailyChallengeCard", true, false)
-	# if card and card.get_parent() != _dc_placeholder:
-	# 	card.get_parent().remove_child(card)
-	# 	_dc_placeholder.add_child(card)
-	# 	card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	
+
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_logo_label, "modulate:a", 1.0, 0.8)
 	tw.tween_property(_button_container, "modulate:a", 1.0, 0.8).set_delay(0.3)
@@ -442,11 +532,23 @@ func _entrance_animation() -> void:
 # ── Fact Logic ────────────────────────────────────────────────────────────────
 
 func _setup_fact_timer() -> void:
+	# Build shuffled order so facts don't repeat until all have been shown
+	_shuffle_facts()
+	# Pick a random starting fact so first visit isn't always the same
+	_current_fact_index = randi() % _fact_order.size()
+	_fact_text.text = FACTS[_fact_order[_current_fact_index]]
+
 	_fact_timer = Timer.new()
-	_fact_timer.wait_time = 8.0
+	_fact_timer.wait_time = 6.0  # Faster rotation for better engagement
 	_fact_timer.timeout.connect(_on_fact_timer_timeout)
 	add_child(_fact_timer)
 	_fact_timer.start()
+
+func _shuffle_facts() -> void:
+	_fact_order.clear()
+	for i in FACTS.size():
+		_fact_order.append(i)
+	_fact_order.shuffle()
 
 func _on_fact_timer_timeout() -> void:
 	var tw := create_tween()
@@ -455,8 +557,12 @@ func _on_fact_timer_timeout() -> void:
 	tw.chain().tween_property(_fact_text, "modulate:a", 1.0, 0.5)
 
 func _cycle_fact() -> void:
-	_current_fact_index = (_current_fact_index + 1) % FACTS.size()
-	_fact_text.text = FACTS[_current_fact_index]
+	_current_fact_index += 1
+	if _current_fact_index >= _fact_order.size():
+		# All facts shown — reshuffle for the next round
+		_shuffle_facts()
+		_current_fact_index = 0
+	_fact_text.text = FACTS[_fact_order[_current_fact_index]]
 
 func _on_ui_cancel_pressed() -> void:
 	if not visible: return
@@ -495,6 +601,34 @@ func _on_theme_toggle_pressed() -> void:
 		var label = theme_node.get_node_or_null("ThemeLabel")
 		if icon: icon.text = "☾" if not ThemeManager.is_dark_mode else "☀"
 		if label: label.text = "Light Mode" if ThemeManager.is_dark_mode else "Dark Mode"
+
+
+func _on_language_toggle_pressed() -> void:
+	_current_locale_index = posmod(_current_locale_index + 1, _available_locales.size())
+	var locale = _available_locales[_current_locale_index]
+	LanguageManager.set_locale(locale)
+	_update_language_toggle_ui()
+
+
+func _update_language_toggle_ui() -> void:
+	for node in _menu_nodes:
+		if node.name == "Language":
+			var icon = node.get_node_or_null("LanguageIcon")
+			var label = node.get_node_or_null("LanguageLabel")
+			if label: label.text = _get_current_language_name()
+			if icon:
+				icon.text = "🌍"
+			break
+
+
+func _get_current_language_name() -> String:
+	if _available_locales.is_empty() or _current_locale_index < 0 or _current_locale_index >= _available_locales.size():
+		return "Language"
+	var locale = _available_locales[_current_locale_index]
+	var name = TranslationServer.get_language_name(locale)
+	if name.is_empty():
+		name = locale
+	return name
 
 
 func _show_patch_notes() -> void:

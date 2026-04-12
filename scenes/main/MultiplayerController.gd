@@ -86,6 +86,12 @@ func spawn_network_player(peer_id: int) -> Node:
 
 
 func remove_network_player(peer_id: int, local_player: Node, mount_state: Dictionary) -> void:
+	# Clean up race data for disconnected player
+	if RaceManager.has_method("_on_player_disconnect"):
+		RaceManager._on_player_disconnect(peer_id)
+	
+	# Clear peer room tracking
+	_peer_rooms.erase(peer_id)
 	if _network_players.has(peer_id):
 		var player_node: Node = _network_players[peer_id]
 		if is_instance_valid(player_node):
@@ -109,11 +115,6 @@ func remove_network_player(peer_id: int, local_player: Node, mount_state: Dictio
 		# Clear mount state tracking
 		if mount_state.has(peer_id):
 			mount_state.erase(peer_id)
-
-		# ── ARCHIVED v0.5.0 - Powerups replaced with Environmental Events
-		# Clear powerups for disconnected player
-		# if PowerupManager:
-		# 	PowerupManager.clear_player_powerups_on_disconnect(peer_id)
 
 		MultiplayerEvents.emit_player_left(peer_id)
 		player_removed.emit(peer_id)

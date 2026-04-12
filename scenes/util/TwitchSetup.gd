@@ -20,9 +20,9 @@ func _ready() -> void:
 		if service_scene:
 			twitch_service = service_scene.instantiate()
 			add_child(twitch_service)
-			print("TwitchSetup: Created new TwitchService instance")
+			Log.info("TwitchSetup", "Created new TwitchService instance")
 		else:
-			print("TwitchSetup: Twitcher addon not found!")
+			Log.error("TwitchSetup", "Twitcher addon not found!")
 			return
 
 	# Configure OAuth settings

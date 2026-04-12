@@ -16,7 +16,7 @@ var _voice_id: String = ""
 
 func _ready() -> void:
 	_find_voice()
-	print("[TTSManager] Ready — using system TTS")
+	Log.debug("TTSManager", "Ready — using system TTS")
 
 
 func _find_voice() -> void:
@@ -25,12 +25,12 @@ func _find_voice() -> void:
 	if voices == null or voices.is_empty():
 		push_warning("[TTSManager] No TTS voices available")
 		return
-	
+
 	# Prefer English voices
 	for v in voices:
 		if v.language.begins_with("en"):
 			_voice_id = v.id
-			print("[TTSManager] Using voice: ", v.name, " (", v.language, ")")
+			Log.debug("TTSManager", "Using voice: %s (%s)" % [v.name, v.language])
 			return
 	
 	# Fall back to first available

@@ -293,6 +293,12 @@ func _apply_theme() -> void:
 
 func _on_start() -> void:
 	if not NetworkManager.is_server():
+		push_error("TournamentSetupMenu: Only the host can start a tournament")
+		# Visual feedback for the client
+		if _start_btn:
+			_start_btn.text = "Only the host can start"
+			await get_tree().create_timer(2.0).timeout
+			_start_btn.text = "Start Tournament  →"
 		return
 	var config := {
 		"name":         _name_input.text.strip_edges() if _name_input else "Wiki Races",
@@ -316,5 +322,9 @@ func _on_cancel() -> void:
 func open() -> void:
 	_update_player_count()
 	visible = true
+	# Only the host can start a tournament — grey out the button for clients
+	if _start_btn:
+		_start_btn.disabled = not NetworkManager.is_server()
+		_start_btn.text = "Start Tournament  →" if NetworkManager.is_server() else "Host starts the tournament"
 	if _name_input:
 		_name_input.grab_focus()

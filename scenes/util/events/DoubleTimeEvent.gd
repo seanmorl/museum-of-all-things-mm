@@ -5,12 +5,12 @@ extends RefCounted
 static func apply() -> void:
 	# Speed up the race timer
 	RaceManager.set_timer_scale(2.0)
-	print("[DoubleTimeEvent] Applied: Timer at 200% speed")
+	Log.info("DoubleTimeEvent", "Applied: Timer at 200% speed")
 
 static func end() -> void:
 	# Restore normal timer speed
 	RaceManager.set_timer_scale(1.0)
-	print("[DoubleTimeEvent] Ended: Timer restored to normal")
+	Log.info("DoubleTimeEvent", "Timer restored to normal")
 
 static func get_duration() -> float:
 	return randf_range(30.0, 60.0)

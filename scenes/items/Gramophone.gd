@@ -1,5 +1,6 @@
 extends StaticBody3D
 ## Plays .ogg audio files streamed from Wikimedia Commons.
+class_name Gramophone
 
 var title: String = ""
 var text: String = ""
@@ -57,8 +58,10 @@ func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStrin
 
 		if _stream:
 			_player.stream = _stream
+			MuseumReverb.ensure_bus()
+			_player.bus = MuseumReverb.BUS_NAME
 			is_playing = false
-			Log.info("Gramophone", "Audio stream loaded successfully")
+			Log.info("Gramophone", "Audio stream loaded successfully (museum reverb enabled)")
 			# Process queued interaction if any
 			if _interact_queued:
 				_interact_queued = false

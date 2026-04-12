@@ -1,0 +1,354 @@
+extends Node
+## Environmental Particle Effects Manager
+## Creates atmospheric particles programmatically per exhibit mood.
+
+# Active particle instances
+var _active_particles: Array[GPUParticles3D] = []
+
+# Shared mesh for particles (billboard quads)
+var _particle_mesh: QuadMesh = null
+
+# Cached materials per particle type (avoids reallocating every room transition)
+var _material_cache: Dictionary = {}
+
+# Shared curve resources
+var _fade_curve: CurveTexture = null
+var _alpha_fade_curve: CurveTexture = null
+
+# Mood-based particle presets
+const MOOD_PARTICLES: Dictionary = {
+	ExhibitMood.Mood.HISTORY: ["dust"],
+	ExhibitMood.Mood.SCIENCE: ["light_dust"],
+	ExhibitMood.Mood.NATURE: ["spores"],
+	ExhibitMood.Mood.ASTRO: ["sparkles"],
+	ExhibitMood.Mood.MEDIA: ["film_grain"],
+	ExhibitMood.Mood.ART: ["paint_mote"],
+	ExhibitMood.Mood.GEOGRAPHY: ["mist"],
+	ExhibitMood.Mood.PHILOSOPHY: ["wisp"],
+	ExhibitMood.Mood.SPORTS: ["confetti"],
+	ExhibitMood.Mood.FOOD: ["steam"],
+	ExhibitMood.Mood.POLITICS: ["dust"],
+	ExhibitMood.Mood.ECONOMY: ["gold_mote"],
+	ExhibitMood.Mood.MYSTERY: ["smoke"],
+	ExhibitMood.Mood.DEFAULT: ["dust"]  # Changed from [] so all exhibits get particles
+}
+
+class ParticleConfig:
+	var amount: int
+	var lifetime: float
+	var emission_shape: int
+	var box_extents: Vector3
+	var sphere_radius: float
+	var direction: Vector3
+	var spread: float
+	var gravity: Vector3
+	var vel_min: float
+	var vel_max: float
+	var scale_min: float
+	var scale_max: float
+	var ang_vel_min: float
+	var ang_vel_max: float
+	var color_start: Color
+	var color_end: Color
+	var turbulence: bool
+
+	func _init(p_amount: int, p_lifetime: float, p_shape: int, p_extents: Vector3, p_radius: float, p_dir: Vector3, p_spread: float, p_grav: Vector3, p_vmin: float, p_vmax: float, p_smin: float, p_smax: float, p_amin: float, p_amax: float, p_c1: Color, p_c2: Color, p_turb: bool) -> void:
+		amount = p_amount
+		lifetime = p_lifetime
+		emission_shape = p_shape
+		box_extents = p_extents
+		sphere_radius = p_radius
+		direction = p_dir
+		spread = p_spread
+		gravity = p_grav
+		vel_min = p_vmin
+		vel_max = p_vmax
+		scale_min = p_smin
+		scale_max = p_smax
+		ang_vel_min = p_amin
+		ang_vel_max = p_amax
+		color_start = p_c1
+		color_end = p_c2
+		turbulence = p_turb
+
+var CONFIGS: Dictionary = {}
+
+signal particle_effect_spawned(name: String, position: Vector3)
+signal particle_effect_removed(name: String)
+
+
+func _ready() -> void:
+	_build_particle_mesh()
+	_build_shared_curves()
+	_build_config_table()
+	_build_material_cache()
+
+
+func _build_particle_mesh() -> void:
+	_particle_mesh = QuadMesh.new()
+	_particle_mesh.size = Vector2(0.8, 0.8)
+	var img = Image.create(128, 128, false, Image.FORMAT_RGBA8)
+	var center = 64.0
+	for x in 128:
+		for y in 128:
+			var dist = sqrt(pow(x - center, 2) + pow(y - center, 2))
+			var alpha = clampf(1.0 - dist / center, 0.0, 1.0)
+			alpha = pow(alpha, 1.5)
+			img.set_pixel(x, y, Color(1, 1, 1, alpha))
+	var tex = ImageTexture.create_from_image(img)
+	var mat = StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# Use ADD blend for visible particles
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.vertex_color_use_as_albedo = true
+	# Billboard so particles always face camera
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	_particle_mesh.material = mat
+
+
+func _build_config_table() -> void:
+	CONFIGS = {
+		"dust": ParticleConfig.new(
+			40, 12.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(10, 5, 10), 0.0,
+			Vector3(0, 1, 0), 0.3, Vector3.ZERO,
+			0.05, 0.15, 0.1, 0.25, -0.05, 0.05,
+			Color(0.95, 0.9, 0.75, 0.35), Color(0.85, 0.8, 0.65, 0.15),
+			false
+		),
+		"light_dust": ParticleConfig.new(
+			30, 14.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(12, 6, 12), 0.0,
+			Vector3(0, 1, 0), 0.2, Vector3.ZERO,
+			0.03, 0.12, 0.08, 0.2, -0.03, 0.03,
+			Color(0.9, 0.92, 1.0, 0.3), Color(0.8, 0.85, 0.95, 0.12),
+			false
+		),
+		"spores": ParticleConfig.new(
+			25, 10.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(8, 4, 8), 0.0,
+			Vector3(0, 1, 0), 0.2, Vector3(0, -0.05, 0),
+			0.03, 0.12, 0.06, 0.14, 0.0, 0.0,
+			Color(0.6, 0.95, 0.6, 0.4), Color(0.4, 0.75, 0.4, 0.12),
+			true
+		),
+		"leaves": ParticleConfig.new(
+			20, 8.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(10, 1, 10), 0.0,
+			Vector3(0, -1, 0), 0.5, Vector3(0, -0.3, 0),
+			0.08, 0.2, 0.12, 0.25, -0.3, 0.3,
+			Color(0.7, 0.45, 0.2, 0.5), Color(0.55, 0.35, 0.1, 0.15),
+			true
+		),
+		"sparkles": ParticleConfig.new(
+			20, 6.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_SPHERE, Vector3.ZERO, 8.0,
+			Vector3(0, 1, 0), 0.1, Vector3.ZERO,
+			0.02, 0.08, 0.04, 0.08, 0.0, 0.0,
+			Color(0.95, 0.97, 1.0, 0.5), Color(0.75, 0.85, 1.0, 0.15),
+			false
+		),
+		"film_grain": ParticleConfig.new(
+			60, 2.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(10, 5, 10), 0.0,
+			Vector3(0, 0, 0), 1.0, Vector3.ZERO,
+			0.01, 0.04, 0.03, 0.08, 0.0, 0.0,
+			Color(1.0, 1.0, 1.0, 0.12), Color(0.7, 0.7, 0.7, 0.02),
+			false
+		),
+		"paint_mote": ParticleConfig.new(
+			20, 10.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(8, 4, 8), 0.0,
+			Vector3(0, 1, 0), 0.3, Vector3(0, -0.03, 0),
+			0.03, 0.1, 0.08, 0.2, 0.0, 0.0,
+			Color(1.0, 0.7, 0.8, 0.4), Color(0.7, 0.5, 0.9, 0.1),
+			true
+		),
+		"mist": ParticleConfig.new(
+			25, 18.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(12, 2, 12), 0.0,
+			Vector3(0, 1, 0), 0.1, Vector3.ZERO,
+			0.01, 0.04, 0.3, 0.6, 0.0, 0.0,
+			Color(0.8, 0.9, 0.85, 0.2), Color(0.7, 0.85, 0.8, 0.05),
+			true
+		),
+		"wisp": ParticleConfig.new(
+			12, 14.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_SPHERE, Vector3.ZERO, 6.0,
+			Vector3(0, 1, 0), 0.1, Vector3(0, 0.02, 0),
+			0.01, 0.04, 0.15, 0.35, 0.0, 0.0,
+			Color(0.95, 0.88, 0.75, 0.3), Color(0.85, 0.75, 0.6, 0.03),
+			true
+		),
+		"confetti": ParticleConfig.new(
+			50, 4.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(10, 1, 10), 0.0,
+			Vector3(0, -1, 0), 0.8, Vector3(0, -0.8, 0),
+			0.2, 0.5, 0.1, 0.2, 1.0, 3.0,
+			Color(1.0, 0.85, 0.3, 0.9), Color(0.3, 0.8, 1.0, 0.3),
+			true
+		),
+		"steam": ParticleConfig.new(
+			50, 6.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(6, 3, 6), 0.0,
+			Vector3(0, 1, 0), 0.3, Vector3(0, 0.3, 0),
+			0.1, 0.4, 0.3, 0.7, 0.0, 0.0,
+			Color(1.0, 1.0, 1.0, 0.5), Color(0.95, 0.9, 0.8, 0.05),
+			true
+		),
+		"gold_mote": ParticleConfig.new(
+			35, 7.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_SPHERE, Vector3.ZERO, 7.0,
+			Vector3(0, 1, 0), 0.1, Vector3.ZERO,
+			0.03, 0.1, 0.08, 0.2, 0.0, 0.0,
+			Color(1.0, 0.85, 0.3, 0.8), Color(0.8, 0.65, 0.2, 0.1),
+			false
+		),
+		"smoke": ParticleConfig.new(
+			70, 10.0,
+			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(8, 3, 8), 0.0,
+			Vector3(0, 1, 0), 0.2, Vector3(0, 0.1, 0),
+			0.05, 0.15, 0.3, 0.6, 0.0, 0.0,
+			Color(0.4, 0.35, 0.45, 0.5), Color(0.25, 0.2, 0.3, 0.05),
+			true
+		),
+	}
+
+
+func _build_shared_curves() -> void:
+	var fade = Curve.new()
+	fade.add_point(Vector2(0.0, 0.0))
+	fade.add_point(Vector2(0.1, 1.0))
+	fade.add_point(Vector2(0.9, 1.0))
+	fade.add_point(Vector2(1.0, 0.0))
+	_fade_curve = CurveTexture.new()
+	_fade_curve.curve = fade
+
+	var alpha_fade = Curve.new()
+	alpha_fade.add_point(Vector2(0.0, 0.0))
+	alpha_fade.add_point(Vector2(0.15, 1.0))
+	alpha_fade.add_point(Vector2(0.85, 1.0))
+	alpha_fade.add_point(Vector2(1.0, 0.0))
+	_alpha_fade_curve = CurveTexture.new()
+	_alpha_fade_curve.curve = alpha_fade
+
+
+func _build_material_cache() -> void:
+	for type_name in CONFIGS:
+		_material_cache[type_name] = _build_material(type_name)
+
+
+func _build_material(type_name: String) -> ParticleProcessMaterial:
+	var cfg: ParticleConfig = CONFIGS[type_name]
+	var mat = ParticleProcessMaterial.new()
+	mat.emission_shape = cfg.emission_shape
+	if cfg.emission_shape == ParticleProcessMaterial.EMISSION_SHAPE_BOX:
+		mat.emission_box_extents = cfg.box_extents
+	else:
+		mat.emission_sphere_radius = cfg.sphere_radius
+	mat.direction = cfg.direction
+	mat.spread = cfg.spread
+	mat.gravity = cfg.gravity
+	mat.initial_velocity_min = cfg.vel_min
+	mat.initial_velocity_max = cfg.vel_max
+	mat.scale_min = cfg.scale_min
+	mat.scale_max = cfg.scale_max
+	mat.angular_velocity_min = cfg.ang_vel_min
+	mat.angular_velocity_max = cfg.ang_vel_max
+
+	var grad = Gradient.new()
+	grad.set_color(0, cfg.color_start)
+	grad.set_color(1, cfg.color_end)
+	var ramp = GradientTexture1D.new()
+	ramp.gradient = grad
+	mat.color_ramp = ramp
+
+	mat.scale_curve = _fade_curve
+
+	if cfg.turbulence:
+		mat.turbulence_enabled = true
+		mat.turbulence_noise_strength = 0.6
+		mat.turbulence_noise_scale = 6.0
+		mat.turbulence_noise_speed = Vector3(0.2, 0.3, 0.2)
+		mat.turbulence_influence_max = 0.15
+
+	mat.damping_min = 0.2
+	mat.damping_max = 0.5
+
+	return mat
+
+
+func clear_all_effects() -> void:
+	for p in _active_particles:
+		if is_instance_valid(p):
+			p.emitting = false
+			p.queue_free()
+	_active_particles.clear()
+
+
+func apply_mood_particles(parent: Node3D, mood: int, intensity: float = 1.0) -> void:
+	clear_all_effects()
+	if not GraphicsManager.particles_enabled:
+		Log.debug("ParticleEffectsManager", "Particles disabled in GraphicsManager")
+		return
+	var effects: Array = MOOD_PARTICLES.get(mood, ["dust"])
+	Log.debug("ParticleEffectsManager", "Spawning particles for mood: %s effects: %s" % [ExhibitMood.Mood.keys()[mood], effects])
+	for effect in effects:
+		_spawn_particles(parent, effect, intensity)
+
+
+func _spawn_particles(parent: Node3D, type_name: String, intensity: float) -> GPUParticles3D:
+	var cfg: ParticleConfig = CONFIGS.get(type_name)
+	if cfg == null:
+		push_warning("ParticleEffectsManager: unknown type '%s'" % type_name)
+		return null
+
+	var mat: ParticleProcessMaterial = _material_cache.get(type_name)
+	if mat == null:
+		push_warning("ParticleEffectsManager: no cached material for '%s'" % type_name)
+		return null
+
+	var particles = GPUParticles3D.new()
+	particles.name = type_name.capitalize().replace(" ", "")
+	particles.draw_pass_1 = _particle_mesh
+	particles.amount = maxi(1, int(cfg.amount * intensity))
+	particles.lifetime = cfg.lifetime
+	particles.one_shot = false
+	particles.explosiveness = 0.0
+	particles.randomness = 0.5
+	particles.process_material = mat
+	particles.local_coords = true
+	# Increased visibility range for larger exhibits
+	particles.visibility_range_end = 150.0
+	particles.visibility_range_fade_mode = GPUParticles3D.VISIBILITY_RANGE_FADE_DISABLED
+
+	# Position particles at ceiling height so they fall down visibly
+	particles.position = Vector3(0, 4, 0)
+
+	# Configure must be called before emitting
+	particles.restart()
+	particles.emitting = true
+
+	parent.add_child(particles)
+	_active_particles.append(particles)
+	Log.debug("ParticleEffectsManager", "Spawned '%s' with %d particles at %s" % [type_name, particles.amount, particles.global_position])
+	return particles
+
+
+func get_active_effects() -> Array:
+	var effects = []
+	for p in _active_particles:
+		if is_instance_valid(p):
+			effects.append({
+				"name": p.name,
+				"position": p.global_position,
+				"emitting": p.emitting
+			})
+	return effects
+
+
+func get_particle_count() -> int:
+	return _active_particles.size()

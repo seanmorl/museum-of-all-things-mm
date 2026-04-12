@@ -1,0 +1,64 @@
+[gd_resource type="Resource" script_class="LobbyData" format=3 uid="uid://dbvtwjnekxmuo"]
+
+[ext_resource type="Script" uid="uid://bdc8jjijlgjox" path="res://resource_definitions/LobbyData.gd" id="1_3ssej"]
+[ext_resource type="Script" uid="uid://ch3nm32ndlrbh" path="res://resource_definitions/LobbyWing.gd" id="2_y4oc8"]
+
+[sub_resource type="Resource" id="Resource_pgwi2"]
+script = ExtResource("2_y4oc8")
+name = "기술"
+corner_1 = Vector2(-68, -44)
+corner_2 = Vector2(-32, -8)
+exhibits = PackedStringArray("동력 분산형 차량", "Minox", "트랜지스터", "도자기", "Godot (게임 엔진)", "저온 살균", "핵무기 실험", "접착제", "수로교", "삼차원 공간", "비행기", "단순 기계", "인쇄기", "피임", "현미경 검사", "가정용 게임기", "트레뷰셋", "축산", "올두바이 문화")
+
+[sub_resource type="Resource" id="Resource_ooopd"]
+script = ExtResource("2_y4oc8")
+name = "문화"
+corner_1 = Vector2(32, -44)
+corner_2 = Vector2(68, -8)
+exhibits = PackedStringArray("광대", "용", "편의점", "하이파이브", "곤차로프 (밈)", "커피", "수프", "더 백룸스", "타로", "K-pop", "바둑", "힌두교", "댄디", "골렘", "노동요", "광고", "홍수 신화", "승려")
+
+[sub_resource type="Resource" id="Resource_m2ope"]
+script = ExtResource("2_y4oc8")
+name = "과학"
+corner_1 = Vector2(-44, -92)
+corner_2 = Vector2(-8, -36)
+exhibits = PackedStringArray("균계", "공룡", "해양 생물권", "지구", "아라비아 사각형", "쥐", "새우", "빵나무", "데이터 시각화", "금", "아단소니아", "호모 사피엔스", "진자", "성적 이형성", "빛", "치즈", "배추", "습지", "완보동물", "나비", "목성", "토양", "프랙탈", "눈")
+
+[sub_resource type="Resource" id="Resource_opuc1"]
+script = ExtResource("2_y4oc8")
+name = "지리"
+corner_1 = Vector2(8, -92)
+corner_2 = Vector2(44, -36)
+exhibits = PackedStringArray("미국", "남극", "파타고니아", "티베트", "페르세폴리스", "페트라", "타이베이 101", "후지산", "경주 불국사 건축", "충칭시", "핏케언 제도", "마리아나 해구", "시베리아 횡단 철도", "시카고", "차드호", "세네갈", "보라보라섬", "랑드 드 가스쿠뉴", "킬리만자로산", "캔버라", "아마존 열대우림", "우루크", "흑석 (이슬람)")
+
+[sub_resource type="Resource" id="Resource_qiy1c"]
+script = ExtResource("2_y4oc8")
+name = "예술"
+corner_1 = Vector2(-72, 12)
+corner_2 = Vector2(-36, 48)
+exhibits = PackedStringArray("바로크 회화", "아르메니아 건축", "파블로 피카소", "루브르박물관", "주안 미로", "아이웨이웨이", "프리다 칼로", "케테 콜비츠", "프랭크 로이드 라이트", "에드가 드가", "동굴 벽화", "미켈란젤로", "프란시스코 고야", "야수파", "그래피티", "고대 그리스 조각", "마우리츠 코르넬리스 에셔", "조르주 쇠라")
+
+[sub_resource type="Resource" id="Resource_l5mfx"]
+script = ExtResource("2_y4oc8")
+name = "인물"
+corner_1 = Vector2(36, 12)
+corner_2 = Vector2(72, 48)
+exhibits = PackedStringArray("알베르트 아인슈타인", "프레디 머큐리", "코비 브라이언트", "칭기즈 칸", "리고리 라스푸틴", "퍼블릭 유니버설 프렌드", "투팍 샤커", "윌리엄 셰익스피어", "라이너스 폴링", "대니 드비토", "J. R. R. 톨킨", "메리 셸리", "알렉산드리아 오카시오코르테스", "이븐 바투타", "마르틴 루터", "마틴 루터 킹 주니어")
+
+[sub_resource type="Resource" id="Resource_bycfx"]
+script = ExtResource("2_y4oc8")
+name = "역사"
+corner_1 = Vector2(-48, 60)
+corner_2 = Vector2(-12, 96)
+exhibits = PackedStringArray("한국사", "체르노빌 원자력 발전소 사고", "타이타닉 (영화)", "1960년대 반문화", "코로나19 범유행", "중앙정보국 (CIA)", "이슬람 황금시대", "아폴로 11호", "1906년 샌프란시스코 지진", "한니바스의 알프스 횡단", "사진의 역사", "해적", "2019-2020년 홍콩 시위")
+
+[sub_resource type="Resource" id="Resource_yimja"]
+script = ExtResource("2_y4oc8")
+name = "미디어"
+corner_1 = Vector2(12, 60)
+corner_2 = Vector2(48, 96)
+exhibits = PackedStringArray("성경", "비틀즈", "매트릭스 (영화)", "오디세이아", "길가메시 서사시", "고도를 기다리며", "홈스턱", "스타 트렉", "바비 (영화)", "신세기 에반게리온", "햄릿", "카탄의 개척자들", "트위터", "보그 (잡지)", "증기선 윌리", "몽테크리스토 백작", "위키백과", "마인크래프트")
+
+[resource]
+script = ExtResource("1_3ssej")
+wings = Array[ExtResource("2_y4oc8")]([SubResource("Resource_pgwi2"), SubResource("Resource_ooopd"), SubResource("Resource_m2ope"), SubResource("Resource_opuc1"), SubResource("Resource_qiy1c"), SubResource("Resource_l5mfx"), SubResource("Resource_bycfx"), SubResource("Resource_yimja")])

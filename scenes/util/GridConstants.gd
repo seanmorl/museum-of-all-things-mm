@@ -5,6 +5,11 @@ class_name GridConstants
 const FLOOR_WOOD: int = 0
 const FLOOR_CARPET: int = 11
 const FLOOR_MARBLE: int = 12
+# Reserved for future use (need mesh library entries):
+# const FLOOR_TILE: int = 13
+# const FLOOR_STONE: int = 14
+# const FLOOR_CONCRETE: int = 15
+# const FLOOR_TERRAZZO: int = 16
 
 # Structure types
 const RESERVED_VAL: int = 1

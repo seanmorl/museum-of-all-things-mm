@@ -134,6 +134,7 @@ func _network_request_item() -> void:
 		_dispatch_request(item[1], item[2], item[3])
 
 func set_language(language: String) -> void:
+	lang = language
 	wikipedia_prefix = "https://" + language + ".wikipedia.org/wiki/"
 	search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srprop=title&srsearch="
 	topic_search_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&format=json&list=search&srnamespace=0&srprop=title&srlimit=500&origin=*&srsearch="
@@ -318,7 +319,7 @@ func _fetch_category_search(query: String, context: Variant) -> void:
 func fetch_backlinks(title: String, context: Variant = null) -> void:
 	"""Fetch all articles that link to the given title (backlinks)"""
 	var url := "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=backlinks&bllimit=500&bltitle=" + title.uri_encode() + "&blnamespace=0&origin=*"
-	print("ExhibitFetcher: Fetching backlinks from URL: ", url)
+	Log.debug("ExhibitFetcher", "Fetching backlinks from URL: %s" % url)
 	var ctx := {
 		"backlinks": true,
 		"title": title
@@ -600,7 +601,7 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 
 		# Handle backlinks response
 		if ctx.get("backlinks", false):
-			print("ExhibitFetcher: Processing backlinks response, query has backlinks: ", query.has("backlinks"))
+			Log.debug("ExhibitFetcher", "Processing backlinks response, query has backlinks: %s" % query.has("backlinks"))
 			if query.has("backlinks"):
 				var backlinks: Array[String] = []
 				for bl in query.backlinks:
@@ -610,11 +611,11 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 						# and external links that won't generate as rooms
 						if _is_valid_article(title):
 							backlinks.append(title)
-				print("ExhibitFetcher: Emitting backlinks_complete with %d filtered backlinks" % backlinks.size())
+				Log.debug("ExhibitFetcher", "Emitting backlinks_complete with %d filtered backlinks" % backlinks.size())
 				backlinks_complete.emit.call_deferred(backlinks, caller_ctx)
 				return true
 			else:
-				print("ExhibitFetcher: WARNING - backlinks request but no 'backlinks' in query response")
+				Log.warn("ExhibitFetcher", "backlinks request but no 'backlinks' in query response")
 				backlinks_complete.emit.call_deferred([], caller_ctx)
 				return true
 

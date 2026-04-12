@@ -107,7 +107,13 @@ func _update_collision_shape(width: float, height: float) -> void:
 			$InteractionBody.collision_layer = 1048576
 
 func interact() -> void:
+	# Handled by Player.gd via _is_stealable_item → try_steal_target()
 	pass
+
+func get_interaction_text() -> String:
+	if is_stolen:
+		return ""
+	return "pick up painting"
 
 func set_stolen(stolen: bool) -> void:
 	is_stolen = stolen

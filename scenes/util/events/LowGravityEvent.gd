@@ -6,13 +6,13 @@ static func apply() -> void:
 	# Reduce gravity for all players
 	if RaceManager.has_method("set_gravity_modifier"):
 		RaceManager.set_gravity_modifier(0.3)  # 30% of normal gravity
-	print("[LowGravityEvent] Applied: Low gravity! Players will float!")
+	Log.info("LowGravityEvent", "Applied: Low gravity! Players will float!")
 
 static func end() -> void:
 	# Restore normal gravity
 	if RaceManager.has_method("set_gravity_modifier"):
 		RaceManager.set_gravity_modifier(1.0)
-	print("[LowGravityEvent] Ended: Gravity restored to normal")
+	Log.info("LowGravityEvent", "Gravity restored to normal")
 
 static func get_duration() -> float:
 	return randf_range(45.0, 90.0)

@@ -25,6 +25,8 @@ func _slider_value_changed(_value):
 	_play(drag_ended_sound)
 
 func _play(sfx):
+	if sfx == null:
+		return
 	var player = AudioStreamPlayer.new()
 	player.stream = sfx
 	player.bus = &"Sound"

@@ -431,3 +431,187 @@ msgid ""
 msgstr ""
 "我们无法找到您请求的展览。请尝试其他展览。\n"
 "\n"
+
+### Settings UI - Accessibility Tab
+msgid "Interface"
+msgstr ""
+
+msgid "Reset to 100%"
+msgstr ""
+
+msgid "UI Scale"
+msgstr ""
+
+msgid "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
+msgstr ""
+
+msgid "Show chat"
+msgstr ""
+
+msgid "Hides the chat overlay while playing."
+msgstr ""
+
+msgid "Typing sound"
+msgstr ""
+
+msgid "Plays a subtle sound on each keypress in the chat box."
+msgstr ""
+
+msgid "Open chat"
+msgstr ""
+
+msgid "Press the button then press any key to rebind."
+msgstr ""
+
+msgid "Screen Reader"
+msgstr ""
+
+msgid "Enable screen reader (AccessKit)"
+msgstr ""
+
+msgid "Exposes UI elements to OS screen readers via AccessKit. "
+msgstr ""
+
+msgid "Requires Godot's DisplayServer accessibility API (4.3+). "
+msgstr ""
+
+msgid "Changes take effect immediately — no restart needed."
+msgstr ""
+
+msgid "Verbosity"
+msgstr ""
+
+msgid "All controls"
+msgstr ""
+
+msgid "Focused only"
+msgstr ""
+
+msgid "Off"
+msgstr ""
+
+msgid "Vision"
+msgstr ""
+
+msgid "Reading font"
+msgstr ""
+
+msgid "Default (Cormorant Garamond)"
+msgstr ""
+
+msgid "OpenDyslexic"
+msgstr ""
+
+msgid "Atkinson Hyperlegible"
+msgstr ""
+
+msgid "OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. "
+msgstr ""
+
+msgid "Fonts must be present at:"
+msgstr ""
+
+msgid "High-contrast exhibit text"
+msgstr ""
+
+msgid "Renders article wall-card text as black-on-white regardless of dark mode."
+msgstr ""
+
+msgid "Exhibit text size"
+msgstr ""
+
+msgid "Scales the font size of Wikipedia article text on exhibit walls."
+msgstr ""
+
+msgid "Floating exhibit signs"
+msgstr ""
+
+msgid "Replaces physical sign boards with floating text. "
+msgstr ""
+
+msgid "Text remains visible but the board mesh is hidden. "
+msgstr ""
+
+msgid "Makes exhibit names easier to read during races."
+msgstr ""
+
+msgid "Colour & Contrast"
+msgstr ""
+
+msgid "Colourblind filter"
+msgstr ""
+
+msgid "Protanopia  (red-blind)"
+msgstr ""
+
+msgid "Deuteranopia  (green-blind)"
+msgstr ""
+
+msgid "Tritanopia  (blue-blind)"
+msgstr ""
+
+msgid "Applies a full-screen post-processing shader to correct for colour vision deficiency. "
+msgstr ""
+
+msgid "Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a "
+msgstr ""
+
+msgid "CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
+msgstr ""
+
+msgid "Motion"
+msgstr ""
+
+msgid "Reduce motion"
+msgstr ""
+
+msgid "Disables slide/fade animations on menus and the race HUD. Fog transitions remain."
+msgstr ""
+
+msgid "HUD & Hints"
+msgstr ""
+
+msgid "Large HUD text"
+msgstr ""
+
+msgid "Increases font size of the race timer, target name, and hint banners."
+msgstr ""
+
+msgid "Keep hints visible"
+msgstr ""
+
+msgid "Hint banners stay on screen until the race ends instead of fading after a few seconds."
+msgstr ""
+
+msgid "Audio & Visual"
+msgstr ""
+
+msgid "Show playing audio indicator"
+msgstr ""
+
+msgid "Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."
+msgstr ""
+
+msgid "Photosensitivity warning"
+msgstr ""
+
+msgid "Shows a warning before exhibits with flashing or strobing content."
+msgstr ""
+
+msgid "HUD opacity"
+msgstr ""
+
+msgid "Makes the race HUD more transparent to see more of the game world."
+msgstr ""
+
+msgid "Motor"
+msgstr ""
+
+msgid "Hold to activate buttons"
+msgstr ""
+
+msgid "Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."
+msgstr ""
+
+msgid "Accessibility"
+msgstr ""

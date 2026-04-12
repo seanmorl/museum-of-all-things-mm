@@ -7,7 +7,7 @@ static var _original_colors: Dictionary = {}  # material -> Color
 static func apply() -> void:
 	# Apply color shift to all materials in the scene
 	_original_colors.clear()
-	
+
 	var mesh_instances = Engine.get_main_loop().get_nodes_in_group("managed_material")
 	for mesh in mesh_instances:
 		if mesh is MeshInstance3D:
@@ -22,17 +22,17 @@ static func apply() -> void:
 					var new_color = material.albedo_color
 					new_color.h = randf()
 					material.albedo_color = new_color
-	
-	print("[ColorShiftEvent] Applied: Colors shifted to random hues")
+
+	Log.info("ColorShiftEvent", "Applied: Colors shifted to random hues")
 
 static func end() -> void:
 	# Restore original colors
 	for material in _original_colors:
 		if is_instance_valid(material):
 			material.albedo_color = _original_colors[material]
-	
+
 	_original_colors.clear()
-	print("[ColorShiftEvent] Ended: Colors restored")
+	Log.info("ColorShiftEvent", "Colors restored")
 
 static func get_duration() -> float:
 	return randf_range(30.0, 45.0)

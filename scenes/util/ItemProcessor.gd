@@ -340,7 +340,7 @@ func _create_items(title: String, result: Dictionary, prev_title: String) -> voi
 					for img_match: RegExMatch in other_images:
 						var image_title: String = image_name_re.sub(img_match.get_string(1), "File:")
 						if image_title.find("\n") >= 0:
-							print("newline in file name ", image_title)
+							Log.warn("ItemProcessor", "newline in file name %s" % image_title)
 						var is_img_tm = image_title and IMAGE_REGEX.search(image_title)
 						var is_aud_tm = image_title and AUDIO_REGEX.search(image_title)
 						if not is_img_tm and not is_aud_tm:

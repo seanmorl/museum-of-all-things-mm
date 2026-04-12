@@ -18,8 +18,9 @@ func _ready() -> void:
 	visible = false
 	ExhibitGraph.graph_changed.connect(queue_redraw)
 	NetworkManager.player_room_changed.connect(func(_id, _room): queue_redraw())
-	_font = ThemeDB.fallback_font
+	_font = ThemeManager.get_reading_font()
 	ThemeManager.dark_mode_changed.connect(func(_d): queue_redraw())
+	ThemeManager.reading_font_changed.connect(func(f): _font = f; queue_redraw())
 
 func _process(delta: float) -> void:
 	if visible:

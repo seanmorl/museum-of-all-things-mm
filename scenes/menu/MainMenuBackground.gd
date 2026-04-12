@@ -107,7 +107,7 @@ func _draw() -> void:
 	var accent := Color(0.30, 0.55, 1.00) if dark else Color(0.15, 0.35, 0.85)
 	var card_border := Color(accent, 0.10 if dark else 0.08)
 	var card_fill   := Color(1.0 if dark else 0.0, 1.0 if dark else 0.0, 1.0 if dark else 0.0,
-	                         0.03 if dark else 0.04)
+							 0.03 if dark else 0.04)
 
 	for c in _cards:
 		var a_scale: float = c.alpha * _edge_fade(c.pos, c.size, vp)
@@ -180,7 +180,7 @@ func _rot_pt(p: Vector2, cx: float, cy: float, angle: float) -> Vector2:
 	var dx: float = p.x - cx
 	var dy: float = p.y - cy
 	return Vector2(cx + dx * cos(angle) - dy * sin(angle),
-	               cy + dx * sin(angle) + dy * cos(angle))
+				   cy + dx * sin(angle) + dy * cos(angle))
 
 
 func _edge_fade(pos: Vector2, sz: Vector2, vp: Vector2) -> float:
@@ -227,7 +227,7 @@ func _reset_card(c: _Card, from_bottom: bool) -> void:
 	var h: float = w * randf_range(1.1, 1.7)
 	c.size  = Vector2(w, h)
 	c.pos   = Vector2(randf() * (vp.x + 60.0) - 30.0,
-	                  vp.y + h + randf_range(0.0, 200.0) if from_bottom else vp.y + h)
+					  vp.y + h + randf_range(0.0, 200.0) if from_bottom else vp.y + h)
 	c.speed = randf_range(CARD_SPEED * 0.5, CARD_SPEED * 1.5)
 	c.phase = randf() * TAU
 	c.alpha = randf_range(0.25, 0.70)
@@ -240,7 +240,7 @@ func _reset_mote(m: _Mote, from_bottom: bool) -> void:
 		vp = Vector2(1280, 720)
 	m.radius = randf_range(1.0, 3.5)
 	m.pos    = Vector2(randf() * vp.x,
-	                   vp.y + m.radius + randf_range(0.0, 120.0) if from_bottom else vp.y + m.radius)
+					   vp.y + m.radius + randf_range(0.0, 120.0) if from_bottom else vp.y + m.radius)
 	m.speed  = randf_range(MOTE_SPEED * 0.5, MOTE_SPEED * 1.6)
 	m.phase  = randf() * TAU
 	m.alpha  = randf_range(0.12, 0.55)

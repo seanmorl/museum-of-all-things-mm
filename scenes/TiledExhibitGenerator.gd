@@ -58,6 +58,8 @@ var _no_props: bool = false
 var _exit_limit: int = 1000000
 var _min_room_dimension: int = 2
 var _max_room_dimension: int = 5
+var _orig_min_room_dimension: int = 2
+var _orig_max_room_dimension: int = 5
 var _min_rooms: int = 2
 var _debug_mode: bool = false
 var _debug_meshes: Array[MeshInstance3D] = []
@@ -118,6 +120,8 @@ func generate(params: Dictionary) -> void:
 	var step_start = Time.get_ticks_msec()
 	_min_room_dimension = params.min_room_dimension
 	_max_room_dimension = params.max_room_dimension
+	_orig_min_room_dimension = _min_room_dimension
+	_orig_max_room_dimension = _max_room_dimension
 	_min_rooms = params.get("min_rooms", 2)
 	_debug_mode = params.get("debug_mode", false)
 
@@ -135,9 +139,11 @@ func generate(params: Dictionary) -> void:
 	# init rng
 	step_start = Time.get_ticks_msec()
 	_rng = RandomNumberGenerator.new()
-	_rng.seed = hash(title)
+	# Session-based seed: same article varies each play session
+	var session_seed = Time.get_ticks_usec()
+	_rng.seed = hash(title) ^ session_seed
 	_prev_title = prev_title
-	_floor = ExhibitStyle.gen_floor(title)
+	_floor = ExhibitStyle.gen_floor_mooded(title, _mood)
 	Log.info("TiledExhibitGenerator", "Step 2 - Init RNG/style: %dms" % (Time.get_ticks_msec() - step_start))
 
 	# init grid
@@ -187,10 +193,15 @@ func generate(params: Dictionary) -> void:
 
 	# Ensure minimum room count
 	_validate_generation_progress()
-	
-	# Final validation
-	validate_final_generation()
-	
+
+	# Final validation (just checks rooms exist, no structural analysis)
+	if _room_list.is_empty():
+		Log.error("TiledExhibitGenerator", "Final validation FAILED: No rooms generated")
+	elif entry == null:
+		Log.error("TiledExhibitGenerator", "Final validation FAILED: No entry hall")
+	else:
+		Log.info("TiledExhibitGenerator", "Validation PASSED: %d rooms generated" % _room_list.size())
+
 	Log.info("TiledExhibitGenerator", "=== Generation complete: %d rooms, %dms ===" % [
 		_room_list.size(), Time.get_ticks_msec() - total_start])
 
@@ -198,12 +209,12 @@ func generate(params: Dictionary) -> void:
 func _create_next_room_candidate(last_room: Dictionary) -> void:
 	var room_width: int = _rand_dim()
 	var room_length: int = _rand_dim()
-	
+
 	# Mood-biased dimensions
 	if ExhibitMood.prefers_symmetry(_mood) and _rng.randf() < 0.15:
 		room_width = _rng.randi_range(5, 7)
 		room_length = _rng.randi_range(4, 6)
-		
+
 	var room_center: Vector3
 	var room_bounds: Array
 	var next_room_dir: Vector3
@@ -268,20 +279,29 @@ func _validate_generation_progress() -> void:
 
 func _try_fallback_generation() -> void:
 	## Relaxes constraints to find new room candidates when stuck
-	# 1. Try smaller dimensions
+	# Save current reduced values so we know what we changed
+	var prev_min := _min_room_dimension
+	var prev_max := _max_room_dimension
+
+	# 1. Try smaller dimensions (but never go below 1)
 	_min_room_dimension = maxi(1, _min_room_dimension - 1)
 	_max_room_dimension = maxi(2, _max_room_dimension - 1)
-	
+
 	# 2. Try creating candidates from all existing rooms
 	var existing_rooms: Array = _room_list.values()
 	CollectionUtils.shuffle(_rng, existing_rooms)
-	
+
 	for room: Dictionary in existing_rooms:
 		_create_next_room_candidate(room)
 		if not _next_room_candidates.is_empty():
 			break
-			
-	Log.info("TiledExhibitGenerator", "Fallback: Reduced dimensions to %d-%d" % [_min_room_dimension, _max_room_dimension])
+
+	Log.info("TiledExhibitGenerator", "Fallback: Reduced dimensions to %d-%d (was %d-%d)" % [
+		_min_room_dimension, _max_room_dimension, prev_min, prev_max])
+
+	# Restore originals after this exhibit so next exhibits start fresh
+	_min_room_dimension = _orig_min_room_dimension
+	_max_room_dimension = _orig_max_room_dimension
 
 
 func validate_final_generation() -> bool:
@@ -289,11 +309,11 @@ func validate_final_generation() -> bool:
 	if _room_list.is_empty():
 		Log.error("TiledExhibitGenerator", "Final validation FAILED: No rooms generated")
 		return false
-	
+
 	if entry == null:
 		Log.error("TiledExhibitGenerator", "Final validation FAILED: No entry hall")
 		return false
-		
+
 	Log.info("TiledExhibitGenerator", "Validation PASSED: %d rooms generated" % _room_list.size())
 	return true
 
@@ -354,12 +374,12 @@ func add_room() -> void:
 	_grid.free_reserved_zone(room.center)
 
 	_add_to_room_list(room.center, room.width, room.length)
-	
+
 	# Determine room type and height
 	var room_type: String = "ROOM"
 	var height: int = 2
 	var debug_color: Color = Color.GREEN
-	
+
 	if _room_count > 2:
 		if ExhibitMood.prefers_verticality(_mood) and _rng.randf() < 0.15:
 			room_type = "ATRIUM"
@@ -379,10 +399,10 @@ func add_room() -> void:
 
 	_carve_room(room.hall[0], room.hall[1], _y)
 	_carve_room(room.bounds[0], room.bounds[1], _y, height)
-	
+
 	if _debug_mode:
 		_debug_draw_box(room.bounds[0], room.bounds[1], _y, height, debug_color)
-	
+
 	_create_next_room_candidate(room)
 
 	# branch sometimes
@@ -497,25 +517,282 @@ func _try_place_large_decoration(center: Vector3, width: int, length: int) -> bo
 	var bounds: Array = _room_to_bounds(center, width, length)
 	var true_center: Vector3 = (bounds[0] + bounds[1]) / 2
 
-	# Mood-biased decoration: nature/history prefer planters, astro/nature prefer pools
+	# Safety: verify the center cell is floor (not wall, hall, or empty)
+	var center_grid := Vector3(round(true_center.x), _y, round(true_center.z))
+	var cell_val: int = _raw_grid.get_cell_item(center_grid)
+	if cell_val == -1:
+		return false  # No floor here
+
+	# 60% chance: mood-specific centerpiece, 40%: standard
+	if _rng.randi_range(0, 99) >= 40:
+		if _try_place_mood_centerpiece(true_center, width, length, bounds):
+			return true
+
+	# Standard decoration (pool, planter, skylight)
 	var pool_weight: int = 2 if ExhibitMood.prefers_pool(_mood) else 1
 	var planter_weight: int = 2 if ExhibitMood.prefers_planter(_mood) else 1
+	var skylight_weight: int = 2 if _mood == ExhibitMood.Mood.ASTRO or _mood == ExhibitMood.Mood.NATURE else 1
 	var empty_weight: int = 2
-	var total: int = pool_weight + planter_weight + empty_weight
-	var roll: int = _rng.randi_range(0, total - 1)
+	var total: int = pool_weight + planter_weight + skylight_weight + empty_weight
+	var r: int = _rng.randi_range(0, total - 1)
 
-	if roll < pool_weight:
+	if r < pool_weight:
 		var pool: Node3D = _POOL_SCENE.instantiate()
 		pool.position = GridUtils.grid_to_world(true_center)
 		add_child(pool)
 		return true
-	elif roll < pool_weight + planter_weight:
+	elif r < pool_weight + planter_weight:
 		var planter: Node3D = _PLANTER_SCENE.instantiate()
 		planter.position = GridUtils.grid_to_world(true_center)
 		planter.rotation.y = PI / 2 if length > width else 0.0
 		add_child(planter)
 		return true
+	elif r < pool_weight + planter_weight + skylight_weight:
+		var skylight: Node3D = _create_skylight()
+		skylight.position = GridUtils.grid_to_world(true_center) + Vector3(0, 2.5, 0)
+		add_child(skylight)
+		return true
 	return false
+
+
+# ── Mood-specific centerpieces ──────────────────────────────────────────────
+## All placements are bounds-checked and use world-space nodes (no grid writes)
+func _try_place_mood_centerpiece(pos: Vector3, width: int, length: int, _bounds: Array) -> bool:
+	if width < 4 or length < 4:
+		return false
+
+	match _mood:
+		ExhibitMood.Mood.ART:        return _place_art_statue(pos)
+		ExhibitMood.Mood.GEOGRAPHY:  return _place_globe(pos)
+		ExhibitMood.Mood.SPORTS:     return _place_trophy(pos)
+		ExhibitMood.Mood.FOOD:       return _place_dining_table(pos)
+		ExhibitMood.Mood.POLITICS:   return _place_rostrum(pos)
+		ExhibitMood.Mood.ECONOMY:    return _place_vault(pos)
+		ExhibitMood.Mood.MYSTERY:    return _place_crystal_ball(pos)
+		ExhibitMood.Mood.PHILOSOPHY: return _place_thinkers_chair(pos)
+		ExhibitMood.Mood.HISTORY:    return _place_artifact(pos)
+		ExhibitMood.Mood.SCIENCE:    return _place_hologram(pos)
+
+	return false
+
+
+func _place_art_statue(pos: Vector3) -> bool:
+	var g := Node3D.new(); g.name = "ArtStatue"
+	var ped := MeshInstance3D.new()
+	var pb := BoxMesh.new(); pb.size = Vector3(0.8, 1.2, 0.8); ped.mesh = pb
+	var pm := StandardMaterial3D.new()
+	pm.albedo_color = Color(0.92, 0.90, 0.87); pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ped.material_override = pm; ped.position = Vector3(0, 0.6, 0); g.add_child(ped)
+	var st := MeshInstance3D.new()
+	var ss := SphereMesh.new(); ss.radius = 0.4; ss.height = 0.8; st.mesh = ss
+	var sm := StandardMaterial3D.new()
+	sm.albedo_color = Color(0.75, 0.65, 0.5); sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	st.material_override = sm; st.position = Vector3(0, 1.6, 0); g.add_child(st)
+	var sp := SpotLight3D.new()
+	sp.light_energy = 2.0; sp.light_color = Color(1.0, 0.95, 0.85)
+	sp.range = 4.0; sp.spot_angle = 30; sp.position = Vector3(0, 3.0, 0)
+	sp.basis = Basis.looking_at(Vector3.DOWN); g.add_child(sp)
+	g.position = GridUtils.grid_to_world(pos); add_child(g); return true
+
+func _place_globe(pos: Vector3) -> bool:
+	var g := Node3D.new(); g.name = "GlobeDisplay"
+	var st := MeshInstance3D.new()
+	var sc := CylinderMesh.new(); sc.top_radius = 0.1; sc.bottom_radius = 0.3; sc.height = 1.0
+	st.mesh = sc
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.4, 0.3, 0.2); m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	st.material_override = m; st.position = Vector3(0, 0.5, 0); g.add_child(st)
+	var gb := MeshInstance3D.new()
+	var s := SphereMesh.new(); s.radius = 0.5; s.height = 1.0; gb.mesh = s
+	var gm := StandardMaterial3D.new()
+	gm.albedo_color = Color(0.3, 0.5, 0.8); gm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	gb.material_override = gm; gb.position = Vector3(0, 1.5, 0); g.add_child(gb)
+	var l := OmniLight3D.new()
+	l.light_energy = 1.5; l.light_color = Color(0.8, 0.9, 1.0); l.omni_range = 4.0
+	l.position = Vector3(0, 2.5, 0); g.add_child(l)
+	g.position = GridUtils.grid_to_world(pos); add_child(g); return true
+
+func _place_trophy(pos: Vector3) -> bool:
+	var g := Node3D.new(); g.name = "TrophyDisplay"
+	var b := MeshInstance3D.new()
+	var bx := BoxMesh.new(); bx.size = Vector3(1.2, 0.6, 1.2); b.mesh = bx
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.35, 0.25, 0.15); m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	b.material_override = m; b.position = Vector3(0, 0.3, 0); g.add_child(b)
+	var tr := MeshInstance3D.new()
+	var cy := CylinderMesh.new(); cy.top_radius = 0.25; cy.bottom_radius = 0.15; cy.height = 0.8
+	tr.mesh = cy
+	var tm := StandardMaterial3D.new()
+	tm.albedo_color = Color(1.0, 0.85, 0.3); tm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	tr.material_override = tm; tr.position = Vector3(0, 1.0, 0); g.add_child(tr)
+	var l := OmniLight3D.new()
+	l.light_energy = 2.0; l.light_color = Color(1.0, 0.95, 0.7); l.omni_range = 4.0
+	l.position = Vector3(0, 2.0, 0); g.add_child(l)
+	g.position = GridUtils.grid_to_world(pos); add_child(g); return true
+
+func _place_dining_table(pos: Vector3) -> bool:
+	var g := Node3D.new(); g.name = "DiningTable"
+	var t := MeshInstance3D.new()
+	var tb := BoxMesh.new(); tb.size = Vector3(1.8, 0.1, 1.2); t.mesh = tb
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.6, 0.4, 0.25); m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	t.material_override = m; t.position = Vector3(0, 0.9, 0); g.add_child(t)
+	for dx in [-0.7, 0.7]:
+		for dz in [-0.4, 0.4]:
+			var lg := MeshInstance3D.new()
+			var lb := BoxMesh.new(); lb.size = Vector3(0.1, 0.9, 0.1); lg.mesh = lb
+			var lm := StandardMaterial3D.new()
+			lm.albedo_color = Color(0.4, 0.25, 0.15); lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			lg.material_override = lm; lg.position = Vector3(dx, 0.45, dz); g.add_child(lg)
+	var w := OmniLight3D.new()
+	w.light_energy = 1.5; w.light_color = Color(1.0, 0.85, 0.6); w.omni_range = 5.0
+	w.position = Vector3(0, 2.0, 0); g.add_child(w)
+	g.position = GridUtils.grid_to_world(pos); add_child(g); return true
+
+func _place_rostrum(pos: Vector3) -> bool:
+	var g := Node3D.new(); g.name = "Rostrum"
+	var p := MeshInstance3D.new()
+	var pb := BoxMesh.new(); pb.size = Vector3(2.0, 0.4, 1.5); p.mesh = pb
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.5, 0.35, 0.25); m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	p.material_override = m; p.position = Vector3(0, 0.2, 0); g.add_child(p)
+	var pd := MeshInstance3D.new()
+	var pdb := BoxMesh.new(); pdb.size = Vector3(0.8, 1.2, 0.5); pd.mesh = pdb
+	var pm := StandardMaterial3D.new()
+	pm.albedo_color = Color(0.35, 0.25, 0.15); pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pd.material_override = pm; pd.position = Vector3(0, 1.0, -0.3); g.add_child(pd)
+	var l := OmniLight3D.new()
+	l.light_energy = 2.0; l.light_color = Color.WHITE; l.omni_range = 5.0
+	l.position = Vector3(0, 2.5, 0); g.add_child(l)
+	g.position = GridUtils.grid_to_world(pos); add_child(g); return true
+
+func _place_vault(pos: Vector3) -> bool:
+	var g := Node3D.new(); g.name = "VaultDisplay"
+	var v := MeshInstance3D.new()
+	var vb := BoxMesh.new(); vb.size = Vector3(1.5, 1.5, 1.5); v.mesh = vb
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.6, 0.55, 0.5); m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	v.material_override = m; v.position = Vector3(0, 0.75, 0); g.add_child(v)
+	var gd := MeshInstance3D.new()
+	var gc := CylinderMesh.new(); gc.top_radius = 0.3; gc.bottom_radius = 0.3; gc.height = 0.2
+	gd.mesh = gc
+	var gm := StandardMaterial3D.new()
+	gm.albedo_color = Color(1.0, 0.85, 0.2); gm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	gd.material_override = gm; gd.position = Vector3(0, 1.6, 0); g.add_child(gd)
+	var l := OmniLight3D.new()
+	l.light_energy = 2.5; l.light_color = Color(1.0, 0.95, 0.7); l.omni_range = 4.0
+	l.position = Vector3(0, 2.5, 0); g.add_child(l)
+	g.position = GridUtils.grid_to_world(pos); add_child(g); return true
+
+func _place_crystal_ball(pos: Vector3) -> bool:
+	var g := Node3D.new(); g.name = "CrystalBall"
+	var st := MeshInstance3D.new()
+	var sc := CylinderMesh.new(); sc.top_radius = 0.15; sc.bottom_radius = 0.25; sc.height = 0.6
+	st.mesh = sc
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.3, 0.2, 0.35); m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	st.material_override = m; st.position = Vector3(0, 0.3, 0); g.add_child(st)
+	var b := MeshInstance3D.new()
+	var s := SphereMesh.new(); s.radius = 0.35; s.height = 0.7; b.mesh = s
+	var bm := StandardMaterial3D.new()
+	bm.albedo_color = Color(0.7, 0.6, 0.8)
+	bm.emission_enabled = true; bm.emission = Color(0.5, 0.3, 0.7, 0.5)
+	bm.emission_energy_multiplier = 1.5; bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	b.material_override = bm; b.position = Vector3(0, 1.0, 0); g.add_child(b)
+	var gl := OmniLight3D.new()
+	gl.light_energy = 1.5; gl.light_color = Color(0.6, 0.4, 0.8); gl.omni_range = 4.0
+	gl.position = Vector3(0, 1.0, 0); g.add_child(gl)
+	g.position = GridUtils.grid_to_world(pos); add_child(g); return true
+
+func _place_thinkers_chair(pos: Vector3) -> bool:
+	var g := Node3D.new(); g.name = "ThinkersChair"
+	var s := MeshInstance3D.new()
+	var sb := BoxMesh.new(); sb.size = Vector3(0.8, 0.1, 0.8); s.mesh = sb
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.5, 0.3, 0.2); m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	s.material_override = m; s.position = Vector3(0, 0.6, 0); g.add_child(s)
+	var bk := MeshInstance3D.new()
+	var bb := BoxMesh.new(); bb.size = Vector3(0.8, 1.0, 0.1); bk.mesh = bb
+	var bm := StandardMaterial3D.new()
+	bm.albedo_color = Color(0.45, 0.28, 0.18); bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bk.material_override = bm; bk.position = Vector3(0, 1.1, -0.35); g.add_child(bk)
+	var w := OmniLight3D.new()
+	w.light_energy = 1.0; w.light_color = Color(1.0, 0.9, 0.7); w.omni_range = 4.0
+	w.position = Vector3(0, 2.0, 0); g.add_child(w)
+	g.position = GridUtils.grid_to_world(pos); add_child(g); return true
+
+func _place_artifact(pos: Vector3) -> bool:
+	var g := Node3D.new(); g.name = "ArtifactDisplay"
+	var p := MeshInstance3D.new()
+	var pc := CylinderMesh.new(); pc.top_radius = 0.5; pc.bottom_radius = 0.5; pc.height = 1.0
+	p.mesh = pc
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.85, 0.8, 0.7); m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	p.material_override = m; p.position = Vector3(0, 0.5, 0); g.add_child(p)
+	var r := MeshInstance3D.new()
+	var tr := TorusMesh.new()
+	tr.inner_radius = 0.15; tr.outer_radius = 0.25; tr.rings = 16; tr.sides = 8
+	r.mesh = tr
+	var rm := StandardMaterial3D.new()
+	rm.albedo_color = Color(0.9, 0.75, 0.4)
+	rm.emission_enabled = true; rm.emission = Color(0.8, 0.6, 0.3, 0.6)
+	rm.emission_energy_multiplier = 1.0; rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	r.material_override = rm; r.position = Vector3(0, 1.2, 0); r.rotation.x = PI / 4
+	g.add_child(r)
+	var l := OmniLight3D.new()
+	l.light_energy = 1.5; l.light_color = Color(1.0, 0.9, 0.7); l.omni_range = 4.0
+	l.position = Vector3(0, 2.0, 0); g.add_child(l)
+	g.position = GridUtils.grid_to_world(pos); add_child(g); return true
+
+func _place_hologram(pos: Vector3) -> bool:
+	var g := Node3D.new(); g.name = "TechDisplay"
+	var b := MeshInstance3D.new()
+	var bb := BoxMesh.new(); bb.size = Vector3(1.0, 0.2, 1.0); b.mesh = bb
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.3, 0.35, 0.4); m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	b.material_override = m; b.position = Vector3(0, 0.1, 0); g.add_child(b)
+	var h := MeshInstance3D.new()
+	var hs := SphereMesh.new(); hs.radius = 0.4; hs.height = 0.8; h.mesh = hs
+	var hm := StandardMaterial3D.new()
+	hm.albedo_color = Color(0.4, 0.8, 1.0)
+	hm.emission_enabled = true; hm.emission = Color(0.3, 0.7, 1.0, 0.4)
+	hm.emission_energy_multiplier = 2.0; hm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	h.material_override = hm; h.position = Vector3(0, 1.2, 0); g.add_child(h)
+	var l := OmniLight3D.new()
+	l.light_energy = 2.0; l.light_color = Color(0.6, 0.8, 1.0); l.omni_range = 5.0
+	l.position = Vector3(0, 2.0, 0); g.add_child(l)
+	g.position = GridUtils.grid_to_world(pos); add_child(g); return true
+
+
+## Creates a skylight node procedurally (avoids preload issues)
+func _create_skylight() -> Node3D:
+	var skylight := Node3D.new()
+	skylight.name = "Skylight"
+	
+	# Glowing panel
+	var mesh := MeshInstance3D.new()
+	mesh.name = "SkylightOpening"
+	var box_mesh := BoxMesh.new()
+	box_mesh.size = Vector3(3, 0.5, 2)
+	mesh.mesh = box_mesh
+	
+	var material := StandardMaterial3D.new()
+	material.emission_enabled = true
+	material.emission = Color(1.0, 0.95, 0.9, 3.0)
+	material.emission_energy_multiplier = 3.0
+	mesh.set_surface_override_material(0, material)
+	skylight.add_child(mesh)
+	
+	# Directional light casting down
+	var light := DirectionalLight3D.new()
+	light.name = "SkylightLight"
+	light.light_energy = 3.0
+	light.light_color = Color(1.0, 0.98, 0.9)
+	light.shadow_enabled = true
+	light.basis = Basis.looking_at(Vector3.DOWN)
+	skylight.add_child(light)
+	
+	return skylight
 
 
 func _place_benches_and_walls(center: Vector3, width: int, length: int) -> void:
@@ -530,7 +807,6 @@ func _place_benches_and_walls(center: Vector3, width: int, length: int) -> void:
 	if not bench_area_bounds:
 		return
 
-	var bench_slots: Array = []
 	var c1: Vector3 = bench_area_bounds[0]
 	var c2: Vector3 = bench_area_bounds[1]
 	var y: int = int(center.y)
@@ -540,30 +816,16 @@ func _place_benches_and_walls(center: Vector3, width: int, length: int) -> void:
 			if _raw_grid.get_cell_item(pos) != -1:
 				continue
 
-			var free_wall: bool = _rng.randi_range(0, 1) == 0
 			var valid_bench: bool = GridUtils.cell_neighbors(_raw_grid, pos, INTERNAL_HALL).size() == 0 and\
 					GridUtils.cell_neighbors(_raw_grid, pos, HALL_STAIRS_UP).size() == 0 and\
 					GridUtils.cell_neighbors(_raw_grid, pos, HALL_STAIRS_DOWN).size() == 0
-			var valid_free_wall: bool = valid_bench and GridUtils.cell_neighbors(_raw_grid, pos, WALL).size() == 0
-
-			if width > 3 or length > 3 and free_wall and valid_free_wall and _room_count > 2:
-				var dir: Vector3 = Vector3.RIGHT if width > length else Vector3.FORWARD
-				var item_dir: Vector3 = Vector3.FORWARD if width > length else Vector3.RIGHT
-				var ori: int = GridUtils.vec_to_orientation(_grid, dir)
-				_grid.set_cell_item(pos, FREE_WALL, ori)
-				bench_slots.push_front([pos - item_dir * 0.075, item_dir])
-				bench_slots.append([pos + item_dir * 0.075, -item_dir])
-			elif valid_bench:
+			if valid_bench:
 				var b: Node3D = _BENCH_SCENE.instantiate()
 				b.position = GridUtils.grid_to_world(pos)
 				if bench_area_ori != 0:
 					b.rotation.y = PI / 2
 				add_child(b)
-				# Still set the grid item for logic/collision if needed, or leave it empty?
-				# The generator uses the grid for room carve checks. Let's keep BENCH item for grid-level tracking.
 				_grid.set_cell_item(pos, BENCH, bench_area_ori)
-	for slot: Array in bench_slots:
-		add_item_slot(slot)
 
 
 func _decorate_wall_tile(pos: Vector3) -> void:
@@ -596,6 +858,82 @@ func _decorate_wall_tile(pos: Vector3) -> void:
 		# put exhibit items everywhere else
 		else:
 			add_item_slot([slot, hall_dir])
+			# Mood-specific wall decorations: occasional sconces/banners/windows
+			_try_place_wall_decoration(wall, slot, hall_dir)
+
+
+## Place decorative wall elements (sconces, banners, plaques) based on mood.
+## These are world-space nodes that don't modify the grid — completely safe.
+func _try_place_wall_decoration(wall_pos: Vector3, slot_pos: Vector3, dir: Vector3) -> void:
+	# Only place decorations occasionally (20% chance per wall tile)
+	if _rng.randi_range(0, 99) >= 20:
+		return
+
+	# Don't place on hallway walls
+	var cell_val: int = _raw_grid.get_cell_item(wall_pos)
+	if cell_val == INTERNAL_HALL or cell_val == INTERNAL_HALL_TURN:
+		return
+
+	# Safety: verify the slot position is reasonable
+	var world_pos := GridUtils.grid_to_world(slot_pos) + dir * 0.15
+
+	match _mood:
+		ExhibitMood.Mood.HISTORY:
+			_place_wall_sconce(world_pos, dir, Color(1.0, 0.85, 0.5))
+		ExhibitMood.Mood.ART:
+			_place_wall_sconce(world_pos, dir, Color(1.0, 0.95, 0.9))
+		ExhibitMood.Mood.MYSTERY:
+			_place_wall_sconce(world_pos, dir, Color(0.5, 0.4, 0.7))
+		ExhibitMood.Mood.SCIENCE:
+			_place_wall_sconce(world_pos, dir, Color(0.7, 0.85, 1.0))
+		ExhibitMood.Mood.POLITICS:
+			_place_wall_sconce(world_pos, dir, Color(1.0, 0.9, 0.7))
+		ExhibitMood.Mood.ECONOMY:
+			_place_wall_sconce(world_pos, dir, Color(1.0, 0.95, 0.6))
+
+
+func _place_wall_sconce(world_pos: Vector3, dir: Vector3, color: Color) -> void:
+	var sconce := Node3D.new()
+	sconce.name = "WallSconce"
+
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.15, 0.3, 0.15)
+	mesh.mesh = box
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.4, 0.35, 0.3)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mesh.material_override = mat
+	mesh.position = Vector3(0, 2.5, 0)
+	sconce.add_child(mesh)
+
+	# Glow
+	var glow := MeshInstance3D.new()
+	var gbox := BoxMesh.new()
+	gbox.size = Vector3(0.1, 0.15, 0.1)
+	glow.mesh = gbox
+	var gmat := StandardMaterial3D.new()
+	gmat.albedo_color = color
+	gmat.emission_enabled = true
+	gmat.emission = color
+	gmat.emission_energy_multiplier = 2.0
+	gmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.material_override = gmat
+	glow.position = Vector3(0, 2.5, 0.05)
+	sconce.add_child(glow)
+
+	# Small light
+	var light := OmniLight3D.new()
+	light.light_energy = 0.5
+	light.light_color = color
+	light.omni_range = 3.0
+	light.position = Vector3(0, 2.5, 0)
+	sconce.add_child(light)
+
+	sconce.position = world_pos + Vector3(0, 0, 0)
+	# Face the sconce toward the room center
+	sconce.rotation.y = GridUtils.vec_to_rot(-dir)
+	add_child(sconce)
 
 
 func _room_to_bounds(center: Vector3, width: int, length: int) -> Array:
@@ -625,20 +963,16 @@ func _carve_room(corner1: Vector3, corner2: Vector3, y: int, height: int = 2) ->
 				elif _grid.get_cell_item(Vector3(x, y - 1, z)) == -1:
 					_grid.set_cell_item(Vector3(x, y, z), WALL, 0)
 					_grid.set_cell_item(Vector3(x, y + 1, z), WALL, 0)
-					# Clear air levels for the wall
-					for i in range(2, height + 1):
+					for i: int in range(2, height + 1):
 						_grid.set_cell_item(Vector3(x, y + i, z), -1, 0)
 			else:
 				if c == WALL:
-					for i in range(height):
+					for i: int in range(height):
 						_grid.set_cell_item(Vector3(x, y + i, z), -1, 0)
-				
-				# Ceiling at the very top
+
 				_grid.set_cell_item(Vector3(x, y + height, z), CEILING, 0)
-				
-				# Floor at the bottom
 				_grid.set_cell_item(Vector3(x, y - 1, z), _floor, 0)
-	
+
 	Log.info("TiledExhibitGenerator", "  _carve_room(): %dms (height: %d)" % [
 		Time.get_ticks_msec() - step_start, height])
 

@@ -48,6 +48,7 @@ var accessibility_mode: bool = false
 var _active_events: Dictionary = {}  # event_type -> {end_time, duration, data}
 var _event_timer: float = 0.0
 var _warning_shown: bool = false
+var _event_pending: bool = false  # Guards against overlapping await calls from _process
 
 # Event durations (base values in seconds)
 const EVENT_DURATIONS := {
@@ -155,7 +156,7 @@ func _process(delta: float) -> void:
 
 	# Check if we should trigger an event
 	_event_timer += delta
-	if _event_timer >= event_frequency:
+	if _event_timer >= event_frequency and not _event_pending:
 		_event_timer = 0.0
 		_try_trigger_event()
 
@@ -167,25 +168,35 @@ func _update_earthquake(delta: float) -> void:
 
 
 func _try_trigger_event() -> void:
+	# Guard against overlapping calls from _process while awaiting
+	if _event_pending:
+		return
+	_event_pending = true
+
 	# Can't trigger if at max concurrent
 	if _active_events.size() >= max_concurrent:
+		_event_pending = false
 		return
-	
+
 	# No events in first 30 seconds of race
 	if RaceManager.get_race_time() < 30.0:
+		_event_pending = false
 		return
-	
+
 	# No events during countdown
 	if RaceManager.is_countdown_active():
+		_event_pending = false
 		return
-	
+
 	# No events when leader is near finish
 	if RaceManager.leader_is_near_finish():
+		_event_pending = false
 		return
-	
+
 	# Get available events
 	var available = _get_available_events()
 	if available.is_empty():
+		_event_pending = false
 		return
 
 	# Pick random event
@@ -199,6 +210,7 @@ func _try_trigger_event() -> void:
 	# Wait 2 seconds then start
 	await get_tree().create_timer(2.0).timeout
 	_start_event(event, duration)
+	_event_pending = false
 
 
 func _start_event(event_type: int, duration: float) -> void:

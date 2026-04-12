@@ -8,8 +8,8 @@ class_name DailyChallengeHUD
 signal challenge_started
 signal challenge_closed
 
-const ACCENT := Color(0.35, 0.75, 1.00)   ## gold
-const ACCENT_LIGHT := Color(0.10, 0.52, 0.85)  ## darker gold for light mode readability
+const ACCENT := Color(0.35, 0.75, 1.00)   ## light blue
+const ACCENT_LIGHT := Color(0.10, 0.52, 0.85)  ## darker blue for light mode readability
 const GREEN  := Color(0.35, 0.85, 0.45)   ## personal best
 const MEDAL  := ["🥇", "🥈", "🥉"]
 
@@ -510,7 +510,7 @@ func _refresh_theme() -> void:
 		_slbl(lbl, help_subtext_clr, 14)
 
 	if _strip_style:
-		_strip_style.bg_color            = Color(0.06, 0.06, 0.08, 0.88)
+		_strip_style.bg_color            = Color(ThemeManager.bg_color, 0.88)
 		_strip_style.border_width_bottom = 2
 		_strip_style.border_color        = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.6)
 

@@ -57,20 +57,20 @@ var _poll_timer : float = 0.0
 # ─────────────────────────────────────────────────────────────────────────────
 
 func init(exhibit: Node3D, count: int = -1) -> void:
-	print("[NPCManager] Initializing with exhibit: %s, count: %d" % [exhibit.name if exhibit else "null", count])
+	Log.debug("NPCManager", "Initializing with exhibit: %s, count: %d" % [exhibit.name if exhibit else "null", count])
 	_exhibit = exhibit
 	_rng.seed = hash(exhibit.get("title") if "title" in exhibit else str(randi()))
 	_player   = get_tree().get_first_node_in_group("local_player")
-	print("[NPCManager] Player found: %s" % ("yes" if _player else "no"))
+	Log.debug("NPCManager", "Player found: %s" % ["yes" if _player else "no"])
 
 	# Connect to RoomService signals (not Museum - it doesn't have these signals)
 	var room_service = get_node_or_null("/root/RoomService")
 	if room_service:
-		print("[NPCManager] RoomService found, connecting signals")
+		Log.debug("NPCManager", "RoomService found, connecting signals")
 		if not room_service.room_loaded.is_connected(_on_room_loaded):
 			room_service.room_loaded.connect(_on_room_loaded)
 	else:
-		print("[NPCManager] WARNING: RoomService not found!")
+		Log.warn("NPCManager", "RoomService not found!")
 
 	_spawn_for_all_rooms(count)
 
@@ -91,7 +91,7 @@ func _process(delta: float) -> void:
 
 func _spawn_for_all_rooms(requested_count: int) -> void:
 	var rooms : Array = _get_rooms()
-	print("[NPCManager] Spawning NPCs: %d rooms found, total_npcs=%d/%d" % [rooms.size(), _total_npcs, MAX_NPCS_TOTAL])
+	Log.debug("NPCManager", "Spawning NPCs: %d rooms found, total_npcs=%d/%d" % [rooms.size(), _total_npcs, MAX_NPCS_TOTAL])
 	for room_data: Dictionary in rooms:
 		if _total_npcs >= MAX_NPCS_TOTAL:
 			break
@@ -122,7 +122,7 @@ func _spawn_in_room(room_data: Dictionary, count_override: int) -> void:
 	var world_bounds       : Array = [wmin3, wmax3]
 	var npcs_in_room       : Array[ExhibitNPC] = []
 
-	print("[NPCManager] Spawning %d NPCs in room %s (area=%.1f, bounds=%s to %s)" % [desired, room_id, area, wmin3, wmax3])
+	Log.debug("NPCManager", "Spawning %d NPCs in room %s (area=%.1f, bounds=%s to %s)" % [desired, room_id, area, wmin3, wmax3])
 
 	# Spawn regular NPCs with better distribution
 	for _i in range(desired * 4):   # try 4× as many positions as desired
@@ -149,7 +149,7 @@ func _spawn_in_room(room_data: Dictionary, count_override: int) -> void:
 		spawned_positions.append(pos)
 		npcs_in_room.append(npc)
 		_total_npcs += 1
-		print("[NPCManager] Spawned NPC at %s, visible=%s" % [pos, npc.visible])
+		Log.debug("NPCManager", "Spawned NPC at %s, visible=%s" % [pos, npc.visible])
 
 	if npcs_in_room.size() > 0:
 		_room_npcs[room_id] = npcs_in_room
@@ -171,7 +171,7 @@ func _instantiate_npc(world_bounds: Array) -> ExhibitNPC:
 		mat.roughness    = 0.65
 		body_mesh.material_override = mat
 		body_mesh.layers = 4194304  # Layer 22 (matches NPC collision layer)
-		print("[NPCManager] BodyMesh material set to %s, layers=%d" % [color, body_mesh.layers])
+		Log.debug("NPCManager", "BodyMesh material set to %s, layers=%d" % [color, body_mesh.layers])
 	# Head skin tone
 	if head_mesh:
 		var hm := StandardMaterial3D.new()
@@ -185,7 +185,7 @@ func _instantiate_npc(world_bounds: Array) -> ExhibitNPC:
 		hm.roughness    = 0.45
 		head_mesh.material_override = hm
 		head_mesh.layers = 4194304  # Layer 22 (matches NPC collision layer)
-		print("[NPCManager] HeadMesh material set to %s, layers=%d" % [skin, head_mesh.layers])
+		Log.debug("NPCManager", "HeadMesh material set to %s, layers=%d" % [skin, head_mesh.layers])
 	return npc
 
 
@@ -209,7 +209,7 @@ func _spawn_cute_demon(world_bounds: Array, wmin3: Vector3) -> void:
 	demon.add_to_group("npc")
 	_total_npcs += 1
 
-	print("[NPCManager] Spawned CuteDemon in room!")
+	Log.debug("NPCManager", "Spawned CuteDemon in room!")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -258,7 +258,7 @@ func _on_exhibit_changed(_title: Variant = null) -> void:
 
 func _on_room_loaded(room_data: Dictionary) -> void:
 	# Called when the procedural generator finishes a single room
-	print("[NPCManager] room_loaded signal: %s" % room_data.get("title", "unknown"))
+	Log.debug("NPCManager", "room_loaded signal: %s" % room_data.get("title", "unknown"))
 	if _total_npcs < MAX_NPCS_TOTAL:
 		_spawn_in_room(room_data, -1)
 
@@ -269,13 +269,13 @@ func _on_room_loaded(room_data: Dictionary) -> void:
 
 func _get_rooms() -> Array:
 	if not is_instance_valid(_exhibit):
-		print("[NPCManager] _get_rooms: exhibit not valid")
+		Log.debug("NPCManager", "_get_rooms: exhibit not valid")
 		return []
 	if _exhibit.has_method("get_rooms_for_npcs"):
 		var rooms = _exhibit.get_rooms_for_npcs()
-		print("[NPCManager] _get_rooms: got %d rooms from exhibit" % rooms.size())
+		Log.debug("NPCManager", "_get_rooms: got %d rooms from exhibit" % rooms.size())
 		return rooms
-	print("[NPCManager] _get_rooms: exhibit missing get_rooms_for_npcs method")
+	Log.debug("NPCManager", "_get_rooms: exhibit missing get_rooms_for_npcs method")
 	return []
 
 

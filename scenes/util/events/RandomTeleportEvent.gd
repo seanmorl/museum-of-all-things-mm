@@ -15,11 +15,11 @@ static func apply() -> void:
 	var random_article = await _fetch_random_article()
 	
 	if random_article.is_empty():
-		print("[RandomTeleportEvent] Failed to fetch random article - skipping teleport")
+		Log.error("RandomTeleportEvent", "Failed to fetch random article - skipping teleport")
 		_teleported = false
 		return
-	
-	print("[RandomTeleportEvent] Applied: Teleporting all players to '%s'" % random_article)
+
+	Log.info("RandomTeleportEvent", "Applied: Teleporting all players to '%s'" % random_article)
 	
 	# Teleport all players to the random article
 	await _teleport_all_players(random_article)
@@ -106,26 +106,26 @@ static func _teleport_all_players(target_article: String) -> void:
 					all_players.append(p)
 	
 	if all_players.is_empty():
-		print("[RandomTeleportEvent] No players found to teleport")
+		Log.warn("RandomTeleportEvent", "No players found to teleport")
 		return
-	
+
 	# Fetch exhibit data for the target article
 	var exhibit_data = await ExhibitFetcher.fetch_article(target_article)
-	
+
 	if not exhibit_data or exhibit_data.is_empty():
-		print("[RandomTeleportEvent] Failed to fetch exhibit data for '%s'" % target_article)
+		Log.error("RandomTeleportEvent", "Failed to fetch exhibit data for '%s'" % target_article)
 		return
-	
+
 	# Generate/load the exhibit
 	var museum = main.get_node_or_null("Museum") if main else null
 	if not museum:
-		print("[RandomTeleportEvent] Museum node not found")
+		Log.error("RandomTeleportEvent", "Museum node not found")
 		return
-	
+
 	# Use ExhibitLoader to load the exhibit
 	var exhibit_loader = museum.get_node_or_null("ExhibitLoader")
 	if not exhibit_loader:
-		print("[RandomTeleportEvent] ExhibitLoader not found")
+		Log.error("RandomTeleportEvent", "ExhibitLoader not found")
 		return
 	
 	# Load the exhibit (this will generate it if needed)
@@ -188,8 +188,8 @@ static func _teleport_all_players(target_article: String) -> void:
 		# Update player's room tracking
 		if "current_room" in player:
 			player.set("current_room", target_article)
-	
-	print("[RandomTeleportEvent] Teleported %d players to '%s'" % [all_players.size(), target_article])
+
+	Log.info("RandomTeleportEvent", "Teleported %d players to '%s'" % [all_players.size(), target_article])
 	
 	# Show notification to all players
 	_show_teleport_notification(target_article)

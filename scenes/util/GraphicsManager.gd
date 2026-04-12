@@ -95,6 +95,10 @@ var voxelgi_voxel_size: float = 0.8
 var voxelgi_max_distance: float = 20.0
 var voxelgi_bounces: int = 2
 
+## ── Particle Effects ─────────────────────────────────────────────────────────
+var particles_enabled: bool = true
+var particles_intensity: float = 1.0  # 0.0..1.0 scales particle counts
+
 ## ── Per-room glow tweening ────────────────────────────────────────────────────
 ## Target glow intensity driven by Museum when the room changes.
 var _room_glow_tween: Tween = null
@@ -530,7 +534,21 @@ func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 	set_anisotropy_level(s.get("anisotropy_level", default.get("anisotropy_level", 4)))
 	set_shadow_quality(s.get("shadow_quality", default.get("shadow_quality", 2)))
 	set_render_distance_multiplier(s.get("render_distance_multiplier", default.get("render_distance_multiplier", 2.5)))
-	set_resolution(s.get("resolution", default.get("resolution", Vector2i(-1, -1))))
+	var res_raw = s.get("resolution", default.get("resolution", Vector2i(-1, -1)))
+	var res: Vector2i
+	if res_raw is Vector2i:
+		res = res_raw
+	elif res_raw is String:
+		# JSON serialization converts Vector2i to string like "(1920, 1080)"
+		var cleaned = res_raw.replace("(", "").replace(")", "")
+		var parts = cleaned.split(",")
+		if parts.size() == 2:
+			res = Vector2i(parts[0].to_int(), parts[1].to_int())
+		else:
+			res = Vector2i(-1, -1)
+	else:
+		res = Vector2i(-1, -1)
+	set_resolution(res)
 
 	# DOF convenience vars (mirrored from env fields above, kept for UI use)
 	dof_enabled = s.get("dof_enabled", default.get("dof_enabled", false))

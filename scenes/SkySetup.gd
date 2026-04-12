@@ -88,7 +88,7 @@ func _ready() -> void:
 	_build_sky(world_env)
 	_ensure_sun_moon(world_env)
 	_update_sun(time_of_day)
-	print("[SkySetup] Sky shader applied successfully")
+	Log.debug("SkySetup", "Sky shader applied successfully")
 
 
 func _process(delta: float) -> void:

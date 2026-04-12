@@ -425,3 +425,229 @@ msgid ""
 msgstr ""
 "Aucune page de ce nom ne se trouve sur Wikipédia. Veuillez essayer une autre exposition.\n"
 "\n"
+
+### Settings UI - Accessibility Tab
+msgid "Interface"
+msgstr ""
+
+msgid "Reset to 100%"
+msgstr ""
+
+msgid "UI Scale"
+msgstr ""
+
+msgid "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
+msgstr ""
+
+msgid "Show chat"
+msgstr ""
+
+msgid "Hides the chat overlay while playing."
+msgstr ""
+
+msgid "Typing sound"
+msgstr ""
+
+msgid "Plays a subtle sound on each keypress in the chat box."
+msgstr ""
+
+msgid "Open chat"
+msgstr ""
+
+msgid "Press the button then press any key to rebind."
+msgstr ""
+
+msgid "Screen Reader"
+msgstr "Lecteur d'écran"
+
+msgid "Enable screen reader (AccessKit)"
+msgstr "Activer le lecteur d'écran (AccessKit)"
+
+msgid "Exposes UI elements to OS screen readers via AccessKit. "
+msgstr "Expose les éléments de l'interface aux lecteurs d'écran du système via AccessKit. "
+
+msgid "Requires Godot's DisplayServer accessibility API (4.3+). "
+msgstr "Nécessite l'API d'accessibilité DisplayServer de Godot (4.3+). "
+
+msgid "Changes take effect immediately — no restart needed."
+msgstr "Les modifications prennent effet immédiatement — aucun redémarrage nécessaire."
+
+msgid "Verbosity"
+msgstr "Verbosité"
+
+msgid "All controls"
+msgstr "Tous les contrôles"
+
+msgid "Focused only"
+msgstr "Uniquement le focus"
+
+msgid "Off"
+msgstr "Désactivé"
+
+msgid "Vision"
+msgstr "Vision"
+
+msgid "Reading font"
+msgstr "Police de lecture"
+
+msgid "Default (Cormorant Garamond)"
+msgstr "Par défaut (Cormorant Garamond)"
+
+msgid "OpenDyslexic"
+msgstr "OpenDyslexic"
+
+msgid "Atkinson Hyperlegible"
+msgstr "Atkinson Hyperlegible"
+
+msgid "OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. "
+msgstr "OpenDyslexic et Atkinson Hyperlegible sont conçues pour une meilleure lisibilité. "
+
+msgid "Fonts must be present at:"
+msgstr "Les polices doivent être présentes à :"
+
+msgid "High-contrast exhibit text"
+msgstr "Texte d'exposition à contraste élevé"
+
+msgid "Renders article wall-card text as black-on-white regardless of dark mode."
+msgstr "Affiche le texte des articles en noir sur blanc quel que soit le mode sombre."
+
+msgid "Exhibit text size"
+msgstr "Taille du texte d'exposition"
+
+msgid "Scales the font size of Wikipedia article text on exhibit walls."
+msgstr "Ajuste la taille de police du texte des articles Wikipedia sur les murs d'exposition."
+
+msgid "Floating exhibit signs"
+msgstr "Panneaux d'exposition flottants"
+
+msgid "Replaces physical sign boards with floating text. "
+msgstr "Remplace les panneaux physiques par du texte flottant. "
+
+msgid "Text remains visible but the board mesh is hidden. "
+msgstr "Le texte reste visible mais le panneau est masqué. "
+
+msgid "Makes exhibit names easier to read during races."
+msgstr "Rend les noms d'exposition plus faciles à lire pendant les courses."
+
+msgid "Colour & Contrast"
+msgstr "Couleur & Contraste"
+
+msgid "Colourblind filter"
+msgstr "Filtre daltonisme"
+
+msgid "Protanopia  (red-blind)"
+msgstr "Protanopie (aveugle au rouge)"
+
+msgid "Deuteranopia  (green-blind)"
+msgstr "Deutéranopie (aveugle au vert)"
+
+msgid "Tritanopia  (blue-blind)"
+msgstr "Tritanopie (aveugle au bleu)"
+
+msgid "Applies a full-screen post-processing shader to correct for colour vision deficiency. "
+msgstr "Applique un shader de post-traitement plein écran pour corriger les déficiences de vision des couleurs. "
+
+msgid "Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a "
+msgstr "Nécessite le shader à res://assets/shaders/colorblind_correction.gdshader et un "
+
+msgid "CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
+msgstr "CanvasLayer + ColorRect nommé ColorblindOverlay dans votre scène principale."
+
+msgid "Motion"
+msgstr "Mouvement"
+
+msgid "Reduce motion"
+msgstr "Réduire le mouvement"
+
+msgid "Disables slide/fade animations on menus and the race HUD. Fog transitions remain."
+msgstr "Désactive les animations de glissement/fondu sur les menus et l'interface de course. Les transitions de brouillard restent."
+
+msgid "HUD & Hints"
+msgstr "Interface & Indices"
+
+msgid "Large HUD text"
+msgstr "Grand texte d'interface"
+
+msgid "Increases font size of the race timer, target name, and hint banners."
+msgstr "Augmente la taille de police du minuteur de course, du nom de la cible et des bannières d'indice."
+
+msgid "Keep hints visible"
+msgstr "Garder les indices visibles"
+
+msgid "Hint banners stay on screen until the race ends instead of fading after a few seconds."
+msgstr "Les bannières d'indice restent à l'écran jusqu'à la fin de la course au lieu de disparaître après quelques secondes."
+
+msgid "Audio & Visual"
+msgstr "Audio & Visuel"
+
+msgid "Show playing audio indicator"
+msgstr "Afficher l'indicateur audio en cours"
+
+msgid "Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."
+msgstr "Affiche une icône visuelle lorsque les éléments audio sont en cours de lecture. Aide les joueurs sourds/malentendants."
+
+msgid "Photosensitivity warning"
+msgstr "Avertissement de photosensibilité"
+
+msgid "Shows a warning before exhibits with flashing or strobing content."
+msgstr "Affiche un avertissement avant les expositions avec du contenu clignotant ou stroboscopique."
+
+msgid "HUD opacity"
+msgstr "Opacité de l'interface"
+
+msgid "Makes the race HUD more transparent to see more of the game world."
+msgstr "Rend l'interface de course plus transparente pour voir plus du monde du jeu."
+
+msgid "Motor"
+msgstr "Moteur"
+
+msgid "Hold to activate buttons"
+msgstr "Maintenir pour activer les boutons"
+
+msgid "Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."
+msgstr "Les boutons nécessitent un maintien de 0,5s au lieu d'un clic. Aide pour les problèmes de contrôle moteur."
+
+msgid "Accessibility"
+msgstr "Accessibilité"
+
+msgid "Play Game"
+msgstr "Jouer"
+
+msgid "Latest Changes"
+msgstr "Derniers changements"
+
+msgid "DedicatedHost"
+msgstr "Serveur dédié"
+
+msgid "Host Server"
+msgstr "Serveur dédié"
+
+msgid "Interface"
+msgstr "Interface"
+
+msgid "Reset to 100%"
+msgstr "Réinitialiser à 100%"
+
+msgid "UI Scale"
+msgstr "Échelle de l'interface"
+
+msgid "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
+msgstr "Met à l'échelle tous les menus, l'interface et les superpositions. Raccourcis : Ctrl+= / Ctrl+- / Ctrl+0"
+
+msgid "Show chat"
+msgstr "Afficher le chat"
+
+msgid "Hides the chat overlay while playing."
+msgstr "Masque la superposition du chat pendant le jeu."
+
+msgid "Typing sound"
+msgstr "Son de frappe"
+
+msgid "Plays a subtle sound on each keypress in the chat box."
+msgstr "Joue un son subtil à chaque frappe dans la boîte de chat."
+
+msgid "Open chat"
+msgstr "Ouvrir le chat"
+
+msgid "Press the button then press any key to rebind."
+msgstr "Appuyez sur le bouton puis sur une touche pour réassigner."

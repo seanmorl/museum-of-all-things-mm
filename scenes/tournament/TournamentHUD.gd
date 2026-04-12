@@ -10,6 +10,7 @@ var _round_label:   Label          = null
 var _name_label:    Label          = null   # tournament name sub-line
 var _list_vbox:     VBoxContainer  = null
 var _between_label: Label          = null
+var _bracket_hud:   Control        = null  # Reference to TournamentBracketHUD
 
 
 func _ready() -> void:
@@ -24,6 +25,22 @@ func _ready() -> void:
 	TournamentManager.standings_updated.connect(_on_standings_updated)
 	TournamentManager.tournament_ended.connect(_on_tournament_ended)
 	TournamentManager.tournament_cancelled.connect(_on_cancelled)
+
+
+func set_bracket_hud(bracket: Control) -> void:
+	_bracket_hud = bracket
+	if _bracket_hud and _bracket_hud.has_method("show_bracket"):
+		_bracket_hud.visible = false
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_TAB:
+		get_viewport().set_input_as_handled()
+		if _bracket_hud and _bracket_hud.has_method("show_bracket"):
+			if _bracket_hud.visible:
+				_bracket_hud.close_bracket()
+			else:
+				_bracket_hud.show_bracket()
 
 
 func _build_ui() -> void:

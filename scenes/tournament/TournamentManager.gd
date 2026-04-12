@@ -18,6 +18,7 @@ signal tournament_round_ended(round_num: int, winner_name: String, standings: Ar
 signal tournament_ended(champion_name: String, final_standings: Array)
 signal tournament_cancelled
 signal standings_updated(standings: Array)
+signal round_history_updated(history: Array)
 
 # ── Enums ─────────────────────────────────────────────────────────────────────
 enum Format { ROUNDS, FIRST_TO_N }
@@ -52,6 +53,9 @@ var _standings: Dictionary = {}
 var _round_finish_order: Array[int] = []
 var _round_in_progress:  bool       = false
 var _between_rounds:     bool       = false
+
+## Per-round history: [ { round_num, results: [ { peer_id, name, position, points_earned } ] } ]
+var _round_history: Array = []
 
 ## Twitch HTTP server (TCP)
 var _twitch_server: TCPServer = null
@@ -109,6 +113,11 @@ func get_config() -> Dictionary:
 		"active":      _active,
 	}
 
+func get_round_history() -> Array:
+	## Returns the per-round result history for bracket display.
+	## Each entry: { round_num, results: [ { peer_id, name, position, points_earned } ] }
+	return _round_history.duplicate(true)
+
 
 # ── Host: Start / Stop ────────────────────────────────────────────────────────
 
@@ -131,6 +140,7 @@ func host_start_tournament(config: Dictionary) -> void:
 	_current_round   = 0
 	_active          = true
 	_standings.clear()
+	_round_history.clear()
 
 	# Register all currently connected players
 	for peer_id in NetworkManager.get_player_list():
@@ -232,9 +242,12 @@ func _on_race_ended(winner_peer_id: int, winner_name: String) -> void:
 
 
 func _award_round_points(winner_time: float) -> void:
-	## Award points to all players based on finish order + points mode
+	## Award points to all players based on finish order + points mode.
+	## Only the winner has a meaningful finish time (RaceManager only tracks
+	## the winner's time). Non-winners get -1.0 recorded.
 	var podium_points := [3, 2, 1]   # PODIUM mode
 	var all_peers := NetworkManager.get_player_list()
+	var round_results: Array = []    # Per-round bracket data
 
 	for i in _round_finish_order.size():
 		var peer_id: int = _round_finish_order[i]
@@ -258,12 +271,22 @@ func _award_round_points(winner_time: float) -> void:
 		s.points += pts
 		if i == 0:
 			s.wins += 1
-		# Record finish time for this round
-		var finish_time: float = RaceManager.get_final_time() if i == 0 \
-			else -1.0   # Only winner time available without per-player tracking
+		# Record finish time. Only the winner has a meaningful time available
+		# (RaceManager tracks first-place finish only). All other finishers
+		# get -1.0 since we don't have per-player timestamps.
+		var finish_time: float = RaceManager.get_final_time() if i == 0 else -1.0
 		s.finish_times.append(finish_time)
 		if finish_time > 0 and (s.best_time <= 0 or finish_time < s.best_time):
 			s.best_time = finish_time
+
+		# Record per-round bracket data
+		round_results.append({
+			"peer_id":       peer_id,
+			"name":          s.name,
+			"color":         s.color,
+			"position":      i + 1,
+			"points_earned": pts,
+		})
 
 	# Players who didn't finish get 0 pts, still registered
 	for peer_id in all_peers:
@@ -271,6 +294,21 @@ func _award_round_points(winner_time: float) -> void:
 			if not _standings.has(peer_id):
 				_register_player(peer_id)
 			_standings[peer_id].finish_times.append(-1.0)
+			var s: Dictionary = _standings[peer_id]
+			round_results.append({
+				"peer_id":       peer_id,
+				"name":          s.name,
+				"color":         s.color,
+				"position":      _round_finish_order.size() + 1,  # DNF
+				"points_earned": 0,
+			})
+
+	# Save round to history
+	_round_history.append({
+		"round_num": _current_round,
+		"results":   round_results,
+	})
+	round_history_updated.emit(_round_history.duplicate(true))
 
 
 func _should_tournament_end() -> bool:
@@ -343,6 +381,7 @@ func _reset_state() -> void:
 	_round_in_progress = false
 	_between_rounds  = false
 	_standings.clear()
+	_round_history.clear()
 	_round_finish_order.clear()
 
 
@@ -360,6 +399,12 @@ func _rpc_sync_tournament_start(
 	_current_round   = 0
 	_active          = true
 	_standings.clear()
+	_round_history.clear()
+
+	# Register all currently connected players on this client too
+	for peer_id in NetworkManager.get_player_list():
+		_register_player(peer_id)
+
 	tournament_started.emit(get_config())
 
 
@@ -369,6 +414,13 @@ func _rpc_sync_round_started(round_num: int, total: int) -> void:
 	_round_in_progress = true
 	_between_rounds    = false
 	tournament_round_started.emit(round_num, total)
+
+	# Do NOT trigger _on_start_race_pressed() on clients.
+	# The host already called it from _start_next_round().  Clients receive
+	# vote candidate data via RaceManager._sync_vote_start (emitted when
+	# the host finishes fetching candidates). Calling _on_start_race_pressed()
+	# here would cause every client to independently fetch the same candidates
+	# from the Wikipedia API — wasting bandwidth and creating duplicate data.
 
 
 @rpc("authority", "call_local", "reliable")
@@ -413,7 +465,7 @@ func start_twitch_server() -> void:
 		push_error("TournamentManager: Could not start Twitch server on port %d" % TWITCH_PORT)
 		_twitch_server = null
 	else:
-		print("TournamentManager: Twitch overlay server listening on http://localhost:%d" % TWITCH_PORT)
+		Log.info("TournamentManager", "Twitch overlay server listening on http://localhost:%d" % TWITCH_PORT)
 
 
 func stop_twitch_server() -> void:

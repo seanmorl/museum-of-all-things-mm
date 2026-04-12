@@ -70,10 +70,10 @@ func init(museum: Node3D, config: Dictionary) -> void:
 		_signals_connected = true
 
 func _on_race_started(event: EventBus.RaceStartedEvent) -> void:
-	print("_on_race_started_called!");
-	destination = event.target;
+	Log.debug("ExhibitLoader", "_on_race_started_called!")
+	destination = event.target
 	if(destination == event.target):
-		print("Destination has been stored successfully");
+		Log.debug("ExhibitLoader", "Destination has been stored successfully")
 
 func get_exhibits() -> Dictionary:
 	return _exhibits
@@ -81,7 +81,7 @@ func get_exhibits() -> Dictionary:
 
 func _debug_log(msg: String) -> void:
 	if OS.is_debug_build():
-		print(msg)
+		Log.debug("ExhibitLoader", msg)
 
 func get_free_exhibit_height() -> int:
 	var height: int = _starting_height
@@ -89,7 +89,7 @@ func get_free_exhibit_height() -> int:
 		height += _height_increment
 	_used_exhibit_heights[height] = true
 	if OS.is_debug_build():
-		print("placing exhibit at height=", height)
+		Log.debug("ExhibitLoader", "placing exhibit at height=%d" % height)
 	return height
 
 
@@ -155,7 +155,7 @@ func load_exhibit_for_rider_without_hall(to_room: String, from_room: String) -> 
 	
 	# Check if we already have cached data (from server sync)
 	if ExhibitFetcher.has_result(to_room):
-		print("ExhibitLoader: Using cached data for '", to_room, "'")
+		Log.debug("ExhibitLoader", "Using cached data for '%s'" % to_room)
 		on_fetch_complete([to_room], {"title": to_room, "from_room": from_room})
 		return
 	
@@ -217,7 +217,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	var mood: int = data.get("mood", ExhibitMood.Mood.DEFAULT)
 
 	#inject target into doors array
-	print("Full list of doors: ", data.doors);
+	Log.debug("ExhibitLoader", "Full list of doors: %s" % [data.doors])
 	if(data.doors.has(destination)):
 		data.doors[2] = destination
 
@@ -256,6 +256,10 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 		_exhibits[context.title] = { "entry": new_exhibit.entry, "exhibit": new_exhibit, "height": exhibit_height, "mood": mood }
 		_exhibit_hist.append(context.title)
 
+		# Spawn mood-based particle effects
+		if ParticleEffectsManager:
+			ParticleEffectsManager.apply_mood_particles(new_exhibit, mood, GraphicsManager.particles_intensity)
+
 		# Link halls if we have exit context (critical for door teleportation!)
 		if is_instance_valid(hall):
 			link_halls(new_exhibit.entry, hall)
@@ -270,10 +274,10 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 			call_deferred("_cleanup_old_exhibits", new_exhibit.title)
 	else:
 		# Exhibit already exists - still emit signal so waiters don't hang
-		print("ExhibitLoader: Exhibit '", context.title, "' already exists, emitting signal anyway")
+		Log.debug("ExhibitLoader", "Exhibit '%s' already exists, emitting signal anyway" % context.title)
 
 	# ALWAYS emit signal (whether new or existing exhibit)
-	print("ExhibitLoader: Emitting exhibit_loaded signal for '", context.title, "'")
+	Log.debug("ExhibitLoader", "Emitting exhibit_loaded signal for '%s'" % context.title)
 	exhibit_loaded.emit(context.title)
 
 	# Clear loading flag after exhibit exists (handles both new and duplicate fetch cases)
@@ -500,7 +504,7 @@ func _add_item_at_slot(exhibit: Node3D, item_data: Dictionary, slot: Array) -> v
 
 func erase_exhibit(key: String) -> void:
 	if OS.is_debug_build():
-		print("erasing exhibit ", key)
+		Log.debug("ExhibitLoader", "erasing exhibit %s" % key)
 	_exhibits[key].exhibit.queue_free()
 	release_exhibit_height(_exhibits[key].height)
 	_museum._global_item_queue_map.erase(key)

@@ -74,11 +74,13 @@ static func ring(dark: bool) -> Color:
 
 ## Success / green
 static func ok(dark: bool) -> Color:
-	return Color(0.184, 0.620, 0.353, 1.0)
+	return Color(0.25, 0.72, 0.42, 1.0) if dark \
+	       else Color(0.184, 0.620, 0.353, 1.0)
 
 ## Danger / red
 static func err(dark: bool) -> Color:
-	return Color(0.863, 0.208, 0.271, 1.0)
+	return Color(0.92, 0.30, 0.35, 1.0) if dark \
+	       else Color(0.863, 0.208, 0.271, 1.0)
 
 ## Daily challenge accent
 static func daily(dark: bool) -> Color:

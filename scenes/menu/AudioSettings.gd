@@ -41,7 +41,7 @@ func _populate_voices() -> void:
 	if voices == null or voices.size() == 0:
 		tts_voice.add_item("No TTS voices available")
 		tts_voice.disabled = true
-		print("[AudioSettings] No TTS voices available")
+		Log.debug("AudioSettings", "No TTS voices available")
 		return
 
 	# System voices are dictionaries: {id, name, language}
@@ -51,7 +51,7 @@ func _populate_voices() -> void:
 		tts_voice.add_item(display_name)
 
 	tts_voice.disabled = false
-	print("[AudioSettings] Loaded %d system TTS voices" % voices.size())
+	Log.debug("AudioSettings", "Loaded %d system TTS voices" % voices.size())
 
 
 func _apply_settings(settings: Dictionary) -> void:
@@ -117,7 +117,7 @@ func _on_tts_voice_item_selected(index: int) -> void:
 		var voice_id = voice_data.id if voice_data is Dictionary else voice_data
 		if voice_id and not voice_id.is_empty():
 			TTSManager.set_voice(voice_id)
-			print("[AudioSettings] Voice changed to: ", voice_id)
+			Log.debug("AudioSettings", "Voice changed to: %s" % voice_id)
 
 
 func _on_tts_speed_changed(value: float) -> void:

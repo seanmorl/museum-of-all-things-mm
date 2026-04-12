@@ -43,6 +43,7 @@ var _resolution_option: OptionButton = null
 ## Post-processing options
 @onready var post_processing_effect: OptionButton = %PostProcessingEffect
 @onready var enable_glow: CheckBox = %EnableGlow
+@onready var enable_particles: CheckBox = %EnableParticles
 
 ## Anti-Aliasing options
 @onready var msaa_option: OptionButton = %MSAAOption
@@ -207,6 +208,7 @@ func _apply_overall_quality(level: int) -> void:
 			e.ssr_enabled  = false
 			e.glow_enabled = false
 			e.volumetric_fog_enabled = false
+			GraphicsManager.particles_enabled = false
 			_apply_tonemap_preset(1)   # Reinhard — cheap
 			_apply_ssao_preset(0)
 		1: # Medium
@@ -222,6 +224,7 @@ func _apply_overall_quality(level: int) -> void:
 			e.ssr_enabled  = false
 			e.glow_enabled = true
 			e.volumetric_fog_enabled = false
+			GraphicsManager.particles_enabled = true
 			_apply_tonemap_preset(1)   # Reinhard
 			_apply_ssao_preset(1)
 		2: # High
@@ -237,6 +240,7 @@ func _apply_overall_quality(level: int) -> void:
 			e.ssr_enabled  = true
 			e.glow_enabled = true
 			e.volumetric_fog_enabled = false
+			GraphicsManager.particles_enabled = true
 			_apply_tonemap_preset(2)   # Filmic
 			_apply_ssao_preset(2)
 		3: # Ultra
@@ -252,6 +256,7 @@ func _apply_overall_quality(level: int) -> void:
 			e.ssr_enabled  = true
 			e.glow_enabled = true
 			e.volumetric_fog_enabled = true
+			GraphicsManager.particles_enabled = true
 			_apply_tonemap_preset(3)   # Filmic Bright
 			_apply_ssao_preset(3)
 
@@ -274,6 +279,7 @@ func _apply_overall_quality(level: int) -> void:
 	enable_reflections.button_pressed = e.ssr_enabled
 	enable_glow.button_pressed     = e.glow_enabled
 	enable_volumetric_fog.button_pressed = e.volumetric_fog_enabled
+	enable_particles.button_pressed = GraphicsManager.particles_enabled
 
 
 func _style_option_button(btn: OptionButton) -> void:
@@ -751,6 +757,7 @@ func _connect_new_signals() -> void:
 	enable_ssao.toggled.connect(_on_enable_ssao_toggled)
 	enable_glow.toggled.connect(_on_enable_glow_toggled)
 	enable_volumetric_fog.toggled.connect(_on_enable_volumetric_fog_toggled)
+	enable_particles.toggled.connect(_on_enable_particles_toggled)
 
 
 # =============================================================================
@@ -790,6 +797,7 @@ func _load_settings() -> void:
 		reflection_quality_value.text = "%d" % int(e.ssr_max_steps)
 	enable_ssao.button_pressed = e.ssao_enabled
 	enable_glow.button_pressed = e.glow_enabled
+	enable_particles.button_pressed = GraphicsManager.particles_enabled
 	
 	if _ssr_roughness_check and "ssr_roughness" in e:
 		_ssr_roughness_check.button_pressed = e.get("ssr_roughness")
@@ -971,3 +979,7 @@ func _on_enable_glow_toggled(on: bool) -> void:
 
 func _on_enable_volumetric_fog_toggled(on: bool) -> void:
 	GraphicsManager.set_volumetric_fog_enabled(on)
+
+func _on_enable_particles_toggled(on: bool) -> void:
+	GraphicsManager.particles_enabled = on
+	GraphicsManager.save_settings()

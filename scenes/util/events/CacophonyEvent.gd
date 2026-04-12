@@ -8,25 +8,25 @@ static func apply() -> void:
 	# Find all audio sources in current exhibit and play them simultaneously
 	var museum = Engine.get_main_loop().current_scene.get_node_or_null("Museum")
 	if not museum:
-		print("[CacophonyEvent] Failed: Museum not found")
+		Log.error("CacophonyEvent", "Museum not found")
 		return
-	
-	print("[CacophonyEvent] Applied: ALL THE SOUNDS AT ONCE!")
-	
+
+	Log.info("CacophonyEvent", "Applied: ALL THE SOUNDS AT ONCE!")
+
 	# Find all AudioStreamPlayer3D nodes in the current exhibit
 	for audio_player in museum.get_tree().get_nodes_in_group("audio"):
 		if audio_player is AudioStreamPlayer3D:
 			if audio_player.stream and not audio_player.playing:
 				audio_player.play()
 				_playing_sounds.append(audio_player)
-	
+
 	# Also find any Gramophone items
 	for gramophone in museum.get_tree().get_nodes_in_group("gramophone"):
 		if gramophone.has_method("play"):
 			gramophone.play()
 			_playing_sounds.append(gramophone)
-	
-	print("[CacophonyEvent] Playing %d sounds simultaneously! CHAOS!" % _playing_sounds.size())
+
+	Log.info("CacophonyEvent", "Playing %d sounds simultaneously! CHAOS!" % _playing_sounds.size())
 
 static func end() -> void:
 	# Stop all sounds
@@ -34,9 +34,9 @@ static func end() -> void:
 		if is_instance_valid(sound):
 			if sound.has_method("stop"):
 				sound.stop()
-	
+
 	_playing_sounds.clear()
-	print("[CacophonyEvent] Ended: Silence at last")
+	Log.info("CacophonyEvent", "Silence at last")
 
 static func get_duration() -> float:
 	return randf_range(20.0, 40.0)

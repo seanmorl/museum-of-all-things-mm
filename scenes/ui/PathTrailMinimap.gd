@@ -122,7 +122,7 @@ func _on_race_started(target_article: String, start_article: String) -> void:
 	_target      = target_article
 	_start       = start_article
 	_race_active = true
-	_visited.clear()
+	# Don't clear _visited — keep exploration trail as the race starting context.
 	_last_room   = ""
 	_elapsed_str = "00:00"
 	_update_footer()
@@ -152,8 +152,7 @@ func _on_room_changed(room: Variant) -> void:
 	var r : String = str(room)
 	if r == "" or r == "Lobby" or r == _last_room:
 		return
-	if not _race_active:
-		return
+	# Track all visits — not just during races — so the trail is always populated.
 	_last_room = r
 	if not _visited.has(r):
 		_visited.append(r)
@@ -189,12 +188,13 @@ func _apply_theme() -> void:
 
 func _update_footer() -> void:
 	if not _footer_lbl: return
-	if not _race_active:
-		_footer_lbl.text = "No active race"
-		return
-	var hops := _visited.size()
-	_footer_lbl.text = "%s  ·  %d hop%s" % [
-		_elapsed_str, hops, "s" if hops != 1 else ""]
+	if _race_active:
+		var hops := _visited.size()
+		_footer_lbl.text = "%s  ·  %d hop%s" % [
+			_elapsed_str, hops, "s" if hops != 1 else ""]
+	else:
+		var n := _visited.size()
+		_footer_lbl.text = "Exploring  ·  %d room%s" % [n, "s" if n != 1 else ""]
 
 
 # ── Draw ───────────────────────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ func _draw_trail() -> void:
 		if _font:
 			_canvas.draw_string(_font,
 				Vector2(LINE_X + 14.0, sz.y * 0.48),
-				"Start a race to\nsee your path here",
+				"Move around to\nsee your trail here",
 				HORIZONTAL_ALIGNMENT_LEFT, sz.x - LINE_X - 20.0, 10,
 				Color(accent, 0.38))
 		return

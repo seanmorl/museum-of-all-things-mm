@@ -8,6 +8,9 @@ signal server_disconnected
 signal player_info_updated(id: int)
 signal player_room_changed(id: int, room: String)
 
+# Extended disconnect signal with reason for better UI feedback
+signal disconnected_with_reason(reason: String)
+
 const DEFAULT_PORT := Constants.DEFAULT_PORT
 const MAX_PLAYERS := Constants.MAX_PLAYERS
 
@@ -45,9 +48,31 @@ var _state_check_timer: float = 0.0
 const _STATE_CHECK_INTERVAL: float = 10.0  # Check every 10 seconds
 var _local_state_hash: String = ""
 var _last_migration_time: int = 0  # Rate limiting for host migration
+var _migration_pending: bool = false  # Track if migration is in progress
+var _migration_timer: float = 0.0  # Timeout for migration
+const _MIGRATION_TIMEOUT: float = 15.0  # Seconds before migration fails
+
+# Connection attempt watchdog — ENet doesn't fire connection_failed if the
+# server is completely unreachable (no route / firewall drop). We need our
+# own timeout so the UI isn't left hanging forever.
+var _connecting: bool = false
+var _connection_watchdog_timer: float = 0.0
+const _CONNECTION_TIMEOUT: float = 15.0  # Seconds before we give up connecting
 
 
 func _process(delta: float) -> void:
+	# Connection watchdog — runs even when multiplayer isn't fully active
+	if _connecting:
+		_connection_watchdog_timer += delta
+		if _connection_watchdog_timer >= _CONNECTION_TIMEOUT:
+			Log.error("Network", "Connection attempt timed out after %.0fs" % _connection_watchdog_timer)
+			_connecting = false
+			_connection_watchdog_timer = 0.0
+			_cleanup_connection()
+			disconnected_with_reason.emit("Connection timed out — server unreachable")
+			if not connection_failed.is_connected(_noop):
+				connection_failed.emit()
+
 	if not is_multiplayer_active():
 		return
 	
@@ -69,6 +94,15 @@ func _process(delta: float) -> void:
 		if _state_check_timer >= _STATE_CHECK_INTERVAL:
 			_validate_game_state()
 			_state_check_timer = 0.0
+	
+	# Migration timeout check (clients waiting for new host)
+	if _migration_pending and not is_hosting:
+		_migration_timer += delta
+		if _migration_timer >= _MIGRATION_TIMEOUT:
+			Log.error("Network", "Host migration timed out (%.0fs)" % _migration_timer)
+			_migration_pending = false
+			_migration_timer = 0.0
+			_cleanup_connection()
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -158,6 +192,11 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
 		Log.warn("Network", "ENet create_client failed: %s" % error_string(error))
 		return error
 
+	# Start the connection watchdog — ENet won't fire connection_failed if
+	# the server never responds (firewall drop, wrong IP, etc.)
+	_connecting = true
+	_connection_watchdog_timer = 0.0
+
 	multiplayer.multiplayer_peer = peer
 	is_hosting = false
 
@@ -177,6 +216,8 @@ func _is_ip_address(s: String) -> bool:
 
 
 func disconnect_from_game() -> void:
+	_connecting = false
+	_connection_watchdog_timer = 0.0
 	if peer:
 		peer.close()
 		peer = null
@@ -411,8 +452,7 @@ func _receive_player_info(peer_id: int, player_name: String, color_html: String,
 
 
 func _on_peer_connected(id: int) -> void:
-	Log.info("Network", "Peer connected: %d" % id)
-	print("NetworkManager: _on_peer_connected - id=%d, player_info before=%s" % [id, str(player_info.keys())])
+	Log.info("Network", "Peer connected: %d, player_info before=%s" % [id, str(player_info.keys())])
 
 	# Set timeout immediately on connection — must happen here (not just in Main.gd)
 	# because Main.gd's peer_connected handler skips setup when game hasn't started yet.
@@ -460,6 +500,8 @@ func _on_peer_disconnected(id: int) -> void:
 
 func _on_connected_to_server() -> void:
 	Log.debug("Network", "Connected to server")
+	_connecting = false
+	_connection_watchdog_timer = 0.0
 
 	# Set timeout on the server peer (id=1) from the client side.
 	# Call it immediately and also deferred — peer.get_peer(1) can return null
@@ -472,6 +514,7 @@ func _on_connected_to_server() -> void:
 		"name": local_player_name,
 		"color": local_player_color,
 		"skin_url": local_player_skin,
+		"pronouns": local_player_pronouns,
 		"current_room": "Lobby"
 	}
 	connection_succeeded.emit()
@@ -487,12 +530,17 @@ func _apply_server_timeout() -> void:
 
 func _on_connection_failed() -> void:
 	Log.warn("Network", "Connection failed")
+	_connecting = false
+	_connection_watchdog_timer = 0.0
 	peer = null
 	multiplayer.multiplayer_peer = null
+	disconnected_with_reason.emit("Connection failed")
 	connection_failed.emit()
 
 func _on_server_disconnected() -> void:
 	Log.info("Network", "Server disconnected")
+	_connecting = false
+	_connection_watchdog_timer = 0.0
 
 	# Clients should NOT attempt self-migration — this is insecure.
 	# Host migration is only initiated by the server via _request_host_migration.
@@ -503,6 +551,7 @@ func _on_server_disconnected() -> void:
 	player_info.clear()
 	is_hosting = false
 	is_dedicated_server = false
+	disconnected_with_reason.emit("Host disconnected")
 	server_disconnected.emit()
 
 func _elect_and_migrate_host(connected_peers: Array) -> void:
@@ -528,17 +577,21 @@ func _get_connected_peers() -> Array:
 	return peers
 
 func _cleanup_connection() -> void:
-	"""Clean up connection and emit disconnect"""
+	"""Clean up connection and emit disconnect with reason"""
+	_connecting = false
+	_connection_watchdog_timer = 0.0
 	peer = null
 	multiplayer.multiplayer_peer = null
 	player_info.clear()
 	is_hosting = false
 	is_dedicated_server = false
+	disconnected_with_reason.emit("Connection cleaned up")
 	server_disconnected.emit()
 
-@rpc("any_peer", "call_remote", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _request_host_migration() -> void:
-	"""Called by clients to request becoming the new host"""
+	"""Called by clients to request becoming the new host.
+	Uses call_local so the HOST (not the sender) processes the migration."""
 	if not is_hosting:
 		return  # Only current host processes migration requests
 
@@ -559,6 +612,10 @@ func _request_host_migration() -> void:
 		Log.warn("Network", "Host migration rate limited (last was %d ms ago)" % (now - _last_migration_time))
 		return
 	_last_migration_time = now
+	
+	# Mark migration as pending with timeout
+	_migration_pending = true
+	_migration_timer = 0.0
 
 	Log.info("Network", "Transferring host to peer %d" % requesting_peer)
 
@@ -572,21 +629,33 @@ func _request_host_migration() -> void:
 	# We become a client now
 	is_hosting = false
 
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _transfer_host_state(game_state: Dictionary) -> void:
-	"""New host receives all game state"""
+	"""New host receives all game state.
+	Uses any_peer because the old host (not authority) sends this to the new host."""
 	Log.info("Network", "Received host state, becoming host...")
 	_deserialize_game_state(game_state)
 
 @rpc("authority", "call_local", "reliable")
 func _make_peer_host(peer_id: int) -> void:
 	"""Tell a peer they are now the host"""
+	_migration_pending = false
+	_migration_timer = 0.0
 	is_hosting = true
 	Log.info("Network", "Now hosting! Peer ID: %d" % peer_id)
-	
+
+	# Close old peer before creating new one to prevent resource leaks
+	if multiplayer.has_multiplayer_peer():
+		multiplayer.multiplayer_peer.close()
+
 	# Reinitialize as server
 	peer = ENetMultiplayerPeer.new()
-	peer.create_server(_host_port, MAX_PLAYERS)
+	var err := peer.create_server(_host_port, MAX_PLAYERS)
+	if err != OK:
+		Log.error("Network", "Failed to create server on port %d: error %d" % [_host_port, err])
+		is_hosting = false
+		peer = null
+		return
 	multiplayer.multiplayer_peer = peer
 
 func _serialize_game_state() -> Dictionary:
@@ -672,8 +741,13 @@ func _resync_client(peer_id: int) -> void:
 	_send_full_state.rpc_id(peer_id, game_state)
 	Log.info("Network", "Sent full state to peer %d for resync" % peer_id)
 
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _send_full_state(peer_id: int, game_state: Dictionary) -> void:
-	"""Receive full state from server and resync"""
+	"""Receive full state from server and resync.
+	Uses call_local so the RECEIVING client deserializes the state."""
 	_deserialize_game_state(game_state)
 	Log.info("Network", "Client resync complete")
+
+
+func _noop() -> void:
+	pass  # Placeholder for signal connection checks

@@ -152,4 +152,4 @@ func t_start() -> void:
 func t_end(msg: String) -> void:
 	var _time_end := Time.get_ticks_usec()
 	var elapsed := _time_end - _time_start
-	print("elapsed=%s msg=%s" % [elapsed / 1000000.0, msg])
+	Log.debug("Util", "elapsed=%s msg=%s" % [elapsed / 1000000.0, msg])

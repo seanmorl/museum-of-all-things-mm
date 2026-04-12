@@ -5,12 +5,12 @@ extends RefCounted
 static func apply() -> void:
 	# Set global speed modifier
 	RaceManager.set_global_speed_modifier(1.5)
-	print("[SpeedUpEvent] Applied: 1.5x speed")
+	Log.info("SpeedUpEvent", "Applied: 1.5x speed")
 
 static func end() -> void:
 	# Restore normal speed
 	RaceManager.set_global_speed_modifier(1.0)
-	print("[SpeedUpEvent] Ended")
+	Log.info("SpeedUpEvent", "Speed restored")
 
 static func get_duration() -> float:
 	return randf_range(20.0, 30.0)

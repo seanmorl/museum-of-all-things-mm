@@ -19,10 +19,10 @@ static func apply() -> void:
 	if camera:
 		_shake_nodes.append(camera)
 		_original_positions[camera] = camera.transform
-		print("[EarthquakeEvent] Found camera, adding to shake nodes")
+		Log.debug("EarthquakeEvent", "Found camera, adding to shake nodes")
 	else:
-		print("[EarthquakeEvent] WARNING: No camera found!")
-	
+		Log.warn("EarthquakeEvent", "No camera found!")
+
 	# Mark all physics objects for shaking
 	var shakeable_count = 0
 	for body in Engine.get_main_loop().get_nodes_in_group("shakeable"):
@@ -30,20 +30,20 @@ static func apply() -> void:
 			_shake_nodes.append(body)
 			_original_positions[body] = body.transform
 			shakeable_count += 1
-	
-	print("[EarthquakeEvent] Applied: Earthquake started (shaking %d nodes)" % _shake_nodes.size())
+
+	Log.info("EarthquakeEvent", "Applied: Earthquake started (shaking %d nodes)" % _shake_nodes.size())
 
 static func _process_shake(_delta: float) -> void:
 	if not _shake_active:
 		return
-	
+
 	_shake_timer += _delta
-	
+
 	# Shake all nodes
 	for node in _shake_nodes:
 		if not is_instance_valid(node):
 			continue
-		
+
 		if node is Camera3D:
 			# Camera shake - offset position (MORE VISIBLE)
 			var original = _original_positions.get(node, Transform3D())
@@ -54,7 +54,7 @@ static func _process_shake(_delta: float) -> void:
 			)
 			node.transform = original
 			node.transform.origin += shake_offset
-		
+
 		elif node is RigidBody3D:
 			# Physics body shake - apply STRONGER random impulses
 			if _shake_timer > _shake_timer - _delta:  # Every frame
@@ -81,7 +81,7 @@ static func end() -> void:
 	_shake_nodes.clear()
 	_shake_timer = 0.0
 	_original_positions.clear()
-	print("[EarthquakeEvent] Ended: Earthquake stopped")
+	Log.info("EarthquakeEvent", "Earthquake stopped")
 
 static func get_duration() -> float:
 	return randf_range(20.0, 35.0)

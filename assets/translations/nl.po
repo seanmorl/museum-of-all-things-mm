@@ -1,0 +1,619 @@
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Museum of All Things\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: nl\n"
+
+msgid "Enter the Museum"
+msgstr "Betreed het Museum"
+
+msgid "Settings"
+msgstr "Instellingen"
+
+msgid "Quit"
+msgstr "Afsluiten"
+
+msgid "The museum is currently unstaffed. Please refer to signage for information."
+msgstr "Het museum heeft momenteel geen personeel. Raadpleeg de borden voor informatie."
+
+msgid "English"
+msgstr "English"
+
+msgid "Spanish"
+msgstr "Español"
+
+msgid "Portuguese"
+msgstr "Português"
+
+msgid "French"
+msgstr "Français"
+
+msgid "Japanese"
+msgstr "日本語"
+
+msgid "Chinese"
+msgstr "中文"
+
+msgid "German"
+msgstr "Deutsch"
+
+msgid "Bengali"
+msgstr "বাংলা"
+
+msgid "Russian"
+msgstr "Русский"
+
+msgid "Italian"
+msgstr "Italiano"
+
+msgid "Polish"
+msgstr "Polski"
+
+msgid "Korean"
+msgstr "한국어"
+
+msgid "Dutch"
+msgstr "Nederlands"
+
+msgid "Are you sure you want to Quit?"
+msgstr "Weet u zeker dat u wilt afsluiten?"
+
+msgid "Yes"
+msgstr "Ja"
+
+msgid "No"
+msgstr "Nee"
+
+msgid "Open Page in Browser"
+msgstr "Pagina openen in browser"
+
+msgid "Paused"
+msgstr "Gepauzeerd"
+
+msgid " - Paused"
+msgstr " — Gepauzeerd"
+
+msgid "Lobby"
+msgstr "Lobby"
+
+msgid "Resume"
+msgstr "Hervatten"
+
+msgid "Return to Lobby"
+msgstr "Terug naar de lobby"
+
+msgid "Enter Exhibit Name"
+msgstr "Voer tentoonstellingsnaam in"
+
+msgid "Go to Random Exhibit"
+msgstr "Ga naar een willekeurige tentoonstelling"
+
+msgid "Enter exhibit title"
+msgstr "Voer de titel van de tentoonstelling in"
+
+msgid "Confirm"
+msgstr "Bevestigen"
+
+msgid "Back"
+msgstr "Terug"
+
+msgid "Exhibit Found: \"\""
+msgstr "Tentoonstelling gevonden: \"\""
+
+msgid "OK / Exit"
+msgstr "OK / Afsluiten"
+
+msgid "VR Controls"
+msgstr "VR-bediening"
+
+msgid "Restore Default Settings"
+msgstr "Standaardinstellingen herstellen"
+
+msgid "Movement Style"
+msgstr "Bewegingsstijl"
+
+msgid "Teleportation (Left Trigger)"
+msgstr "Teleportatie (linkertrigger)"
+
+msgid "Direct Movement (Left Analog Stick)"
+msgstr "Directe beweging (linker analoge stick)"
+
+msgid "Direct Movement Speed"
+msgstr "Snelheid directe beweging"
+
+msgid "Camera Rotation Increment (Right Stick)"
+msgstr "Camerarotatie stap (rechter stick)"
+
+msgid "Smooth Camera Rotation"
+msgstr "Soepele camerarotatie"
+
+msgid "Preparing Exhibit..."
+msgstr "Tentoonstelling voorbereiden..."
+
+msgid "Error Loading Exhibit."
+msgstr "Fout bij laden van tentoonstelling."
+
+msgid "Graphics"
+msgstr "Grafisch"
+
+msgid "Audio"
+msgstr "Audio"
+
+msgid "Data"
+msgstr "Gegevens"
+
+msgid "Controls"
+msgstr "Bediening"
+
+msgid "Data Settings"
+msgstr "Gegevensinstellingen"
+
+msgid "Cache"
+msgstr "Cache"
+
+msgid "Clear Cache"
+msgstr "Cache wissen"
+
+msgid "Cache Size Limit"
+msgstr "Cachegrootte beperken"
+
+msgid "Automatically limit cache size (on quit)"
+msgstr "Cachegrootte automatisch beperken (bij afsluiten)"
+
+msgid "Graphics Settings"
+msgstr "Grafische instellingen"
+
+msgid "Render Scale"
+msgstr "Weergaveschaal"
+
+msgid "Fullscreen"
+msgstr "Volledig scherm"
+
+msgid "Reflection Quality"
+msgstr "Reflectiekwaliteit"
+
+msgid "Enable Reflections"
+msgstr "Reflecties inschakelen"
+
+msgid "Ambient Light Level"
+msgstr "Omgevingslichtniveau"
+
+msgid "Enable Indirect Lighting (SSIL)"
+msgstr "Indirecte verlichting inschakelen (SSIL)"
+
+msgid "Render Distance"
+msgstr "Weergaveafstand"
+
+msgid "Fog"
+msgstr "Mist"
+
+msgid "Maximum FPS"
+msgstr "Maximale FPS"
+
+msgid "Enable Fog"
+msgstr "Mist inschakelen"
+
+msgid "Enable V-Sync"
+msgstr "V-Sync inschakelen"
+
+msgid "Limit FPS"
+msgstr "FPS beperken"
+
+msgid "Post-Processing Effect"
+msgstr "Post-processing effect"
+
+msgid "None"
+msgstr "Geen"
+
+msgid "CRT Filter"
+msgstr "CRT-filter"
+
+msgid "Control Settings"
+msgstr "Bedieningsinstellingen"
+
+msgid "Mouse Sensitivity"
+msgstr "Muisgevoeligheid"
+
+msgid "Invert Y-axis"
+msgstr "Y-as omkeren"
+
+msgid "Remap Inputs"
+msgstr "Invoer opnieuw toewijzen"
+
+msgid "Move Forward"
+msgstr "Vooruit"
+
+msgid "Move Back"
+msgstr "Achteruit"
+
+msgid "Strafe Left"
+msgstr "Links schuinen"
+
+msgid "Strafe Right"
+msgstr "Rechts schuinen"
+
+msgid "Jump"
+msgstr "Springen"
+
+msgid "Crouch"
+msgstr "Bukken"
+
+msgid "Interact"
+msgstr "Interactie"
+
+msgid "Joypad Camera Deadzone"
+msgstr "Dode zone gamepadcamera"
+
+msgid "Audio Settings"
+msgstr "Audio-instellingen"
+
+msgid "Global Volume"
+msgstr "Algemeen volume"
+
+msgid "Sound Effects Volume"
+msgstr "Geluidseffecten volume"
+
+msgid "Ambience Volume"
+msgstr "Sfeervolume"
+
+msgid "Music Volume"
+msgstr "Muziekvolume"
+
+msgid "Enter VR"
+msgstr "VR betreden"
+
+msgid "Snap turning:"
+msgstr "Snel draaien:"
+
+msgid "Y axis dead zone"
+msgstr "Dode zone Y-as"
+
+msgid "X axis dead zone"
+msgstr "Dode zone X-as"
+
+msgid "Haptics Scale"
+msgstr "Haptische intensiteit"
+
+msgid "Apply"
+msgstr "Toepassen"
+
+msgid "Reset"
+msgstr "Herstellen"
+
+msgid "Height adjust:"
+msgstr "Hoogte aanpassen:"
+
+msgid "WebXR primary:"
+msgstr "WebXR primair:"
+
+msgid "Auto"
+msgstr "Auto"
+
+msgid "Thumbstick"
+msgstr "Duimstick"
+
+msgid "Trackpad"
+msgstr "Trackpad"
+
+msgid "Technology"
+msgstr "Technologie"
+
+msgid "Featured Technology Exhibits"
+msgstr "Uitgelichte technologietentoonstellingen"
+
+msgid "Science"
+msgstr "Wetenschap"
+
+msgid "Featured Science Exhibits"
+msgstr "Uitgelichte wetenschapstentoonstellingen"
+
+msgid "Geography"
+msgstr "Geografie"
+
+msgid "Featured Geography Exhibits"
+msgstr "Uitgelichte geografietentoonstellingen"
+
+msgid "Culture"
+msgstr "Cultuur"
+
+msgid "Featured Culture Exhibits"
+msgstr "Uitgelichte cultuurtentoonstellingen"
+
+msgid "Art"
+msgstr "Kunst"
+
+msgid "Featured Art Exhibits"
+msgstr "Uitgelichte kunsttentoonstellingen"
+
+msgid "People"
+msgstr "Mensen"
+
+msgid "Featured People Exhibits"
+msgstr "Uitgelichte personententoonstellingen"
+
+msgid "History"
+msgstr "Geschiedenis"
+
+msgid "Featured History Exhibits"
+msgstr "Uitgelichte geschiedenistentoonstellingen"
+
+msgid "Media"
+msgstr "Media"
+
+msgid "Featured Media Exhibits"
+msgstr "Uitgelichte mediatentoonstellingen"
+
+msgid "Search"
+msgstr "Zoeken"
+
+msgid "Featured Search Exhibits"
+msgstr "Zoek tentoonstellingen"
+
+msgid ""
+"[b]Welcome to the Museum of All Things![/b]\n"
+"\n"
+"[fill]This museum is different from any you've visited in the physical world, so it may take a moment to get your bearings.[/fill]\n"
+"\n"
+"[b]The Lobby[/b]\n"
+"\n"
+"[fill]Right now you are in the museum's lobby, tailored to give you a pleasant starting point on your visit. If you ever wish to return here, you may simply open your museum menu (via \"Escape,\" \"Start,\" or by hitting \"Y\" on your right-hand controller in Virtual Reality) and select \"Return to Lobby.\"\n"
+"\n"
+"The lobby is divided into areas by subject, which are marked by signs and indicated on the maps in the entry hall behind you. In each of these areas, you will find many hallways into a range of fascinating exhibits.[/fill]"
+msgstr ""
+"[b]Welkom bij het Museum van Alle Dingen![/b]\n"
+"\n"
+"[fill]Dit museum is anders dan elk museum dat u in de echte wereld heeft bezocht, dus het kan even duren voordat u de weg heeft gevonden.[/fill]\n"
+"\n"
+"[b]De Lobby[/b]\n"
+"\n"
+"[fill]Op dit moment bevindt u zich in de lobby van het museum, ontworpen om u een aangenaam startpunt voor uw bezoek te bieden. Als u ooit hierheen wilt terugkeren, opent u eenvoudig het museummenu (via \"Escape\", \"Start\" of door op \"Y\" te drukken op de rechtercontroller in Virtual Reality) en selecteert u \"Terug naar de lobby\".\n"
+"\n"
+"De lobby is verdeeld in gebieden per onderwerp, aangegeven door borden en op de kaarten in de ontvangshal achter u. In elk van deze gebieden vindt u vele gangen naar een reeks fascinerende tentoonstellingen.[/fill]"
+
+msgid ""
+"[b]Museum Exhibits[/b]\n"
+"\n"
+"[fill]Exhibits are not made by hand-- they are generated procedurally by pulling images and textual data from Wikipedia and Wikimedia commons. This means any topic with a Wikipedia page can also be accessed as an exhibit in this museum!\n"
+"\n"
+"Furthermore, each exhibit contains many hallways connecting it to other exhibits. These hallways are determined based on the links in the current exhibit's Wikipedia article. You can move from exhibit to exhibit endlessly, following your curiosity.\n"
+"\n"
+"If you prefer to go straight to a particular subject, you may access the search terminal, at the end of the entry hall directly behind you. Simply enter your topic of interest into the terminal's interface, and it will create a hallway for you to walk straight there.[/fill]"
+msgstr ""
+"[b]Museumtentoonstellingen[/b]\n"
+"\n"
+"[fill]Tentoonstellingen worden niet met de hand gemaakt — ze worden procedureel gegenereerd door afbeeldingen en tekstgegevens op te halen uit Wikipedia en Wikimedia Commons. Dit betekent dat elk onderwerp met een Wikipedia-pagina ook als tentoonstelling in dit museum kan worden bezocht!\n"
+"\n"
+"Bovendien bevat elke tentoonstelling vele gangen die deze verbinden met andere tentoonstellingen. Deze gangen worden bepaald op basis van de links in het Wikipedia-artikel van de huidige tentoonstelling. U kunt eindeloos van tentoonstelling naar tentoonstelling gaan, uw nieuwsgierigheid volgend.\n"
+"\n"
+"Als u liever direct naar een bepaald onderwerp gaat, kunt u de zoekterminal gebruiken aan het einde van de ontvangshal direct achter u. Voer gewoon uw onderwerp van interesse in de interface van de terminal in, en er wordt een gang gecreëerd die u er recht naartoe leidt.[/fill]"
+
+msgid ""
+"Welcome to the MoAT Custom Exhibit Terminal\n"
+"\n"
+"You may access a specific exhibit by selecting \"Enter Exhibit Name.\" Alternatively, you may ask for a random exhibit.\n"
+"\n"
+"Hit \"E\" on your keyboard to interact with the terminal, or press Y/△ if you are using a controller.\n"
+"\n"
+msgstr ""
+"Welkom bij de MoAT zoekterminal voor tentoonstellingen\n"
+"\n"
+"U kunt een specifieke tentoonstelling bezoeken door \"Voer tentoonstellingsnaam in\" te selecteren. U kunt ook een willekeurige tentoonstelling opvragen.\n"
+"\n"
+"Druk op \"E\" op uw toetsenbord om met de terminal te interacteren, of op Y/△ als u een controller gebruikt.\n"
+"\n"
+
+msgid "Enter Exhibit Name "
+msgstr "Voer tentoonstellingsnaam in "
+
+msgid "Go to Random Exhibit "
+msgstr "Ga naar een willekeurige tentoonstelling "
+
+msgid ""
+"Enter the title of the exhibit you would like to acccess. A path will be routed and the door will open to the best matching exhibit.\n"
+"\n"
+msgstr ""
+"Voer de titel in van de tentoonstelling die u wilt bezoeken. Er wordt een route uitgezet en de deur opent zich naar de best passende tentoonstelling.\n"
+"\n"
+
+msgid ""
+"\n"
+"Proceed to your right to access this exhibit, or return to the terminal's main menu to access a different exhibit.\n"
+"\n"
+msgstr ""
+"\n"
+"Loop naar rechts om deze tentoonstelling te betreden, of keer terug naar het hoofdmenu van de terminal om een andere tentoonstelling te bezoeken.\n"
+"\n"
+
+msgid ""
+"We were unable to locate the exhibit that you requested. Please try a different exhibit.\n"
+"\n"
+msgstr ""
+"We konden de gevraagde tentoonstelling niet vinden. Probeer een andere tentoonstelling.\n"
+"\n"
+
+### Settings UI - Accessibility Tab
+msgid "Interface"
+msgstr ""
+
+msgid "Reset to 100%"
+msgstr ""
+
+msgid "UI Scale"
+msgstr ""
+
+msgid "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
+msgstr ""
+
+msgid "Show chat"
+msgstr ""
+
+msgid "Hides the chat overlay while playing."
+msgstr ""
+
+msgid "Typing sound"
+msgstr ""
+
+msgid "Plays a subtle sound on each keypress in the chat box."
+msgstr ""
+
+msgid "Open chat"
+msgstr ""
+
+msgid "Press the button then press any key to rebind."
+msgstr ""
+
+msgid "Screen Reader"
+msgstr ""
+
+msgid "Enable screen reader (AccessKit)"
+msgstr ""
+
+msgid "Exposes UI elements to OS screen readers via AccessKit. "
+msgstr ""
+
+msgid "Requires Godot's DisplayServer accessibility API (4.3+). "
+msgstr ""
+
+msgid "Changes take effect immediately — no restart needed."
+msgstr ""
+
+msgid "Verbosity"
+msgstr ""
+
+msgid "All controls"
+msgstr ""
+
+msgid "Focused only"
+msgstr ""
+
+msgid "Off"
+msgstr ""
+
+msgid "Vision"
+msgstr ""
+
+msgid "Reading font"
+msgstr ""
+
+msgid "Default (Cormorant Garamond)"
+msgstr ""
+
+msgid "OpenDyslexic"
+msgstr ""
+
+msgid "Atkinson Hyperlegible"
+msgstr ""
+
+msgid "OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. "
+msgstr ""
+
+msgid "Fonts must be present at:"
+msgstr ""
+
+msgid "High-contrast exhibit text"
+msgstr ""
+
+msgid "Renders article wall-card text as black-on-white regardless of dark mode."
+msgstr ""
+
+msgid "Exhibit text size"
+msgstr ""
+
+msgid "Scales the font size of Wikipedia article text on exhibit walls."
+msgstr ""
+
+msgid "Floating exhibit signs"
+msgstr ""
+
+msgid "Replaces physical sign boards with floating text. "
+msgstr ""
+
+msgid "Text remains visible but the board mesh is hidden. "
+msgstr ""
+
+msgid "Makes exhibit names easier to read during races."
+msgstr ""
+
+msgid "Colour & Contrast"
+msgstr ""
+
+msgid "Colourblind filter"
+msgstr ""
+
+msgid "Protanopia  (red-blind)"
+msgstr ""
+
+msgid "Deuteranopia  (green-blind)"
+msgstr ""
+
+msgid "Tritanopia  (blue-blind)"
+msgstr ""
+
+msgid "Applies a full-screen post-processing shader to correct for colour vision deficiency. "
+msgstr ""
+
+msgid "Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a "
+msgstr ""
+
+msgid "CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
+msgstr ""
+
+msgid "Motion"
+msgstr ""
+
+msgid "Reduce motion"
+msgstr ""
+
+msgid "Disables slide/fade animations on menus and the race HUD. Fog transitions remain."
+msgstr ""
+
+msgid "HUD & Hints"
+msgstr ""
+
+msgid "Large HUD text"
+msgstr ""
+
+msgid "Increases font size of the race timer, target name, and hint banners."
+msgstr ""
+
+msgid "Keep hints visible"
+msgstr ""
+
+msgid "Hint banners stay on screen until the race ends instead of fading after a few seconds."
+msgstr ""
+
+msgid "Audio & Visual"
+msgstr ""
+
+msgid "Show playing audio indicator"
+msgstr ""
+
+msgid "Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."
+msgstr ""
+
+msgid "Photosensitivity warning"
+msgstr ""
+
+msgid "Shows a warning before exhibits with flashing or strobing content."
+msgstr ""
+
+msgid "HUD opacity"
+msgstr ""
+
+msgid "Makes the race HUD more transparent to see more of the game world."
+msgstr ""
+
+msgid "Motor"
+msgstr ""
+
+msgid "Hold to activate buttons"
+msgstr ""
+
+msgid "Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."
+msgstr ""
+
+msgid "Accessibility"
+msgstr ""

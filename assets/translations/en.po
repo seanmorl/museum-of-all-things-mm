@@ -431,3 +431,187 @@ msgid ""
 msgstr ""
 "We were unable to locate the exhibit that you requested. Please try a different exhibit.\n"
 "\n"
+
+### Settings UI - Accessibility Tab
+msgid "Interface"
+msgstr "Interface"
+
+msgid "Reset to 100%"
+msgstr "Reset to 100%"
+
+msgid "UI Scale"
+msgstr "UI Scale"
+
+msgid "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
+msgstr "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
+
+msgid "Show chat"
+msgstr "Show chat"
+
+msgid "Hides the chat overlay while playing."
+msgstr "Hides the chat overlay while playing."
+
+msgid "Typing sound"
+msgstr "Typing sound"
+
+msgid "Plays a subtle sound on each keypress in the chat box."
+msgstr "Plays a subtle sound on each keypress in the chat box."
+
+msgid "Open chat"
+msgstr "Open chat"
+
+msgid "Press the button then press any key to rebind."
+msgstr "Press the button then press any key to rebind."
+
+msgid "Screen Reader"
+msgstr "Screen Reader"
+
+msgid "Enable screen reader (AccessKit)"
+msgstr "Enable screen reader (AccessKit)"
+
+msgid "Exposes UI elements to OS screen readers via AccessKit. "
+msgstr "Exposes UI elements to OS screen readers via AccessKit. "
+
+msgid "Requires Godot's DisplayServer accessibility API (4.3+). "
+msgstr "Requires Godot's DisplayServer accessibility API (4.3+). "
+
+msgid "Changes take effect immediately — no restart needed."
+msgstr "Changes take effect immediately — no restart needed."
+
+msgid "Verbosity"
+msgstr "Verbosity"
+
+msgid "All controls"
+msgstr "All controls"
+
+msgid "Focused only"
+msgstr "Focused only"
+
+msgid "Off"
+msgstr "Off"
+
+msgid "Vision"
+msgstr "Vision"
+
+msgid "Reading font"
+msgstr "Reading font"
+
+msgid "Default (Cormorant Garamond)"
+msgstr "Default (Cormorant Garamond)"
+
+msgid "OpenDyslexic"
+msgstr "OpenDyslexic"
+
+msgid "Atkinson Hyperlegible"
+msgstr "Atkinson Hyperlegible"
+
+msgid "OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. "
+msgstr "OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. "
+
+msgid "Fonts must be present at:"
+msgstr "Fonts must be present at:"
+
+msgid "High-contrast exhibit text"
+msgstr "High-contrast exhibit text"
+
+msgid "Renders article wall-card text as black-on-white regardless of dark mode."
+msgstr "Renders article wall-card text as black-on-white regardless of dark mode."
+
+msgid "Exhibit text size"
+msgstr "Exhibit text size"
+
+msgid "Scales the font size of Wikipedia article text on exhibit walls."
+msgstr "Scales the font size of Wikipedia article text on exhibit walls."
+
+msgid "Floating exhibit signs"
+msgstr "Floating exhibit signs"
+
+msgid "Replaces physical sign boards with floating text. "
+msgstr "Replaces physical sign boards with floating text. "
+
+msgid "Text remains visible but the board mesh is hidden. "
+msgstr "Text remains visible but the board mesh is hidden. "
+
+msgid "Makes exhibit names easier to read during races."
+msgstr "Makes exhibit names easier to read during races."
+
+msgid "Colour & Contrast"
+msgstr "Colour & Contrast"
+
+msgid "Colourblind filter"
+msgstr "Colourblind filter"
+
+msgid "Protanopia  (red-blind)"
+msgstr "Protanopia  (red-blind)"
+
+msgid "Deuteranopia  (green-blind)"
+msgstr "Deuteranopia  (green-blind)"
+
+msgid "Tritanopia  (blue-blind)"
+msgstr "Tritanopia  (blue-blind)"
+
+msgid "Applies a full-screen post-processing shader to correct for colour vision deficiency. "
+msgstr "Applies a full-screen post-processing shader to correct for colour vision deficiency. "
+
+msgid "Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a "
+msgstr "Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a "
+
+msgid "CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
+msgstr "CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
+
+msgid "Motion"
+msgstr "Motion"
+
+msgid "Reduce motion"
+msgstr "Reduce motion"
+
+msgid "Disables slide/fade animations on menus and the race HUD. Fog transitions remain."
+msgstr "Disables slide/fade animations on menus and the race HUD. Fog transitions remain."
+
+msgid "HUD & Hints"
+msgstr "HUD & Hints"
+
+msgid "Large HUD text"
+msgstr "Large HUD text"
+
+msgid "Increases font size of the race timer, target name, and hint banners."
+msgstr "Increases font size of the race timer, target name, and hint banners."
+
+msgid "Keep hints visible"
+msgstr "Keep hints visible"
+
+msgid "Hint banners stay on screen until the race ends instead of fading after a few seconds."
+msgstr "Hint banners stay on screen until the race ends instead of fading after a few seconds."
+
+msgid "Audio & Visual"
+msgstr "Audio & Visual"
+
+msgid "Show playing audio indicator"
+msgstr "Show playing audio indicator"
+
+msgid "Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."
+msgstr "Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."
+
+msgid "Photosensitivity warning"
+msgstr "Photosensitivity warning"
+
+msgid "Shows a warning before exhibits with flashing or strobing content."
+msgstr "Shows a warning before exhibits with flashing or strobing content."
+
+msgid "HUD opacity"
+msgstr "HUD opacity"
+
+msgid "Makes the race HUD more transparent to see more of the game world."
+msgstr "Makes the race HUD more transparent to see more of the game world."
+
+msgid "Motor"
+msgstr "Motor"
+
+msgid "Hold to activate buttons"
+msgstr "Hold to activate buttons"
+
+msgid "Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."
+msgstr "Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."
+
+msgid "Accessibility"
+msgstr "Accessibility"

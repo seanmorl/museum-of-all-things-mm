@@ -107,7 +107,7 @@ func _on_vote_started(_candidates: Array) -> void:
 	_refresh()
 
 func _on_race_started(target: String, _start: String) -> void:
-	print("[SimpleLeaderboard] Race started! Target: ", target)
+	Log.info("SimpleLeaderboard", "Race started! Target: %s" % target)
 	_race_active = true
 	_refresh()
 

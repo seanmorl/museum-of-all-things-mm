@@ -5,12 +5,12 @@ extends RefCounted
 static func apply() -> void:
 	# Set global flag to disable dashing
 	RaceManager.set_dash_enabled(false)
-	print("[NoRunningEvent] Applied: Dash disabled")
+	Log.info("NoRunningEvent", "Applied: Dash disabled")
 
 static func end() -> void:
 	# Re-enable dashing
 	RaceManager.set_dash_enabled(true)
-	print("[NoRunningEvent] Ended: Dash re-enabled")
+	Log.info("NoRunningEvent", "Dash re-enabled")
 
 static func get_duration() -> float:
 	return randf_range(45.0, 90.0)

@@ -1,7 +1,7 @@
 # Museum of All Things — Development Roadmap
 
-**Last Updated:** March 16, 2026  
-**Current Version:** v0.3.0 — UI & Graphics Overhaul  
+**Last Updated:** April 5, 2026  
+**Current Version:** v0.3.5 — Code Quality & Sticky Notes  
 **Next Version:** v0.4.0 — Wiki Races Update (Tournament Mode)
 
 ---
@@ -12,9 +12,9 @@ A fast-paced multiplayer Wikipedia navigation game where players race through ar
 
 ---
 
-## ✅ Completed (v0.3.0 — March 2026)
+## ✅ Completed (v0.3.0-v0.3.5 — March-April 2026)
 
-### UI & Graphics Overhaul
+### v0.3.0: UI & Graphics Overhaul
 - ✨ 4 new overlay systems (RaceCountdown, LoadingScreen, VictoryScreen, LeaderboardHUD)
 - 🔄 4 rewritten components (VoteHUD, RaceHUD, PlayerListOverlay, MainMenu)
 - 🐛 8 critical bug fixes (host visibility, race win detection, countdown sync, etc.)
@@ -22,6 +22,15 @@ A fast-paced multiplayer Wikipedia navigation game where players race through ar
 - ⚡ Performance optimizations
 
 **Status:** ✅ **Released**
+
+### v0.3.5: Code Quality & Sticky Notes (April 2026)
+- 📝 **Sticky Note System** - Multiplayer-synchronized persistent notes in exhibits
+- 🧹 **Dead Code Removal** - Removed archived power-up references from active code
+- 🔧 **Architecture Cleanup** - Resolved service layer vs singleton confusion
+- 🐛 **Bug Fixes** - Fixed export config typo, documentation mismatches
+- 📚 **Documentation** - Added architecture decisions, integration guides
+
+**Status:** ✅ **Complete**
 
 ---
 
@@ -32,20 +41,19 @@ A fast-paced multiplayer Wikipedia navigation game where players race through ar
 #### Core Features
 - [ ] **Tournament Brackets** — Single/double elimination support
 - [ ] **Ranked Leaderboards** — ELO or MMR-based ranking system
-- [ ] **Matchmaking** — Skill-based player matching
+- [x] **Matchmaking** — Skill-based player matching (✅ Implemented, needs testing)
 - [ ] **Scheduled Events** — Daily/weekly tournaments
-- [ ] **Spectator Mode** — Watch live matches with observer UI
+- [x] **Spectator Mode** — Watch live matches with observer UI (✅ Implemented)
 - [ ] **Tournament Lobby** — Pre-match staging area
-- [ ] **Prize/Reward System** — Cosmetics, badges, or achievements
 
 #### Technical Requirements
 - [ ] Tournament data persistence (PostgreSQL/SQLite)
-- [ ] Anti-cheat enhancements for competitive play
-- [ ] Replay system (record and playback)
+- [x] Anti-cheat enhancements for competitive play (✅ Implemented: speed hack, teleport, path validation)
+- [x] Replay system (record and playback) (✅ Implemented: RaceReplay.gd)
 - [ ] Admin tools for tournament organizers
 
 **Target Release:** Q2 2026 (April–June)  
-**Status:** 🚧 **In Development**
+**Status:** 🚧 **~60% Complete** — Core infrastructure done, tournament logic needs work
 
 ---
 
@@ -72,7 +80,7 @@ All 9 power-ups re-enabled with improved balance:
 - [ ] Power-up disabled option for tournaments
 
 **Target Release:** Q3 2026 (July–September)  
-**Status:** 📋 **Planned**
+**Status:** 📋 **Planned** — Code archived in `_archived_powerups_OLD/`
 
 ---
 
@@ -119,18 +127,28 @@ These features would make strong candidates for a v1.0.0 release:
 ## 🐛 Known Issues & Technical Debt
 
 ### Current Issues
-| Issue | Priority | Target Version |
-|-------|----------|----------------|
-| Power-ups disabled | High | v0.5.0 |
-| Voice chat not fully implemented | Medium | v0.5.0 |
-| Some UI elements need light mode polish | Low | v0.4.0 |
+| Issue | Priority | Target Version | Status |
+|-------|----------|----------------|--------|
+| Power-ups disabled | High | v0.5.0 | 📋 Planned |
+| Voice chat not fully implemented | Medium | v0.5.0 | ⚠️ Not player-facing |
+| Service layer redundancy | Low | v0.4.0 | ✅ Documented, archived |
+| Large monolithic files | Low | Ongoing | 📝 Refactor gradually |
+
+### Recently Fixed ✅
+| Issue | Fixed In | Date |
+|-------|----------|------|
+| Typo in export_presets.cfg (`search_hhistory`) | v0.3.5 | 2026-04-05 |
+| Broken `!hint` command stub | v0.3.5 | 2026-04-05 |
+| Documentation mismatch (60Hz vs 10Hz sync) | v0.3.5 | 2026-04-05 |
+| Dead power-up code in Player.gd/Main.gd | v0.3.5 | 2026-04-05 |
 
 ### Technical Debt
 - [ ] Remove debug logging from release builds (partially done)
 - [ ] Optimize network bandwidth for large player counts
 - [ ] Improve error handling for network disconnects
 - [ ] Add automated testing for critical systems
-- [ ] Document codebase for community contributors
+- [x] Document codebase for community contributors ✅ (docs/ added)
+- [x] Resolve service layer vs singleton architecture ✅ (see ARCHITECTURE_DECISIONS.md)
 
 ---
 
@@ -141,6 +159,7 @@ These features would make strong candidates for a v1.0.0 release:
 | v0.1.0 | Initial Prototype | 2025 | ✅ Released |
 | v0.2.0 | Multiplayer Update | 2025 | ✅ Released |
 | **v0.3.0** | **UI & Graphics Overhaul** | **Mar 2026** | ✅ **Released** |
+| **v0.3.5** | **Code Quality & Sticky Notes** | **Apr 2026** | ✅ **Complete** |
 | v0.4.0 | Wiki Races Update | Q2 2026 | 🚧 In Progress |
 | v0.5.0 | Power-ups Restored | Q3 2026 | 📋 Planned |
 | v1.0.0 | Release Candidate | TBA | 🔮 Future |
@@ -180,6 +199,7 @@ These features would make strong candidates for a v1.0.0 release:
 │   └── ✅ v0.3.0 — UI & Graphics Overhaul
 │
 ├── Q2 (Apr–Jun)
+│   ├── ✅ v0.3.5 — Code Quality & Sticky Notes (April)
 │   └── 🚧 v0.4.0 — Wiki Races Update (Tournament Mode)
 │
 ├── Q3 (Jul–Sep)

@@ -1046,7 +1046,7 @@ func _apply_handicap() -> void:
 	pass
 
 func _show_host_message(msg: String) -> void:
-	print("HostMenu: " + msg)
+	Log.info("HostMenu", msg)
 	if _main and _main.has_node("ChatSystem"):
 		_main.get_node("ChatSystem")._show_system_message("🎮 Host: " + msg)
 

@@ -1,0 +1,64 @@
+[gd_resource type="Resource" script_class="LobbyData" format=3 uid="uid://bta7k2qtvou5s"]
+
+[ext_resource type="Script" uid="uid://bdc8jjijlgjox" path="res://resource_definitions/LobbyData.gd" id="1_3ssej"]
+[ext_resource type="Script" uid="uid://ch3nm32ndlrbh" path="res://resource_definitions/LobbyWing.gd" id="2_y4oc8"]
+
+[sub_resource type="Resource" id="Resource_pgwi2"]
+script = ExtResource("2_y4oc8")
+name = "Technologie"
+corner_1 = Vector2(-68, -44)
+corner_2 = Vector2(-32, -8)
+exhibits = PackedStringArray("Stuurstandrijtuig", "Minox", "Transistor", "Aardewerk", "Godot (game-engine)", "Pasteurisatie", "Kernproef", "Lijm", "Aqueduct", "Drie dimensies", "Vliegtuig", "Eenvoudige machine", "Drukpers", "Geboortebeperking", "Microscopie", "Spelcomputer", "Blide", "Veeteelt", "Oldowan")
+
+[sub_resource type="Resource" id="Resource_ooopd"]
+script = ExtResource("2_y4oc8")
+name = "Cultuur"
+corner_1 = Vector2(32, -44)
+corner_2 = Vector2(68, -8)
+exhibits = PackedStringArray("Clown", "Draak", "Gemakswinkel", "High five", "Goncharov (meme)", "Koffie", "Soep", "The Backrooms", "Tarot", "K-pop", "Go (spel)", "Hindoeïsme", "Dandy", "Golem", "Shanty", "Reclame", "Zondvloedmythe", "Monnik")
+
+[sub_resource type="Resource" id="Resource_m2ope"]
+script = ExtResource("2_y4oc8")
+name = "Wetenschap"
+corner_1 = Vector2(-44, -92)
+corner_2 = Vector2(-8, -36)
+exhibits = PackedStringArray("Schimmels", "Dinosauriërs", "Mariene biodiversiteit", "Aarde", "Arabia-vierhoek", "Rat", "Garnaal", "Broodboom", "Datavisualisatie", "Goud", "Baobab", "Homo sapiens", "Slinger", "Seksuele dimorfie", "Licht", "Kaas", "Kool", "Moerasgebied", "Beertjes", "Vlinder", "Jupiter", "Bodem", "Fractaal", "Oog")
+
+[sub_resource type="Resource" id="Resource_opuc1"]
+script = ExtResource("2_y4oc8")
+name = "Geografie"
+corner_1 = Vector2(8, -92)
+corner_2 = Vector2(44, -36)
+exhibits = PackedStringArray("Verenigde Staten", "Antarctica", "Patagonië", "Tibet", "Persepolis", "Petra", "Taipei 101", "Architectuur van Delft", "Chongqing", "Pitcairneilanden", "Marianentrog", "Trans-Siberische Spoorlijn", "Tsjaadmeer", "Senegal", "Bora Bora", "Landes de Gascogne", "Kilimanjaro", "Canberra", "Amazone-regenwoud", "Uruk", "Zwarte Steen (islam)")
+
+[sub_resource type="Resource" id="Resource_qiy1c"]
+script = ExtResource("2_y4oc8")
+name = "Kunst"
+corner_1 = Vector2(-72, 12)
+corner_2 = Vector2(-36, 48)
+exhibits = PackedStringArray("Barokschilderkunst", "Armeense architectuur", "Pablo Picasso", "Louvre", "Joan Miró", "Ai Weiwei", "Frida Kahlo", "Käthe Kollwitz", "Frank Lloyd Wright", "Edgar Degas", "Rotsschilderkunst", "Michelangelo", "Francisco Goya", "Fauvisme", "Graffiti", "Oudgriekse beeldhouwkunst", "M. C. Escher", "Georges Seurat")
+
+[sub_resource type="Resource" id="Resource_l5mfx"]
+script = ExtResource("2_y4oc8")
+name = "Mensen"
+corner_1 = Vector2(36, 12)
+corner_2 = Vector2(72, 48)
+exhibits = PackedStringArray("Albert Einstein", "Freddie Mercury", "Kobe Bryant", "Jezus Khan", "Grigori Raspoetin", "Public Universal Friend", "Tupac Shakur", "William Shakespeare", "Linus Pauling", "Danny DeVito", "J. R. R. Tolkien", "Mary Shelley", "Alexandria Ocasio-Cortez", "Ibn Battuta", "Maarten Luther", "Martin Luther King")
+
+[sub_resource type="Resource" id="Resource_bycfx"]
+script = ExtResource("2_y4oc8")
+name = "Geschiedenis"
+corner_1 = Vector2(-48, 60)
+corner_2 = Vector2(-12, 96)
+exhibits = PackedStringArray("Geschiedenis van Nederland", "Kernramp van Tsjernobyl", "Titanic", "Tegencultuur van de jaren 1960", "COVID-19-pandemie", "Central Intelligence Agency", "Gouden Eeuw van de islam", "Maanlanding", "Aardbeving San Francisco 1906", "Hannibals oversteek van de Alpen", "Geschiedenis van de fotografie", "Piraterij", "Protesten in Hongkong 2019-2020")
+
+[sub_resource type="Resource" id="Resource_yimja"]
+script = ExtResource("2_y4oc8")
+name = "Media"
+corner_1 = Vector2(12, 60)
+corner_2 = Vector2(48, 96)
+exhibits = PackedStringArray("Bijbel", "The Beatles", "The Matrix", "Odyssee", "Gilgamesj", "Wachten op Godot", "Homestuck", "Star Trek", "Barbie (film)", "Neon Genesis Evangelion", "Hamlet", "De Kolonisten van Catan", "Twitter", "Vogue (tijdschrift)", "Steamboat Willie", "De Graaf van Monte-Cristo", "Wikipedia", "Minecraft")
+
+[resource]
+script = ExtResource("1_3ssej")
+wings = Array[ExtResource("2_y4oc8")]([SubResource("Resource_pgwi2"), SubResource("Resource_ooopd"), SubResource("Resource_m2ope"), SubResource("Resource_opuc1"), SubResource("Resource_qiy1c"), SubResource("Resource_l5mfx"), SubResource("Resource_bycfx"), SubResource("Resource_yimja")])

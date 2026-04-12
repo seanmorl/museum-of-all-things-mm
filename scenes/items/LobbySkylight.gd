@@ -120,7 +120,7 @@ func _build() -> void:
 	_add(fill)
 
 	if OS.is_debug_build():
-		print("[LobbySkylight] Built %d glass panels from GridMap ceiling tiles" % placed)
+		Log.debug("LobbySkylight", "Built %d glass panels from GridMap ceiling tiles" % placed)
 
 
 func _make_glass_mat() -> StandardMaterial3D:

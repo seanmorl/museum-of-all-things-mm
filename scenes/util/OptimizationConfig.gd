@@ -47,6 +47,6 @@ static func force_reliable_sync(enabled: bool) -> void:
 	"""Toggle to test reliable vs unreliable sync at runtime."""
 	# This would be connected to a debug key (e.g., F4)
 	if enabled:
-		print("[OptimizationConfig] FORCED reliable sync (F4)")
+		Log.debug("OptimizationConfig", "FORCED reliable sync (F4)")
 	else:
-		print("[OptimizationConfig] Using unreliable sync (F4)")
+		Log.debug("OptimizationConfig", "Using unreliable sync (F4)")

@@ -6,13 +6,13 @@ static func apply() -> void:
 	# Tell all players to enable double jump
 	if RaceManager.has_method("set_double_jump_enabled"):
 		RaceManager.set_double_jump_enabled(true)
-	print("[DoubleJumpEvent] Applied: Double jump enabled!")
+	Log.info("DoubleJumpEvent", "Applied: Double jump enabled!")
 
 static func end() -> void:
 	# Disable double jump
 	if RaceManager.has_method("set_double_jump_enabled"):
 		RaceManager.set_double_jump_enabled(false)
-	print("[DoubleJumpEvent] Ended: Double jump disabled")
+	Log.info("DoubleJumpEvent", "Double jump disabled")
 
 static func get_duration() -> float:
 	return randf_range(30.0, 60.0)

@@ -15,11 +15,11 @@ var _subtitle_lbl: Label          = null
 var _podium_list:  VBoxContainer  = null
 var _dismiss_btn:  Button         = null
 var _timer_lbl:    Label          = null
+var _dismiss_timer_node: Timer    = null
 
 var _burst_scale: float = 0.0
 var _burst_alpha: float = 0.0
 var _burst_time:  float = 0.0
-var _dismiss_timer: float = 20.0
 const AUTO_DISMISS: float = 20.0
 
 
@@ -114,6 +114,14 @@ func _build_ui() -> void:
 	_dismiss_btn.pressed.connect(_dismiss)
 	btn_row.add_child(_dismiss_btn)
 
+	# Dismiss countdown timer node (replaces per-frame _process countdown)
+	_dismiss_timer_node = Timer.new()
+	_dismiss_timer_node.wait_time = 1.0
+	_dismiss_timer_node.autostart = false
+	_dismiss_timer_node.one_shot = false
+	_dismiss_timer_node.timeout.connect(_on_dismiss_timer_tick)
+	add_child(_dismiss_timer_node)
+
 
 func _divider() -> ColorRect:
 	var d := ColorRect.new()
@@ -187,20 +195,26 @@ func _process(delta: float) -> void:
 	if not visible: return
 	_burst_time += delta
 	if _crown_canvas: _crown_canvas.queue_redraw()
-	_dismiss_timer -= delta
-	if _dismiss_timer <= 0.0:
+	# Update countdown label from the Timer node (no per-frame arithmetic needed)
+	if _dismiss_timer_node and _dismiss_timer_node.time_left > 0 and _timer_lbl:
+		_timer_lbl.text = "Closing in %ds…" % int(ceil(_dismiss_timer_node.time_left))
+
+
+func _on_dismiss_timer_tick() -> void:
+	# Called every second by the Timer node. When time_left hits 0, dismiss.
+	if _dismiss_timer_node and _dismiss_timer_node.time_left <= 0.0:
 		_dismiss()
-	elif _timer_lbl:
-		_timer_lbl.text = "Closing in %ds…" % int(ceil(_dismiss_timer))
 
 
 func _on_tournament_ended(champion: String, standings: Array) -> void:
 	_champion_lbl.text = champion + "  ✦  wins!"
-	_dismiss_timer = AUTO_DISMISS
 	_build_podium(standings)
 	visible = true
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_animate_in()
+	# Start the auto-dismiss countdown
+	if _dismiss_timer_node:
+		_dismiss_timer_node.start(AUTO_DISMISS)
 
 
 func _build_podium(standings: Array) -> void:
@@ -250,7 +264,10 @@ func _animate_in() -> void:
 
 func _dismiss() -> void:
 	visible = false
-	_dismiss_timer = AUTO_DISMISS
+	if _dismiss_timer_node:
+		_dismiss_timer_node.stop()
+	if _timer_lbl:
+		_timer_lbl.text = ""
 	if _dismiss_btn: _dismiss_btn.text = "Close"
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	dismissed.emit()
