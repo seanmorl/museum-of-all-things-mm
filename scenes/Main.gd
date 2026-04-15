@@ -816,6 +816,10 @@ func _process(delta: float) -> void:
 	if not _multiplayer_controller:
 		return
 
+	# Guard: _player might not be initialized yet
+	if not _player or not is_instance_valid(_player):
+		return
+
 	# Broadcast local player position to other players
 	if _multiplayer_controller.process_position_sync(delta, _player):
 		var pivot_rot_x: float = _player_pivot.rotation.x if _player_pivot else 0.0
@@ -1369,14 +1373,6 @@ func _on_network_peer_connected(peer_id: int) -> void:
 			_race_controller_peer_id = peer_id
 			_grant_race_control.rpc_id(peer_id)
 
-		# Sync placed paintings to late joiner so they see paintings placed
-		# before they connected. Defer until exhibit is loaded to ensure
-		# paintings are parented correctly.
-		if _painting_controller:
-			var state: Array = _painting_controller.get_placed_paintings_state()
-			if state.size() > 0:
-				call_deferred("_sync_placed_paintings_deferred", peer_id, state)
-		
 		# Sync placed audio state to late joiner
 		if _painting_controller:
 			var audio_state: Dictionary = _painting_controller.get_placed_audio_state()
@@ -1388,6 +1384,23 @@ func _on_network_peer_connected(peer_id: int) -> void:
 			var stolen_state: Dictionary = _painting_controller.get_stolen_paintings_state()
 			if not stolen_state.is_empty():
 				_sync_stolen_paintings_to_peer.rpc_id(peer_id, stolen_state)
+
+		# Sync mount state to late joiner so they see mounted players
+		var mount_state: Dictionary = _mount_controller.get_mount_state()
+		if not mount_state.is_empty():
+			_sync_mount_state_to_peer.rpc_id(peer_id, mount_state)
+
+		# Sync current exhibit to late joiner so they see other players
+		if _museum and _museum.has_method("get_current_exhibit"):
+			var current_exhibit: String = _museum.get_current_exhibit()
+			if current_exhibit != "":
+				_sync_exhibit_to_peer.rpc_id(peer_id, current_exhibit)
+
+		# Sync placed paintings AFTER exhibit loads (deferred)
+		if _painting_controller:
+			var state: Array = _painting_controller.get_placed_paintings_state()
+			if state.size() > 0:
+				call_deferred("_sync_placed_paintings_deferred", peer_id, state)
 
 func _on_network_peer_disconnected(peer_id: int) -> void:
 	if _painting_controller:
@@ -1735,6 +1748,14 @@ func _sync_stolen_paintings_to_peer(state: Dictionary) -> void:
 	## Received by a newly-joined client. Populates the stolen painting map.
 	if _painting_controller:
 		_painting_controller.apply_stolen_paintings_state(state)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_mount_state_to_peer(state: Dictionary) -> void:
+	## Received by a newly-joined peer. Sets initial mount state for all players.
+	for rider_peer_id in state:
+		var mount_peer_id: int = state[rider_peer_id]
+		if mount_peer_id != -1:
+			_mount_controller.apply_mount_state(rider_peer_id, mount_peer_id, _player)
 
 @rpc("authority", "call_remote", "reliable")
 func _sync_wikipedia_data(article: String, data: Dictionary) -> void:

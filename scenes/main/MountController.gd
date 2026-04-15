@@ -152,3 +152,13 @@ func execute_dismount_sync(rider_peer_id: int, local_player: Node) -> void:
 		return
 	rider.execute_dismount()
 	Log.debug("Mount", "Dismount sync - %d" % rider_peer_id)
+
+
+func apply_mount_state(rider_peer_id: int, mount_peer_id: int, local_player: Node) -> void:
+	## Apply mount state for late-joining peers.
+	_mount_state[rider_peer_id] = mount_peer_id
+	var rider: Node = _multiplayer_controller.get_player_by_peer_id(rider_peer_id, local_player)
+	var mount: Node = _multiplayer_controller.get_player_by_peer_id(mount_peer_id, local_player)
+	if is_instance_valid(rider) and is_instance_valid(mount):
+		rider.execute_mount(mount, mount_peer_id)
+		Log.debug("Mount", "Applied mount state for late joiner: %d mounted on %d" % [rider_peer_id, mount_peer_id])

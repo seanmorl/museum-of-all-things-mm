@@ -28,8 +28,8 @@ const _DARK := {
 }
 
 const FONT_PATHS := [
-	"res://assets/fonts/DM_Sans/static/DMSans-Regular.ttf",
 	"res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf",
+	"res://assets/fonts/DM_Sans/static/DMSans-Regular.ttf",
 	"res://assets/fonts/OpenDyslexic/OpenDyslexic-Regular.otf",
 	"res://assets/fonts/AtkinsonHyperlegible/AtkinsonHyperlegible-Regular.ttf",
 	# Additional fonts (may not render properly in Godot 4.x):

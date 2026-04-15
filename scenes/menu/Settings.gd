@@ -537,6 +537,7 @@ func _build_accessibility_settings() -> Control:
 	font_row.add_child(font_lbl)
 	var font_option := OptionButton.new()
 	font_option.add_item(tr("Default (Cormorant Garamond)"))
+	font_option.add_item(tr("DM Sans"))
 	font_option.add_item(tr("OpenDyslexic"))
 	font_option.add_item(tr("Atkinson Hyperlegible"))
 	# Additional fonts disabled - Godot 4.x font rendering issues

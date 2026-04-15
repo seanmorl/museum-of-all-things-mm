@@ -59,8 +59,9 @@ LeaderboardManager="*res://scenes/util/LeaderboardManager.gd"
 LoadingScreen="*res://scenes/ui/LoadingScreen.tscn"
 RaceCountdown="*res://scenes/ui/RaceCountdown.tscn"
 TournamentManager="*uid://c5soqs2h61dt4"
-DiscordRichPresence="*res://scenes/util/DiscordRichPresence.gd"
+# DiscordRichPresence="*res://scenes/util/DiscordRichPresence.gd"
 ParticleEffectsManager="*res://scenes/fx/ParticleEffectsManager.gd"
+# DiscordRPC="*res://addons/discord-rpc-gd/nodes/discord_autoload.gd"
 
 [display]
 

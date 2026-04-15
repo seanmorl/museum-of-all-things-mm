@@ -532,6 +532,13 @@ func _add_item(exhibit: Node3D, item_data: Dictionary) -> void:
 	var t: String = item_data.get("type", "") as String
 	var item: Node3D
 	if t == "audio":
+		# Check if audio URL exists before creating the item
+		var file_title: String = item_data.get("title", "")
+		var get_res = ExhibitFetcher.get_result(file_title)
+		var has_audio_url: bool = get_res and get_res.has("url")
+		if not has_audio_url:
+			Log.debug("ExhibitLoader", "Skipping audio item '%s' - no audio URL available" % file_title)
+			return  # Skip creating the audio item
 		item = SoundItem.instantiate()
 	else:
 		item = WallItem.instantiate()

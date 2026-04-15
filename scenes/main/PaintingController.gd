@@ -964,15 +964,50 @@ func apply_placed_paintings_state(state: Array, _local_player: Node) -> void:
 	for entry: Dictionary in state:
 		if existing_titles.has(entry.get("image_title", "")):
 			continue
+		
+		var exhibit_title: String = entry.get("exhibit_title", "")
+		
+		# Check if exhibit is loaded - if not, defer placement until it loads
+		var parent_node: Node = _get_exhibit_node(exhibit_title)
+		if not is_instance_valid(parent_node):
+			Log.debug("PaintingController", "Exhibit '%s' not loaded yet, deferring painting placement" % exhibit_title)
+			var deferred_entry: Dictionary = entry.duplicate()
+			call_deferred("_apply_placed_painting_deferred", deferred_entry, existing_titles)
+			continue
+		
 		_create_placed_painting(
 			entry.get("wall_position", Vector3.ZERO),
 			entry.get("wall_normal",   Vector3.UP),
 			entry.get("image_size",    Vector2.ONE),
 			null,
-			entry.get("exhibit_title", ""),
+			exhibit_title,
 			entry.get("image_title",   ""),
 			entry.get("image_url",     "")
 		)
+
+
+func _apply_placed_painting_deferred(entry: Dictionary, existing_titles: Dictionary) -> void:
+	## Called deferred to place a painting after exhibit has loaded.
+	var image_title: String = entry.get("image_title", "")
+	if existing_titles.has(image_title):
+		return
+	
+	var exhibit_title: String = entry.get("exhibit_title", "")
+	var parent_node: Node = _get_exhibit_node(exhibit_title)
+	if not is_instance_valid(parent_node):
+		Log.warn("PaintingController", "Deferred painting still can't find exhibit '%s'" % exhibit_title)
+		return
+	
+	_create_placed_painting(
+		entry.get("wall_position", Vector3.ZERO),
+		entry.get("wall_normal",   Vector3.UP),
+		entry.get("image_size",    Vector2.ONE),
+		null,
+		exhibit_title,
+		image_title,
+		entry.get("image_url",     "")
+	)
+	Log.debug("PaintingController", "Deferred painting '%s' placed in exhibit '%s'" % [image_title, exhibit_title])
 
 
 func get_stolen_paintings_state() -> Dictionary:

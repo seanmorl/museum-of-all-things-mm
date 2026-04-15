@@ -73,6 +73,8 @@ func spawn_network_player(peer_id: int) -> Node:
 	if net_player.has_method("set_player_pronouns"):
 		net_player.set_player_pronouns(NetworkManager.get_player_pronouns(peer_id))
 	net_player.position = _starting_point
+	if "current_room" in net_player:
+		net_player.current_room = "Lobby"
 
 	_network_players[peer_id] = net_player
 	_spawning_peers.erase(peer_id)  # Remove from spawning guard

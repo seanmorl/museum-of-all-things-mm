@@ -170,33 +170,67 @@ func _play_audio() -> void:
 
 
 func _load_audio_stream(body: PackedByteArray, file_url: String) -> AudioStream:
-	# Detect format from URL extension
+	# Try to detect format from file content magic bytes
+	# OGG: "OggS" magic bytes
+	# MP3: "ID3" or first byte >= 0xFF
+	# WAV: "RIFF" magic bytes
+	# FLAC: "fLaC" magic bytes
+	
+	if body.size() >= 4:
+		var magic: String = body.slice(0, 4).get_string_from_utf8()
+		var first_bytes: String = body.slice(0, 3).get_string_from_ascii()
+		
+		# Try OGG first (most common from Wikipedia)
+		if body.size() >= 4 and (magic == "OggS" or file_url.to_lower().ends_with(".ogg")):
+			var stream = AudioStreamOggVorbis.load_from_buffer(body)
+			if stream:
+				Log.debug("Gramophone", "Successfully loaded OGG audio (magic: %s)" % magic)
+				return stream
+		
+		# Try MP3 (check for ID3 tag or sync word)
+		if body.size() >= 3 and (first_bytes == "ID3" or (body[0] == 0xFF and (body[1] & 0xE0) == 0xE0)):
+			var stream = AudioStreamMP3.load_from_buffer(body)
+			if stream:
+				Log.debug("Gramophone", "Successfully loaded MP3 audio")
+				return stream
+		
+		# Try WAV (RIFF header)
+		if magic == "RIFF" and body.size() >= 8 and body.slice(4, 8).get_string_from_ascii() == "WAVE":
+			var stream = AudioStreamWAV.load_from_buffer(body)
+			if stream:
+				Log.debug("Gramophone", "Successfully loaded WAV audio")
+				return stream
+		
+		# Try FLAC
+		if magic == "fLaC":
+			var stream = AudioStreamWAV.load_from_buffer(body)
+			if stream:
+				Log.debug("Gramophone", "Loaded FLAC as WAV")
+				return stream
+	
+	# Fallback: try based on URL extension
 	var ext := ""
 	if "." in file_url:
 		ext = file_url.get_slice(".", -1).to_lower()
 	
-	Log.debug("Gramophone", "Attempting to load audio format: .%s" % ext)
+	Log.debug("Gramophone", "Attempting fallback load for format: .%s" % ext)
 	
-	# Try OGG first (most common on Wikimedia)
-	var stream: AudioStream = AudioStreamOggVorbis.load_from_buffer(body)
-	if stream:
-		Log.debug("Gramophone", "Successfully loaded OGG audio")
-		return stream
+	if ext == "ogg":
+		var stream = AudioStreamOggVorbis.load_from_buffer(body)
+		if stream:
+			return stream
 	
-	# Try MP3
-	stream = AudioStreamMP3.load_from_buffer(body)
-	if stream:
-		Log.debug("Gramophone", "Successfully loaded MP3 audio")
-		return stream
+	if ext == "mp3":
+		var stream = AudioStreamMP3.load_from_buffer(body)
+		if stream:
+			return stream
 	
-	# Try WAV
-	stream = AudioStreamWAV.load_from_buffer(body)
-	if stream:
-		Log.debug("Gramophone", "Successfully loaded WAV audio")
-		return stream
+	if ext == "wav":
+		var stream = AudioStreamWAV.load_from_buffer(body)
+		if stream:
+			return stream
 	
-	# No format worked
-	Log.warn("Gramophone", "No supported audio format found for .%s" % ext)
+	Log.warn("Gramophone", "No supported audio format found for .%s (size: %d)" % [ext, body.size()])
 	return null
 
 
