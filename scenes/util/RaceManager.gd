@@ -410,7 +410,7 @@ func _receive_vote(peer_id: int, candidate_index: int) -> void:
 	if candidate_index < 0 or candidate_index >= _vote_candidates.size():
 		Log.warn("RaceManager", "Invalid candidate index: %d" % candidate_index)
 		return
-	if _state != State.VOTING:
+	if not _vote_active:
 		Log.debug("RaceManager", "Vote received but not in voting state")
 		return
 	_votes[peer_id] = candidate_index
