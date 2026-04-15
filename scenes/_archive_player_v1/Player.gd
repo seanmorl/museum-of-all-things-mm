@@ -64,7 +64,6 @@ var _painting_system: PlayerPaintingSystem = null
 var _pointing_system: PlayerPointingSystem = null
 var _journal_system: PlayerJournalSystem = null
 var _footprint_system: PlayerFootprintSystem = null
-var _fp_arms: Node = null  # First-person arms for local player
 
 ## Void detection - teleport player back to safety if they fall too far
 var _void_check_timer: float = 0.0
@@ -110,9 +109,8 @@ func _ready() -> void:
 
 	if is_local:
 		add_to_group("local_player")
-		# Hide body mesh from first-person view (use FP arms instead)
-		# Remote players still see the body via MultiplayerSynchronizer
-		set_body_visible(false)
+		# Ensure host player is visible to other clients in multiplayer
+		set_body_visible(true)
 
 	# Initialize subsystems
 	_crouch_system = PlayerCrouchSystem.new()
@@ -151,21 +149,6 @@ func _ready() -> void:
 	_footprint_system.init(self)
 	add_child(_footprint_system)
 	_footstep_player.footstep_played.connect(_on_footstep_played)
-
-	# First-person arms (only for local player)
-	if is_local:
-		var arms_script := load("res://scenes/fp/FirstPersonArms.gd")
-		if arms_script and camera:
-			_fp_arms = Node3D.new()
-			_fp_arms.set_script(arms_script)
-			_fp_arms.name = "FirstPersonArms"
-			camera.add_child(_fp_arms)
-			# Wire to subsystems
-			if _painting_system:
-				_painting_system.eat_anim_started.connect(func(): _fp_arms.set_eating(true))
-				_painting_system.eat_anim_cancelled.connect(func(): _fp_arms.set_eating(false))
-			if _pointing_system:
-				_pointing_system.reaction_fired.connect(func(): _fp_arms.set_state("point"))
 
 
 # =============================================================================
@@ -262,26 +245,20 @@ func _unhandled_input(event: InputEvent) -> void:
 
 				# Check if target is an audio item (Gramophone or SoundItem)
 				var is_audio_item = target is Gramophone or target is SoundItem
-				Log.debug("Player", "  is_audio_item=%s" % [is_audio_item])
 
-				# Priority 1: Audio items = play/pause
-				if target and is_audio_item and target.has_method("interact"):
-					Log.debug("Player", "Calling interact() on audio item: %s" % target.name)
-					target.interact()
-
-				# Priority 2: Try to steal stealable items (paintings, placed audio)
-				elif _is_stealable_item(collider) and _painting_system:
+				# Priority 1: Try to steal stealable items (paintings, placed audio items)
+				if _is_stealable_item(collider) and _painting_system:
 					Log.debug("Player", "Detected stealable item, attempting steal")
 					if _painting_system.try_steal_target():
 						get_viewport().set_input_as_handled()
 						return
 
-				# Priority 3: Other interactives (benches, terminals) = call interact
-				elif target and target.has_method("interact"):
+				# Priority 2: Audio items = play/pause
+				if target and is_audio_item and target.has_method("interact"):
+					Log.debug("Player", "Calling interact() on audio item: %s" % target.name)
 					target.interact()
-
-				# Priority 4: Fallback = mount
 				elif target:
+					# Priority 3: Other interactives = mount or interact
 					_mount_system.try_mount_target()
 				else:
 					_mount_system.try_mount_target()
@@ -397,10 +374,6 @@ func _physics_process(delta: float) -> void:
 	# Process movement input only when enabled
 	if _enabled and is_local:
 		var fully_standing: bool = _crouch_system.is_fully_standing()
-		
-		# Update first-person arms crouch state
-		if _fp_arms and _fp_arms.has_method("set_crouching"):
-			_fp_arms.set_crouching(not fully_standing)
 
 		if fully_standing and Input.is_action_pressed("dash") and RaceManager.is_dash_enabled():
 			max_speed = max_speed_dash

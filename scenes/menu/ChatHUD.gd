@@ -23,6 +23,11 @@ var _text_primary: Color:
 var _text_subtle: Color:
 	get: return ThemeManager.subtext_color
 
+## Stored lambdas for signal cleanup
+var _dark_mode_lambda: Callable = Callable()
+var _chat_enabled_lambda: Callable = Callable()
+var _chat_typing_sound_lambda: Callable = Callable()
+
 var _chat_system: ChatSystem = null
 var _typing_player: AudioStreamPlayer = null
 var _typing_sound_enabled: bool = false
@@ -151,12 +156,15 @@ func _load_typing_sound() -> void:
 	MultiplayerEvents.chat_message_received.connect(_on_chat_message_received)
 	MultiplayerEvents.player_joined.connect(_on_player_joined)
 	MultiplayerEvents.player_left.connect(_on_player_left)
-	SettingsEvents.chat_enabled_changed.connect(func(e): visible = e)
-	SettingsEvents.chat_typing_sound_changed.connect(func(e): _typing_sound_enabled = e)
+	_chat_enabled_lambda = func(e): visible = e
+	SettingsEvents.chat_enabled_changed.connect(_chat_enabled_lambda)
+	_chat_typing_sound_lambda = func(e): _typing_sound_enabled = e
+	SettingsEvents.chat_typing_sound_changed.connect(_chat_typing_sound_lambda)
 	_apply_chat_enabled_setting()
 	_apply_typing_sound_setting()
 	_apply_saved_chat_key()
-	ThemeManager.dark_mode_changed.connect(func(_d): _refresh_theme())
+	_dark_mode_lambda = func(_d): _refresh_theme()
+	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
 
 
 func _on_reading_font_changed(new_font: Font) -> void:
@@ -447,3 +455,16 @@ func _apply_typing_sound_setting() -> void:
 	var saved = SettingsManager.get_settings("multiplayer_ui")
 	if saved and saved.has("typing_sound_enabled"):
 		_typing_sound_enabled = saved.typing_sound_enabled
+
+
+func _exit_tree() -> void:
+	ThemeManager.reading_font_changed.disconnect(_on_reading_font_changed)
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
+	MultiplayerEvents.chat_message_received.disconnect(_on_chat_message_received)
+	MultiplayerEvents.player_joined.disconnect(_on_player_joined)
+	MultiplayerEvents.player_left.disconnect(_on_player_left)
+	if _chat_enabled_lambda.is_valid():
+		SettingsEvents.chat_enabled_changed.disconnect(_chat_enabled_lambda)
+	if _chat_typing_sound_lambda.is_valid():
+		SettingsEvents.chat_typing_sound_changed.disconnect(_chat_typing_sound_lambda)

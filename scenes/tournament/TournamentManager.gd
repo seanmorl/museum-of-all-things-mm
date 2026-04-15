@@ -65,7 +65,15 @@ var _twitch_clients: Array    = []
 func _ready() -> void:
 	RaceManager.race_ended.connect(_on_race_ended)
 	RaceManager.race_won.connect(_on_race_won_signal)
+	RaceManager.race_cancelled.connect(_on_race_cancelled)
 	NetworkManager.peer_disconnected.connect(_on_peer_disconnected)
+
+
+func _exit_tree() -> void:
+	RaceManager.race_ended.disconnect(_on_race_ended)
+	RaceManager.race_won.disconnect(_on_race_won_signal)
+	RaceManager.race_cancelled.disconnect(_on_race_cancelled)
+	NetworkManager.peer_disconnected.disconnect(_on_peer_disconnected)
 
 
 func _process(delta: float) -> void:
@@ -239,6 +247,20 @@ func _on_race_ended(winner_peer_id: int, winner_name: String) -> void:
 		await get_tree().create_timer(BETWEEN_ROUND_DELAY).timeout
 		if _active:
 			_start_next_round()
+
+
+func _on_race_cancelled() -> void:
+	## Handle race cancellation - reset round state for retry or continue
+	if not _active or not _round_in_progress:
+		return
+	if not NetworkManager.is_server():
+		return
+
+	_round_in_progress = false
+	_round_finish_order.clear()
+	_between_rounds = false
+
+	Log.info("TournamentManager", "Race cancelled - round state reset")
 
 
 func _award_round_points(winner_time: float) -> void:
@@ -657,7 +679,9 @@ function refresh() {
 		'</tr>';
     });
 	document.getElementById('tbody').innerHTML = rows;
-  }).catch(function(){});
+  }).catch(function(err){
+	console.error('Tournament standings refresh failed:', err);
+  });
 }
 refresh();
 setInterval(refresh, 3000);

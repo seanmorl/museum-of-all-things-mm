@@ -13,6 +13,10 @@ var _panel_style:    StyleBoxFlat    = null
 var _crown_canvas:   Control         = null
 var _winner_label:   Label           = null
 var _time_label:     Label           = null
+
+## Stored lambdas for signal cleanup
+var _dark_mode_lambda: Callable = Callable()
+var _reading_font_lambda: Callable = Callable()
 var _path_label:     Label           = null
 var _path_list:      VBoxContainer   = null
 var _continue_btn:   Button          = null
@@ -32,9 +36,19 @@ func _ready() -> void:
 	visible = false
 	_build_ui()
 	_apply_theme()
-	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
-	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
+	_dark_mode_lambda = func(_d): _apply_theme()
+	_reading_font_lambda = func(f): _serif_font = f; _apply_theme()
+	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
+	ThemeManager.reading_font_changed.connect(_reading_font_lambda)
 	RaceManager.race_ended.connect(_on_race_ended)
+
+
+func _exit_tree() -> void:
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
+	if _reading_font_lambda.is_valid():
+		ThemeManager.reading_font_changed.disconnect(_reading_font_lambda)
+	RaceManager.race_ended.disconnect(_on_race_ended)
 
 
 func _build_ui() -> void:

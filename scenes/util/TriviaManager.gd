@@ -14,9 +14,6 @@ var _pending_requests: Dictionary = {}
 
 var lang: String = "en"
 
-func _ready() -> void:
-	pass
-
 func fetch_trivia(article_title: String) -> void:
 	if _trivia_cache.has(article_title):
 		trivia_ready.emit(article_title, _trivia_cache[article_title])

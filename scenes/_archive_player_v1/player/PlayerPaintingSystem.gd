@@ -52,11 +52,6 @@ var _carry_material: Material = null
 
 func init(player: CharacterBody3D) -> void:
 	_player = player
-	
-	if not player.has_node("Pivot/Camera3D/RayCast3D"):
-		push_error("PlayerPaintingSystem: Pivot/Camera3D/RayCast3D not found for player '%s'" % player.name)
-		return
-	
 	_raycast = player.get_node("Pivot/Camera3D/RayCast3D")
 
 	# Create shared material for carry meshes

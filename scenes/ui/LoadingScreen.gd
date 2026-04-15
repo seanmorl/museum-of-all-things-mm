@@ -43,6 +43,10 @@ var _serif_font:   Font        = null
 ## Progress (0.0 – 1.0, negative = hidden)
 var _progress: float = -1.0
 
+## Stored lambdas for proper signal cleanup
+var _dark_mode_lambda: Callable = Callable()
+var _reading_font_lambda: Callable = Callable()
+
 
 func _ready() -> void:
 	layer = 100
@@ -50,8 +54,17 @@ func _ready() -> void:
 	visible = false
 	_serif_font = ThemeManager.get_reading_font()
 	_build_ui()
-	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
-	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
+	_dark_mode_lambda = func(_d): _apply_theme()
+	_reading_font_lambda = func(f): _serif_font = f; _apply_theme()
+	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
+	ThemeManager.reading_font_changed.connect(_reading_font_lambda)
+
+
+func _exit_tree() -> void:
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
+	if _reading_font_lambda.is_valid():
+		ThemeManager.reading_font_changed.disconnect(_reading_font_lambda)
 
 
 func _process(delta: float) -> void:

@@ -41,7 +41,7 @@ var PROCESSOR_QUEUE: String = "ItemProcessor"
 func _ready() -> void:
 	# Compile regexes
 	IMAGE_REGEX.compile("\\.(png|jpg|jpeg|webp|svg)$")
-	AUDIO_REGEX.compile("\\.(ogg)$")
+	AUDIO_REGEX.compile("\\.(ogg|mp3|wav|flac|m4a|aac)$")
 	s2_re.compile("^==[^=]")
 	template_re.compile("\\{\\{.*?\\}\\}")
 	links_re.compile("\\[\\[([^|\\]]*?\\|)?(.*?)\\]\\]")

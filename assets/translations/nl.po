@@ -436,184 +436,184 @@ msgstr ""
 
 ### Settings UI - Accessibility Tab
 msgid "Interface"
-msgstr ""
+msgstr "Interface"
 
 msgid "Reset to 100%"
-msgstr ""
+msgstr "Herstel naar 100%"
 
 msgid "UI Scale"
-msgstr ""
+msgstr "UI-schaal"
 
 msgid "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
-msgstr ""
+msgstr "Schaalt alle menu's, HUD en overlays. Sneltoetsen: Ctrl+= / Ctrl+- / Ctrl+0"
 
 msgid "Show chat"
-msgstr ""
+msgstr "Chat tonen"
 
 msgid "Hides the chat overlay while playing."
-msgstr ""
+msgstr "Verbergt de chatoverlay tijdens het spelen."
 
 msgid "Typing sound"
-msgstr ""
+msgstr "Typgeluid"
 
 msgid "Plays a subtle sound on each keypress in the chat box."
-msgstr ""
+msgstr "Speelt een subtiel geluid bij elke toetsaanslag in het chatvenster."
 
 msgid "Open chat"
-msgstr ""
+msgstr "Chat openen"
 
 msgid "Press the button then press any key to rebind."
-msgstr ""
+msgstr "Druk op de knop en druk vervolgens op een toets om opnieuw toe te wijzen."
 
 msgid "Screen Reader"
-msgstr ""
+msgstr "Schermlezer"
 
 msgid "Enable screen reader (AccessKit)"
-msgstr ""
+msgstr "Schermlezer inschakelen (AccessKit)"
 
 msgid "Exposes UI elements to OS screen readers via AccessKit. "
-msgstr ""
+msgstr "Maakt UI-elementen zichtbaar voor schermlezers van het besturingssysteem via AccessKit. "
 
 msgid "Requires Godot's DisplayServer accessibility API (4.3+). "
-msgstr ""
+msgstr "Vereist Godot's DisplayServer toegankelijkheids-API (4.3+). "
 
 msgid "Changes take effect immediately — no restart needed."
-msgstr ""
+msgstr "Wijzigingen worden direct toegepast — opnieuw opstarten is niet nodig."
 
 msgid "Verbosity"
-msgstr ""
+msgstr "Woordenrijkheid"
 
 msgid "All controls"
-msgstr ""
+msgstr "Alle bedieningselementen"
 
 msgid "Focused only"
-msgstr ""
+msgstr "Alleen gefocust"
 
 msgid "Off"
-msgstr ""
+msgstr "Uit"
 
 msgid "Vision"
-msgstr ""
+msgstr "Visie"
 
 msgid "Reading font"
-msgstr ""
+msgstr "Leeslettertype"
 
 msgid "Default (Cormorant Garamond)"
-msgstr ""
+msgstr "Standaard (Cormorant Garamond)"
 
 msgid "OpenDyslexic"
-msgstr ""
+msgstr "OpenDyslexic"
 
 msgid "Atkinson Hyperlegible"
-msgstr ""
+msgstr "Atkinson Hyperlegible"
 
 msgid "OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. "
-msgstr ""
+msgstr "OpenDyslexic en Atkinson Hyperlegible zijn ontworpen voor verbeterde leesbaarheid. "
 
 msgid "Fonts must be present at:"
-msgstr ""
+msgstr "Lettertypen moeten aanwezig zijn op:"
 
 msgid "High-contrast exhibit text"
-msgstr ""
+msgstr "Tekst met hoog contrast voor tentoonstellingen"
 
 msgid "Renders article wall-card text as black-on-white regardless of dark mode."
-msgstr ""
+msgstr "Geeft artikelkaarttekst weer als zwart-op-wit, ongeacht de donkere modus."
 
 msgid "Exhibit text size"
-msgstr ""
+msgstr "Tekengrootte tentoonstelling"
 
 msgid "Scales the font size of Wikipedia article text on exhibit walls."
-msgstr ""
+msgstr "Schaalt de lettergrootte van Wikipedia-artikeltekst op tentoonstellingsmuren."
 
 msgid "Floating exhibit signs"
-msgstr ""
+msgstr "Zwevende tentoonstellingsborden"
 
 msgid "Replaces physical sign boards with floating text. "
-msgstr ""
+msgstr "Vervangt fysieke borden door zwevende tekst. "
 
 msgid "Text remains visible but the board mesh is hidden. "
-msgstr ""
+msgstr "Tekst blijft zichtbaar maar het bordmesh is verborgen. "
 
 msgid "Makes exhibit names easier to read during races."
-msgstr ""
+msgstr "Maakt tentoonstellingsnamen gemakkelijker leesbaar tijdens races."
 
 msgid "Colour & Contrast"
-msgstr ""
+msgstr "Kleur en contrast"
 
 msgid "Colourblind filter"
-msgstr ""
+msgstr "Kleurenblindfilter"
 
 msgid "Protanopia  (red-blind)"
-msgstr ""
+msgstr "Protanopie  (roodblind)"
 
 msgid "Deuteranopia  (green-blind)"
-msgstr ""
+msgstr "Deuteranopie  (groenblind)"
 
 msgid "Tritanopia  (blue-blind)"
-msgstr ""
+msgstr "Tritanopie  (blauwblind)"
 
 msgid "Applies a full-screen post-processing shader to correct for colour vision deficiency. "
-msgstr ""
+msgstr "Past een volledig scherm post-processing shader toe om kleurvisiegebrek te corrigeren. "
 
 msgid "Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a "
-msgstr ""
+msgstr "Vereist de shader op res://assets/shaders/colorblind_correction.gdshader en een "
 
 msgid "CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
-msgstr ""
+msgstr "CanvasLayer + ColorRect met de naam ColorblindOverlay in je hoofdscene."
 
 msgid "Motion"
-msgstr ""
+msgstr "Beweging"
 
 msgid "Reduce motion"
-msgstr ""
+msgstr "Beweging verminderen"
 
 msgid "Disables slide/fade animations on menus and the race HUD. Fog transitions remain."
-msgstr ""
+msgstr "Schakelt vervaag- en verloopanimaties op menu's en de race-HUD uit. Misttransities blijven."
 
 msgid "HUD & Hints"
-msgstr ""
+msgstr "HUD en hints"
 
 msgid "Large HUD text"
-msgstr ""
+msgstr "Grote HUD-tekst"
 
 msgid "Increases font size of the race timer, target name, and hint banners."
-msgstr ""
+msgstr "Verhoogt de lettergrootte van de racetimer, doelnaam en hintbanners."
 
 msgid "Keep hints visible"
-msgstr ""
+msgstr "Hints zichtbaar houden"
 
 msgid "Hint banners stay on screen until the race ends instead of fading after a few seconds."
-msgstr ""
+msgstr "Hintbanners blijven op het scherm tot de race eindigt in plaats van na enkele seconden te vervagen."
 
 msgid "Audio & Visual"
-msgstr ""
+msgstr "Audio en visueel"
 
 msgid "Show playing audio indicator"
-msgstr ""
+msgstr "Afspelen audio-indicator tonen"
 
 msgid "Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."
-msgstr ""
+msgstr "Toont een visueel pictogram wanneer audio-items afspelen. Helpt dove/slechthorende spelers."
 
 msgid "Photosensitivity warning"
-msgstr ""
+msgstr "Fotogevoeligheidswaarschuwing"
 
 msgid "Shows a warning before exhibits with flashing or strobing content."
-msgstr ""
+msgstr "Toont een waarschuwing vóór tentoonstellingen met flitsende of stroboscoopinhoud."
 
 msgid "HUD opacity"
-msgstr ""
+msgstr "HUD-dekking"
 
 msgid "Makes the race HUD more transparent to see more of the game world."
-msgstr ""
+msgstr "Maakt de race-HUD transparanter zodat je meer van de spelwereld ziet."
 
 msgid "Motor"
-msgstr ""
+msgstr "Motoriek"
 
 msgid "Hold to activate buttons"
-msgstr ""
+msgstr "Ingedrukt houden om knoppen te activeren"
 
 msgid "Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."
-msgstr ""
+msgstr "Knoppen moeten 0,5s ingedrukt blijven in plaats van klikken. Helpt bij motorische controleproblemen."
 
 msgid "Accessibility"
-msgstr ""
+msgstr "Toegankelijkheid"

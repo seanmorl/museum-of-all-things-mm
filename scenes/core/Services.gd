@@ -29,6 +29,8 @@ var room_service: Node = null
 
 func _ready() -> void:
 	# Services are initialized by Main.gd
+	# @deprecated - Use autoload singletons directly (NetworkManager, RaceManager, etc.)
+	push_warning("Services.gd is deprecated. Use autoload singletons directly (NetworkManager, RaceManager, etc.)")
 	pass
 
 # --- Initialization ---

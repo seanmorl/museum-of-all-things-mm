@@ -433,184 +433,184 @@ msgstr ""
 
 ### Settings UI - Accessibility Tab
 msgid "Interface"
-msgstr ""
+msgstr "인터페이스"
 
 msgid "Reset to 100%"
-msgstr ""
+msgstr "100%로 초기화"
 
 msgid "UI Scale"
-msgstr ""
+msgstr "UI 크기"
 
 msgid "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
-msgstr ""
+msgstr "모든 메뉴, HUD, 오버레이 크기를 조절합니다. 단축키: Ctrl+= / Ctrl+- / Ctrl+0"
 
 msgid "Show chat"
-msgstr ""
+msgstr "채팅 표시"
 
 msgid "Hides the chat overlay while playing."
-msgstr ""
+msgstr "플레이 중 채팅 오버레이를 숨깁니다."
 
 msgid "Typing sound"
-msgstr ""
+msgstr "타이핑 소리"
 
 msgid "Plays a subtle sound on each keypress in the chat box."
-msgstr ""
+msgstr "채팅 입력 시 은은한 소리를 재생합니다."
 
 msgid "Open chat"
-msgstr ""
+msgstr "채팅 열기"
 
 msgid "Press the button then press any key to rebind."
-msgstr ""
+msgstr "버튼을 누른 후 다시 설정할 키를 누르세요."
 
 msgid "Screen Reader"
-msgstr ""
+msgstr "화면 읽기"
 
 msgid "Enable screen reader (AccessKit)"
-msgstr ""
+msgstr "화면 읽기 활성화 (AccessKit)"
 
 msgid "Exposes UI elements to OS screen readers via AccessKit. "
-msgstr ""
+msgstr "AccessKit을 통해 OS 화면 읽기 프로그램에 UI 요소를 노출합니다. "
 
 msgid "Requires Godot's DisplayServer accessibility API (4.3+). "
-msgstr ""
+msgstr "Godot의 DisplayServer 접근성 API(4.3+)가 필요합니다. "
 
 msgid "Changes take effect immediately — no restart needed."
-msgstr ""
+msgstr "변경 사항은 즉시 적용되며 재시작이 필요 없습니다."
 
 msgid "Verbosity"
-msgstr ""
+msgstr "상세도"
 
 msgid "All controls"
-msgstr ""
+msgstr "모든 조작"
 
 msgid "Focused only"
-msgstr ""
+msgstr "포커스된 요소만"
 
 msgid "Off"
-msgstr ""
+msgstr "끔"
 
 msgid "Vision"
-msgstr ""
+msgstr "시각"
 
 msgid "Reading font"
-msgstr ""
+msgstr "읽기용 글꼴"
 
 msgid "Default (Cormorant Garamond)"
-msgstr ""
+msgstr "기본 (Cormorant Garamond)"
 
 msgid "OpenDyslexic"
-msgstr ""
+msgstr "OpenDyslexic"
 
 msgid "Atkinson Hyperlegible"
-msgstr ""
+msgstr "Atkinson Hyperlegible"
 
 msgid "OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. "
-msgstr ""
+msgstr "OpenDyslexic과 Atkinson Hyperlegible은 가독성 향상을 위해 설계되었습니다. "
 
 msgid "Fonts must be present at:"
-msgstr ""
+msgstr "글꼴이 다음 위치에 있어야 합니다:"
 
 msgid "High-contrast exhibit text"
-msgstr ""
+msgstr "고대비 전시 텍스트"
 
 msgid "Renders article wall-card text as black-on-white regardless of dark mode."
-msgstr ""
+msgstr "다크 모드와 관계없이 기사 카드 텍스트를 흰색 바탕에 검은 글씨로 표시합니다."
 
 msgid "Exhibit text size"
-msgstr ""
+msgstr "전시 텍스트 크기"
 
 msgid "Scales the font size of Wikipedia article text on exhibit walls."
-msgstr ""
+msgstr "전시 벽면의 Wikipedia 기사 텍스트 글꼴 크기를 조절합니다."
 
 msgid "Floating exhibit signs"
-msgstr ""
+msgstr "부동 전시 표지"
 
 msgid "Replaces physical sign boards with floating text. "
-msgstr ""
+msgstr "물리적 표지판을 부동 텍스트로 대체합니다. "
 
 msgid "Text remains visible but the board mesh is hidden. "
-msgstr ""
+msgstr "텍스트는 그대로 보이지만 표지판 메시는 숨겨집니다. "
 
 msgid "Makes exhibit names easier to read during races."
-msgstr ""
+msgstr "레이스 중 전시 이름을 더 읽기 쉽게 합니다."
 
 msgid "Colour & Contrast"
-msgstr ""
+msgstr "색상 및 대비"
 
 msgid "Colourblind filter"
-msgstr ""
+msgstr "색맹 필터"
 
 msgid "Protanopia  (red-blind)"
-msgstr ""
+msgstr "제1형 색맹  (적색 약)"
 
 msgid "Deuteranopia  (green-blind)"
-msgstr ""
+msgstr "제2형 색맹  (녹색 약)"
 
 msgid "Tritanopia  (blue-blind)"
-msgstr ""
+msgstr "제3형 색맹  (청색 약)"
 
 msgid "Applies a full-screen post-processing shader to correct for colour vision deficiency. "
-msgstr ""
+msgstr "전체 화면 후처리 셰이더를 적용하여 색각 이상을 보정합니다. "
 
 msgid "Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a "
-msgstr ""
+msgstr "res://assets/shaders/colorblind_correction.gdshader 셰이더와 "
 
 msgid "CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
-msgstr ""
+msgstr "메인 씬에 ColorblindOverlay라는 CanvasLayer + ColorRect가 필요합니다."
 
 msgid "Motion"
-msgstr ""
+msgstr "움직임"
 
 msgid "Reduce motion"
-msgstr ""
+msgstr "움직임 줄이기"
 
 msgid "Disables slide/fade animations on menus and the race HUD. Fog transitions remain."
-msgstr ""
+msgstr "메뉴와 레이스 HUD의 슬라이드/페이드 애니메이션을 비활성화합니다. 안개 전환은 유지됩니다."
 
 msgid "HUD & Hints"
-msgstr ""
+msgstr "HUD 및 힌트"
 
 msgid "Large HUD text"
-msgstr ""
+msgstr "큰 HUD 텍스트"
 
 msgid "Increases font size of the race timer, target name, and hint banners."
-msgstr ""
+msgstr "레이스 타이머, 목표 이름, 힌트 배너의 글꼴 크기를 키웁니다."
 
 msgid "Keep hints visible"
-msgstr ""
+msgstr "힌트 계속 표시"
 
 msgid "Hint banners stay on screen until the race ends instead of fading after a few seconds."
-msgstr ""
+msgstr "힌트 배너가 몇 초 후 사라지는 대신 레이스가 끝날 때까지 화면에 유지됩니다."
 
 msgid "Audio & Visual"
-msgstr ""
+msgstr "오디오 및 비주얼"
 
 msgid "Show playing audio indicator"
-msgstr ""
+msgstr "오디오 재생 표시기 표시"
 
 msgid "Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."
-msgstr ""
+msgstr "오디오 항목 재생 시 시각 아이콘을 표시합니다. 청각 장애인/난청 플레이어에게 도움이 됩니다."
 
 msgid "Photosensitivity warning"
-msgstr ""
+msgstr "광과민성 경고"
 
 msgid "Shows a warning before exhibits with flashing or strobing content."
-msgstr ""
+msgstr "깜빡임 또는 스트로브 콘텐츠가 있는 전시 전 경고를 표시합니다."
 
 msgid "HUD opacity"
-msgstr ""
+msgstr "HUD 불투명도"
 
 msgid "Makes the race HUD more transparent to see more of the game world."
-msgstr ""
+msgstr "레이스 HUD를 더 투명하게 만들어 게임 세상을 더 많이 볼 수 있게 합니다."
 
 msgid "Motor"
-msgstr ""
+msgstr "운동"
 
 msgid "Hold to activate buttons"
-msgstr ""
+msgstr "길게 눌러 버튼 활성화"
 
 msgid "Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."
-msgstr ""
+msgstr "클릭 대신 0.5초간 길게 눌러야 합니다. 운동 조절 장애에 도움이 됩니다."
 
 msgid "Accessibility"
-msgstr ""
+msgstr "접근성"

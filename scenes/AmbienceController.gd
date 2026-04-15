@@ -161,3 +161,7 @@ func _on_dark_mode_changed(enabled: bool) -> void:
 		if child is AudioStreamPlayer:
 			var tw: Tween = get_tree().create_tween()
 			tw.tween_property(child, "volume_db", target, _VOLUME_TWEEN_DURATION)
+
+
+func _exit_tree() -> void:
+	ThemeManager.dark_mode_changed.disconnect(_on_dark_mode_changed)

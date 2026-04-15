@@ -121,12 +121,13 @@ func load_exhibit_for_rider(from_room: String, to_room: String) -> void:
 
 	# Update room title immediately for network sync (even before load completes)
 	_set_current_room_title(to_room)
-	
+
 	# Schedule validation - if exhibit fails to load, revert to lobby
-	await get_tree().create_timer(2.0).timeout
-	if _rider_loading_exhibits.has(to_room) and not has_exhibit(to_room):
-		# Exhibit failed to load - player might be in void
-		_revert_to_safe_position(to_room)
+	if is_inside_tree():
+		await get_tree().create_timer(2.0).timeout
+		if _rider_loading_exhibits.has(to_room) and not has_exhibit(to_room):
+			# Exhibit failed to load - player might be in void
+			_revert_to_safe_position(to_room)
 
 func _revert_to_safe_position(failed_room: String) -> void:
 	"""When exhibit fails to load, teleport player back to lobby to prevent void falling."""
@@ -243,6 +244,21 @@ func _ready() -> void:
 	# 	TwitchManager.color_change_requested.connect(_on_twitch_color_requested)
 
 	ThemeManager.disco_mode_changed.connect(_on_disco_mode_changed)
+
+
+func _exit_tree() -> void:
+	_queue_timer.timeout.disconnect(_process_item_queue)
+	ExhibitFetcher.wikitext_complete.disconnect(_on_fetch_complete)
+	ExhibitFetcher.wikidata_complete.disconnect(_on_wikidata_complete)
+	ExhibitFetcher.commons_images_complete.disconnect(_on_commons_images_complete)
+	UIEvents.reset_custom_door.disconnect(_reset_custom_door)
+	UIEvents.set_custom_door.disconnect(_set_custom_door)
+	SettingsEvents.language_changed.disconnect(_on_change_language)
+	RaceManager.race_started.disconnect(_on_race_started)
+	RaceManager.race_ended.disconnect(_on_race_ended)
+	RaceManager.race_cancelled.disconnect(_on_race_ended)
+	ThemeManager.disco_mode_changed.disconnect(_on_disco_mode_changed)
+	# Note: ThemeManager.dark_mode_changed uses lambda, auto-cleanup via object destruction
 
 
 func init(player: Node) -> void:

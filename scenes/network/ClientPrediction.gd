@@ -30,7 +30,11 @@ var _server_sequence: int = 0
 var _has_server_state: bool = false
 
 # Prediction settings
-var _reconciliation_enabled: bool = true
+# NOTE: Reconciliation is disabled by default in host-authoritative mode.
+# The host is the source of truth for game state; clients trust the host's
+# corrections. Full reconciliation would require storing physics state per
+# input frame, which is expensive. See apply_reconciliation() for details.
+var _reconciliation_enabled: bool = false
 var _max_rewind_frames: int = 20
 var _position_error_threshold: float = 0.5  # Snap if error > this
 
@@ -87,23 +91,18 @@ func apply_reconciliation(player: Node3D) -> Vector3:
 	"""Apply server reconciliation - rewind and replay inputs"""
 	if not _has_server_state or _input_queue.is_empty():
 		return _server_position
-	
-	# Start from server position
-	var corrected_position = _server_position
-	var corrected_velocity = _server_velocity
-	
-	# Replay all unconfirmed inputs
-	# Note: Actual physics replay would require full physics state storage
-	# This is a simplified visual correction
-	for cmd in _input_queue:
-		# In a full implementation, you would:
-		# 1. Restore player state to _server_position
-		# 2. Apply each input command's movement
-		# 3. Return final position
-		# For now, we just return server position + local input offset
-		pass
-	
-	return corrected_position
+
+	# Reconciliation is disabled by default. A full implementation would:
+	# 1. Save physics state snapshots each frame
+	# 2. Restore to server position + velocity
+	# 3. Replay each input command through the physics step
+	# This is expensive and unnecessary in host-authoritative mode where
+	# the host sends periodic position that clients snap to.
+	#
+	# The simplified approach: just snap to server position if divergence
+	# exceeds threshold (checked in needs_reconciliation).
+
+	return _server_position
 
 func reset() -> void:
 	"""Reset all state"""

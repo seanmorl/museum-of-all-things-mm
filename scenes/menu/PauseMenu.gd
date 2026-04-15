@@ -33,6 +33,9 @@ var _dividers: Array[Dictionary] = []
 # Fullscreen loading overlay shown while fetching race articles.
 var _loading_overlay: Control = null
 
+## Stored lambdas for signal cleanup
+var _reading_font_lambda: Callable = Callable()
+
 # Group leaders: a divider line is placed just above each of these nodes.
 # Names matched to the actual tscn — "Lobby" is the Return to Lobby button,
 # "AskQuit" is the Quit button visible in the pause panel.
@@ -67,7 +70,8 @@ func _ready() -> void:
 
 	_apply_theme()
 	ThemeManager.dark_mode_changed.connect(_on_dark_mode_changed)
-	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
+	_reading_font_lambda = func(f): _serif_font = f; _apply_theme()
+	ThemeManager.reading_font_changed.connect(_reading_font_lambda)
 
 	if Platform.is_web():
 		var aq = get_node_or_null("%AskQuit")
@@ -429,3 +433,18 @@ func _update_race_button_visibility() -> void:
 func set_race_control_override(enabled: bool) -> void:
 	_race_control_override = enabled
 	_update_race_button_visibility()
+
+
+func _exit_tree() -> void:
+	SettingsEvents.set_current_room.disconnect(set_current_room)
+	UIEvents.ui_cancel_pressed.disconnect(ui_cancel_pressed)
+	MultiplayerEvents.multiplayer_started.disconnect(_update_race_button_visibility)
+	MultiplayerEvents.multiplayer_ended.disconnect(_update_race_button_visibility)
+	RaceManager.race_started.disconnect(_on_race_state_changed)
+	RaceManager.race_ended.disconnect(_on_race_state_changed)
+	RaceManager.race_cancelled.disconnect(_on_race_state_changed)
+	RaceManager.vote_started.disconnect(_on_vote_started)
+	RaceManager.vote_cancelled.disconnect(_on_vote_cancelled)
+	ThemeManager.dark_mode_changed.disconnect(_on_dark_mode_changed)
+	if _reading_font_lambda.is_valid():
+		ThemeManager.reading_font_changed.disconnect(_reading_font_lambda)

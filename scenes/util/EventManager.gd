@@ -208,7 +208,8 @@ func _try_trigger_event() -> void:
 	_rpc_show_warning.rpc(event)
 
 	# Wait 2 seconds then start
-	await get_tree().create_timer(2.0).timeout
+	if is_inside_tree():
+		await get_tree().create_timer(2.0).timeout
 	_start_event(event, duration)
 	_event_pending = false
 
@@ -413,7 +414,8 @@ func _try_trigger_event_manual(event: EventType) -> void:
 
 	_rpc_show_warning.rpc(event)
 
-	await get_tree().create_timer(2.0).timeout
+	if is_inside_tree():
+		await get_tree().create_timer(2.0).timeout
 	_start_event(event, duration)
 
 

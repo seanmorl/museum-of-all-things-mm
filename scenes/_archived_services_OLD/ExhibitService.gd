@@ -14,6 +14,8 @@ var _museum: Node = null
 var _exhibit_loader: Node = null
 
 func _ready() -> void:
+	# @deprecated - This service is archived. Use Museum/ExhibitLoader directly.
+	push_warning("ExhibitService is deprecated. Use Museum/ExhibitLoader directly.")
 	pass
 
 func initialize(museum: Node, exhibit_loader: Node) -> void:

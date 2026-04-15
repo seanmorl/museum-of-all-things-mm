@@ -16,6 +16,8 @@ var _museum: Node = null
 
 func _ready() -> void:
 	# Will be initialized by Main.gd
+	# @deprecated - This service is archived. Use autoloads directly.
+	push_warning("RoomService is deprecated. Use autoload singletons directly.")
 	pass
 
 func initialize(museum: Node, exhibit_loader: Node) -> void:

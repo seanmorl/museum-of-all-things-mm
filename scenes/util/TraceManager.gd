@@ -20,18 +20,27 @@ func _load() -> void:
 		return
 	var file: FileAccess = FileAccess.open(TRACE_FILE, FileAccess.READ)
 	if not file:
+		Log.warn("TraceManager", "Failed to open trace file for reading")
 		return
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	var json_str := file.get_as_text()
 	file.close()
+	if json_str.is_empty():
+		return
+	var parsed: Variant = JSON.parse_string(json_str)
+	if parsed == null:
+		Log.warn("TraceManager", "Failed to parse trace file JSON")
+		return
 	if parsed is Dictionary:
 		_data = parsed
 
 
 func _save() -> void:
 	var file: FileAccess = FileAccess.open(TRACE_FILE, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(_data))
-		file.close()
+	if not file:
+		Log.error("TraceManager", "Failed to open trace file for writing")
+		return
+	file.store_string(JSON.stringify(_data))
+	file.close()
 
 
 func _ensure_exhibit(title: String) -> void:

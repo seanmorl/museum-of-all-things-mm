@@ -91,16 +91,14 @@ var passable: bool = true
 
 func set_passable(v: bool) -> void:
 	passable = v
-	if entry_door and entry_door.has_method("set_locked"): # Wait, I named it lock/unlock
-		pass
-	
-	# Let's use the new methods
+
+	# Lock/unlock doors using the door's lock/unlock methods
 	if not v:
-		if entry_door.has_method("lock"): entry_door.lock()
-		if exit_door.has_method("lock"): exit_door.lock()
+		if entry_door and entry_door.has_method("lock"): entry_door.lock()
+		if exit_door and exit_door.has_method("lock"): exit_door.lock()
 	else:
-		if entry_door.has_method("unlock"): entry_door.unlock()
-		if exit_door.has_method("unlock"): exit_door.unlock()
+		if entry_door and entry_door.has_method("unlock"): entry_door.unlock()
+		if exit_door and exit_door.has_method("unlock"): exit_door.unlock()
 
 var player_in_hall: bool:
 	get:
@@ -295,6 +293,10 @@ func _exit_tree() -> void:
 	
 	if is_instance_valid(_detector) and _detector.direction_changed.is_connected(_on_direction_changed):
 		_detector.direction_changed.disconnect(_on_direction_changed)
+	
+	# Clean up ThemeManager signals
+	ThemeManager.disco_mode_changed.disconnect(_on_disco_mode_changed)
+	ThemeManager.reading_font_changed.disconnect(_on_font_changed)
 
 
 func _on_fetch_failed(titles: Array, message: String) -> void:

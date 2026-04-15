@@ -126,13 +126,17 @@ func _get_pcm_data() -> AudioStreamWAV:
 # ── Public API ───────────────────────────────────────────────────────────────
 
 func init_local_voice(_player: Node3D) -> void:
-	## Legacy API — local voice is now attached to the VoiceChatManager itself.
-	## Kept for backward compatibility. No-op.
+	## @deprecated - Legacy API kept for backward compatibility.
+	## Local voice is now attached to the VoiceChatManager itself.
+	## This function does nothing and will be removed in a future version.
+	push_warning("VoiceChatManager.init_local_voice() is deprecated and does nothing")
 	pass
 
 
 func send_voice_audio(_peer_id: int, _audio_data: PackedByteArray) -> void:
-	## Legacy unicast API — replaced by broadcast RPC. Kept for compatibility.
+	## @deprecated - Legacy unicast API replaced by broadcast RPC.
+	## This function does nothing and will be removed in a future version.
+	push_warning("VoiceChatManager.send_voice_audio() is deprecated and does nothing")
 	pass
 
 
@@ -253,6 +257,9 @@ func _receive_voice_audio(audio_data: PackedByteArray) -> void:
 		return
 
 	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id <= 0:
+		return  # Invalid sender
+	
 	if sender_id == multiplayer.get_unique_id():
 		return  # Ignore our own broadcasts
 

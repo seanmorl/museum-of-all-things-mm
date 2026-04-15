@@ -87,9 +87,30 @@ func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStrin
 	_loading = false
 	
 	if result == HTTPRequest.RESULT_SUCCESS and response_code == 200:
-		_stream = AudioStreamOggVorbis.load_from_buffer(body)
+		_stream = _load_audio_stream(body, audio_url)
 		if _stream and _player:
 			_player.stream = _stream
+
+
+func _load_audio_stream(body: PackedByteArray, file_url: String) -> AudioStream:
+	var ext := ""
+	if "." in file_url:
+		ext = file_url.get_slice(".", -1).to_lower()
+	
+	var stream: AudioStream = AudioStreamOggVorbis.load_from_buffer(body)
+	if stream:
+		return stream
+	
+	stream = AudioStreamMP3.load_from_buffer(body)
+	if stream:
+		return stream
+	
+	stream = AudioStreamWAV.load_from_buffer(body)
+	if stream:
+		return stream
+	
+	Log.warn("PlacedAudio", "No supported audio format for .%s" % ext)
+	return null
 
 func set_stolen(stolen: bool) -> void:
 	if stolen:

@@ -18,6 +18,10 @@ var _dedicated_host_btn: Button = null  # unused here, kept for parity
 var _closing: bool = false
 var _background: Control = null
 
+## Stored lambdas for signal cleanup
+var _dark_mode_lambda: Callable = Callable()
+var _reading_font_lambda: Callable = Callable()
+
 # The single panel node that slides/fades (mirrors PauseMenu's _panel approach)
 @onready var _panel = get_node_or_null("MarginContainer/Panel")
 @onready var _inner_panel = get_node_or_null("MarginContainer/Panel")
@@ -72,8 +76,10 @@ func _ready() -> void:
 	MultiplayerEvents.multiplayer_started.connect(_on_multiplayer_started)
 
 	_apply_theme()
-	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
-	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
+	_dark_mode_lambda = func(_d): _apply_theme()
+	_reading_font_lambda = func(f): _serif_font = f; _apply_theme()
+	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
+	ThemeManager.reading_font_changed.connect(_reading_font_lambda)
 
 	_show_state(MenuState.MAIN)
 	_setup_pronoun_dropdowns()
@@ -775,3 +781,16 @@ func _on_multiplayer_started() -> void:
 func _start_multiplayer_game() -> void:
 	MultiplayerEvents.emit_multiplayer_started()
 	start_game.emit()
+
+
+func _exit_tree() -> void:
+	NetworkManager.peer_connected.disconnect(_on_peer_connected)
+	NetworkManager.peer_disconnected.disconnect(_on_peer_disconnected)
+	NetworkManager.connection_succeeded.disconnect(_on_connection_succeeded)
+	NetworkManager.connection_failed.disconnect(_on_connection_failed)
+	NetworkManager.server_disconnected.disconnect(_on_server_disconnected)
+	MultiplayerEvents.multiplayer_started.disconnect(_on_multiplayer_started)
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
+	if _reading_font_lambda.is_valid():
+		ThemeManager.reading_font_changed.disconnect(_reading_font_lambda)

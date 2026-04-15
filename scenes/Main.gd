@@ -34,6 +34,10 @@ var _chat_hud: Node = null
 var _trivia_manager: TriviaManager = null
 var _host_menu: CanvasLayer = null
 
+## Stored lambdas for proper cleanup
+var _reading_font_lambda: Callable = Callable()
+var _quit_lambda: Callable = Callable()
+
 @onready var _journal_overlay: JournalOverlay = %JournalOverlay
 @onready var player_list_overlay: Control = %PlayerListOverlay
 @onready var _server_console_overlay: Control = %ServerConsoleOverlay
@@ -125,7 +129,8 @@ func _ready() -> void:
 	# WIP Label font management
 	if _wip_label:
 		_wip_label.add_theme_font_override("font", ThemeManager.get_reading_font())
-		ThemeManager.reading_font_changed.connect(func(f): _wip_label.add_theme_font_override("font", f))
+		_reading_font_lambda = func(f): _wip_label.add_theme_font_override("font", f)
+		ThemeManager.reading_font_changed.connect(_reading_font_lambda)
 
 func _initialize_room_service() -> void:
 	"""Initialize RoomService with museum references (called after @onready vars are set)."""
@@ -1571,17 +1576,30 @@ func _sync_exhibit_to_peer(exhibit_title: String) -> void:
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _sync_player_position(peer_id: int, pos: Vector3, rot_y: float, pivot_rot_x: float, pivot_pos_y: float = 1.35, is_mounted: bool = false, mounted_peer_id: int = -1, current_room: String = "Lobby", pointing: bool = false, pt_target: Vector3 = Vector3.ZERO) -> void:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != peer_id:
+		return
 	_multiplayer_controller.apply_network_position(peer_id, pos, rot_y, pivot_rot_x, pivot_pos_y, is_mounted, mounted_peer_id, _player, current_room, pointing, pt_target)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_mount_rpc(rider_peer_id: int, mount_peer_id: int) -> void:
-	if NetworkManager.is_server():
-		_mount_controller.handle_mount_request(rider_peer_id, mount_peer_id, _player)
+	if not NetworkManager.is_server():
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != rider_peer_id:
+		Log.warn("Main", "Mount rejected - sender %d != rider %d" % [sender_id, rider_peer_id])
+		return
+	_mount_controller.handle_mount_request(rider_peer_id, mount_peer_id, _player)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_dismount_rpc(rider_peer_id: int) -> void:
-	if NetworkManager.is_server():
-		_mount_controller.handle_dismount_request(rider_peer_id, _player)
+	if not NetworkManager.is_server():
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != rider_peer_id:
+		Log.warn("Main", "Dismount rejected - sender %d != rider %d" % [sender_id, rider_peer_id])
+		return
+	_mount_controller.handle_dismount_request(rider_peer_id, _player)
 
 @rpc("authority", "call_local", "reliable")
 func _execute_mount_sync(rider_peer_id: int, mount_peer_id: int) -> void:
@@ -1594,28 +1612,48 @@ func _execute_dismount_sync(rider_peer_id: int) -> void:
 ## Painting RPCs
 @rpc("any_peer", "call_remote", "reliable")
 func _request_steal_painting_rpc(peer_id: int, exhibit_title: String, image_title: String, image_url: String, image_size: Vector2) -> void:
-	if NetworkManager.is_server():
-		_painting_controller.handle_steal_request(peer_id, exhibit_title, image_title, image_url, image_size, _player)
+	if not NetworkManager.is_server():
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != peer_id:
+		return
+	_painting_controller.handle_steal_request(peer_id, exhibit_title, image_title, image_url, image_size, _player)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_place_painting_rpc(peer_id: int, exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2) -> void:
-	if NetworkManager.is_server():
-		_painting_controller.handle_place_request(peer_id, exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, _player)
+	if not NetworkManager.is_server():
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != peer_id:
+		return
+	_painting_controller.handle_place_request(peer_id, exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, _player)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_steal_audio_rpc(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String) -> void:
-	if NetworkManager.is_server():
-		_painting_controller.handle_steal_audio_request(peer_id, exhibit_title, audio_title, audio_url, _player)
+	if not NetworkManager.is_server():
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != peer_id:
+		return
+	_painting_controller.handle_steal_audio_request(peer_id, exhibit_title, audio_title, audio_url, _player)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_place_audio_rpc(peer_id: int, exhibit_title: String, audio_title: String, audio_url: String, position: Vector3, normal: Vector3) -> void:
-	if NetworkManager.is_server():
-		_painting_controller.handle_place_audio_request(peer_id, exhibit_title, audio_title, audio_url, position, normal, _player)
+	if not NetworkManager.is_server():
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != peer_id:
+		return
+	_painting_controller.handle_place_audio_request(peer_id, exhibit_title, audio_title, audio_url, position, normal, _player)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_eat_painting_rpc(peer_id: int, exhibit_title: String, image_title: String) -> void:
-	if NetworkManager.is_server():
-		_painting_controller.handle_eat_request(peer_id, exhibit_title, image_title, _player)
+	if not NetworkManager.is_server():
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != peer_id:
+		return
+	_painting_controller.handle_eat_request(peer_id, exhibit_title, image_title, _player)
 
 @rpc("authority", "call_local", "reliable")
 func _execute_steal_sync(peer_id: int, exhibit_title: String, image_title: String, image_url: String, image_size: Vector2) -> void:
@@ -1636,15 +1674,17 @@ func _execute_place_audio_sync(peer_id: int, exhibit_title: String, audio_title:
 # Audio playback sync RPCs
 @rpc("any_peer", "call_remote", "reliable")
 func _request_audio_play_rpc(audio_key: String, exhibit_title: String, audio_title: String) -> void:
-	if NetworkManager.is_server():
-		_painting_controller.handle_audio_play_request(exhibit_title, audio_title)
-		_broadcast_audio_play_sync.rpc(audio_key, exhibit_title, audio_title)
+	if not NetworkManager.is_server():
+		return
+	_painting_controller.handle_audio_play_request(exhibit_title, audio_title)
+	_broadcast_audio_play_sync.rpc(audio_key, exhibit_title, audio_title)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_audio_stop_rpc(audio_key: String, exhibit_title: String, audio_title: String) -> void:
-	if NetworkManager.is_server():
-		_painting_controller.handle_audio_stop_request(exhibit_title, audio_title)
-		_broadcast_audio_stop_sync.rpc(audio_key, exhibit_title, audio_title)
+	if not NetworkManager.is_server():
+		return
+	_painting_controller.handle_audio_stop_request(exhibit_title, audio_title)
+	_broadcast_audio_stop_sync.rpc(audio_key, exhibit_title, audio_title)
 
 @rpc("authority", "call_local", "reliable")
 func _broadcast_audio_play_sync(audio_key: String, exhibit_title: String, audio_title: String) -> void:
@@ -1660,10 +1700,16 @@ func _execute_eat_sync(peer_id: int) -> void:
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _eat_anim_start_sync(peer_id: int) -> void:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != peer_id:
+		return
 	_painting_controller.apply_eat_anim_start(peer_id, _player)
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _eat_anim_cancel_sync(peer_id: int) -> void:
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != peer_id:
+		return
 	_painting_controller.apply_eat_anim_cancel(peer_id, _player)
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -2519,3 +2565,29 @@ func _test_pcm_playback() -> void:
 	await player.finished
 	Log.debug("Main", "[Piper Test] Playback finished")
 	player.queue_free()
+
+
+func _exit_tree() -> void:
+	# Clean up menu controller connections
+	if _menu_controller:
+		_menu_controller.game_start_requested.disconnect(_start_game)
+		_menu_controller.multiplayer_start_requested.disconnect(_on_multiplayer_start_game)
+	
+	# Clean up ThemeManager signal (lambda stored in _ready)
+	if _reading_font_lambda.is_valid():
+		ThemeManager.reading_font_changed.disconnect(_reading_font_lambda)
+	
+	# Clean up UI events (lambda may have been connected in _initialize_room_service)
+	# Note: _quit_lambda may not be stored if connect was inline, so we use is_valid check
+	if _quit_lambda.is_valid():
+		UIEvents.quit_requested.disconnect(_quit_lambda)
+	
+	UIEvents.open_trivia.disconnect(_on_open_trivia)
+	
+	# Clean up trivia overlay
+	if _trivia_overlay and _trivia_overlay.trivia_closed.is_connected(_on_trivia_closed):
+		_trivia_overlay.trivia_closed.disconnect(_on_trivia_closed)
+	
+	# Clean up multiplayer controller
+	if _multiplayer_controller:
+		_multiplayer_controller.end_multiplayer_session()

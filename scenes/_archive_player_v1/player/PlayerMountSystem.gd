@@ -1,0 +1,281 @@
+extends Node
+class_name PlayerMountSystem
+## Handles player mounting and dismounting: riding other players, managing rider state.
+
+signal mount_requested(target: Node)
+signal dismount_requested
+
+const MOUNT_HEIGHT_OFFSET: float = 1.95
+const SEAT_HEIGHT_OFFSET: float = 0.65
+
+var _player: CharacterBody3D = null
+var _crouch_system: PlayerCrouchSystem = null
+
+var mounted_on: Node = null       # Player we're riding
+var mounted_by: Node = null       # Player riding us
+var _is_mounted: bool = false
+var _has_rider: bool = false
+var mount_peer_id: int = -1
+
+# Mount position lerp variables - offset shrinks to zero during initial mount
+var _mount_lerp_time: float = 0.0
+var _mount_lerp_duration: float = 0.3
+var _mount_initial_offset: Vector3 = Vector3.ZERO
+
+# Store original collision settings
+var _original_collision_layer: int = 1 << 19  # Layer 20: Player Body
+var _original_collision_mask: int = (1 << 19) | (1 << 0)  # Layer 20 + Layer 1: Static World
+
+
+func init(player: CharacterBody3D, crouch_system: PlayerCrouchSystem) -> void:
+	_player = player
+	_crouch_system = crouch_system
+	_original_collision_layer = player.collision_layer
+	_original_collision_mask = player.collision_mask
+
+
+func is_mounted() -> bool:
+	return _is_mounted
+
+
+func has_rider() -> bool:
+	return _has_rider
+
+
+func process_mount(delta: float) -> void:
+	if not _is_mounted:
+		return
+
+	# Auto-dismount if mount enters a hallway
+	if _player.is_local and is_instance_valid(mounted_on) and "in_hall" in mounted_on and mounted_on.in_hall:
+		_player.request_dismount()
+		return
+
+	# Follow mount's position
+	if is_instance_valid(mounted_on):
+		var is_seat: bool = mounted_on.is_in_group("Seat")
+		# Calculate height offset accounting for mount's crouch state
+		var height_offset: float = SEAT_HEIGHT_OFFSET if is_seat else MOUNT_HEIGHT_OFFSET
+		if "_crouch_system" in mounted_on and mounted_on._crouch_system:
+			var mount_crouch: PlayerCrouchSystem = mounted_on._crouch_system
+			var crouch_factor: float = mount_crouch.get_crouch_factor()
+			# Reduce height when mount crouches (pivot moves from 1.35 to 0.45 = 0.9 delta)
+			var crouch_adjustment: float = crouch_factor * (mount_crouch.get_starting_height() - mount_crouch.get_crouching_height())
+			height_offset -= crouch_adjustment
+
+		# Calculate target position (where rider should be on mount)
+		var target_position: Vector3 = mounted_on.global_position + Vector3(0, height_offset, 0)
+
+		# Handle jump-to-dismount for seats
+		if is_seat and _player.is_local and Input.is_action_just_pressed("jump"):
+			_player.request_dismount()
+			return
+
+		# During initial mount, smoothly reduce offset to zero while tracking mount
+		if _mount_lerp_time < _mount_lerp_duration:
+			_mount_lerp_time += delta
+			var t: float = clamp(_mount_lerp_time / _mount_lerp_duration, 0.0, 1.0)
+			# Smooth ease-out for natural landing feel
+			t = 1.0 - pow(1.0 - t, 2.0)
+			# Apply shrinking offset - rider tracks mount instantly but offset fades out
+			_player.global_position = target_position + _mount_initial_offset * (1.0 - t)
+		else:
+			# After lerp complete, follow mount instantly
+			_player.global_position = target_position
+
+		# Check if we can safely sync room state
+		if "current_room" in _player and "current_room" in mounted_on:
+			if _player.current_room != mounted_on.current_room:
+				var target_room: String = mounted_on.current_room
+				var can_sync: bool = target_room == "Lobby"
+				var museum: Node = null
+				if not can_sync:
+					var main_node: Node = _player.get_tree().current_scene
+					if main_node and main_node.has_node("Museum"):
+						museum = main_node.get_node("Museum")
+						if museum.has_method("has_exhibit"):
+							can_sync = museum.has_exhibit(target_room)
+
+						# Trigger loading if exhibit doesn't exist
+						if not can_sync and museum.has_method("load_exhibit_for_rider"):
+							museum.load_exhibit_for_rider(_player.current_room, target_room)
+
+				if can_sync:
+					_player.current_room = target_room
+					if museum and museum.has_method("sync_rider_to_room"):
+						museum.sync_rider_to_room(target_room)
+	else:
+		# Mount became invalid, force dismount
+		execute_dismount()
+
+
+func try_mount_target() -> void:
+	if _player.in_hall:
+		return
+
+	if not _player.has_node("Pivot/Camera3D/RayCast3D"):
+		return
+
+	var raycast: RayCast3D = _player.get_node("Pivot/Camera3D/RayCast3D")
+	if not raycast.is_colliding():
+		return
+
+	var collider: Node = raycast.get_collider()
+	if not collider:
+		return
+
+	# Check if we hit a player
+	if collider.is_in_group("Player") and collider != _player:
+		mount_requested.emit(collider)
+
+
+func request_dismount() -> void:
+	dismount_requested.emit()
+
+
+func execute_mount(target: Node, target_peer_id: int = -1) -> void:
+	if not is_instance_valid(target):
+		return
+	if "has_rider" in target and target.has_rider:
+		return  # Target already has a rider
+
+	mounted_on = target
+	mount_peer_id = target_peer_id
+	_is_mounted = true
+
+	var is_seat: bool = target.is_in_group("Seat")
+	# Initialize lerp transition - calculate offset from target mount position
+	_mount_lerp_time = 0.0
+	var h_offset: float = SEAT_HEIGHT_OFFSET if is_seat else MOUNT_HEIGHT_OFFSET
+	var initial_target: Vector3 = target.global_position + Vector3(0, h_offset, 0)
+	_mount_initial_offset = _player.global_position - initial_target
+
+	# Clear velocity and disable all collision while mounted
+	_player.velocity = Vector3.ZERO
+	_player.collision_layer = 0
+	_player.collision_mask = 0
+
+	# Disable collision shapes entirely
+	if _player.has_node("CollisionShape2"):
+		_player.get_node("CollisionShape2").disabled = true
+	if _player.has_node("Feet"):
+		_player.get_node("Feet").disabled = true
+
+	# Temporarily disable bench collision to prevent getting stuck when mounting
+	if is_seat and mounted_on.has_node("CollisionShape3D"):
+		var bench_collision: CollisionShape3D = mounted_on.get_node("CollisionShape3D")
+		bench_collision.disabled = true
+		# Re-enable after a short delay (in case mount fails)
+		bench_collision.get_tree().create_timer(0.5).timeout.connect(_re_enable_bench_collision.bind(bench_collision))
+
+	# Force rider to crouched position immediately
+	if _crouch_system:
+		_crouch_system.force_crouched_position()
+
+	# Tell mount they have a rider
+	if target.has_method("_accept_rider"):
+		target._accept_rider(_player)
+
+
+func execute_dismount() -> void:
+	Log.debug("PlayerMountSystem", "execute_dismount() called, _is_mounted=%s, mounted_on=%s" % [_is_mounted, mounted_on])
+	if not _is_mounted or not is_instance_valid(mounted_on):
+		_is_mounted = false
+		mounted_on = null
+		mount_peer_id = -1
+		# Re-enable collision shapes in case we got here from invalid mount
+		_restore_collision()
+		return
+
+	# Get dismount position (offset to the side of mount)
+	var is_seat: bool = mounted_on.is_in_group("Seat")
+	var dismount_pos: Vector3 = mounted_on.global_position
+	if is_seat:
+		dismount_pos += -mounted_on.global_transform.basis.z * 2.0
+	else:
+		dismount_pos += mounted_on.global_transform.basis.x * 1.5
+
+	dismount_pos.y = mounted_on.global_position.y + 0.5
+
+	# Tell mount we're leaving
+	if mounted_on.has_method("_remove_rider"):
+		mounted_on._remove_rider(_player)
+
+	# Temporarily disable bench collision to prevent getting stuck
+	if is_seat and mounted_on.has_node("CollisionShape3D"):
+		var bench_collision: CollisionShape3D = mounted_on.get_node("CollisionShape3D")
+		bench_collision.disabled = true
+		# Re-enable after a short delay
+		bench_collision.get_tree().create_timer(0.5).timeout.connect(_re_enable_bench_collision.bind(bench_collision))
+
+	_restore_collision()
+
+	# Move to dismount position
+	_player.global_position = dismount_pos
+	_player.velocity = Vector3.ZERO
+
+	_is_mounted = false
+	mounted_on = null
+	mount_peer_id = -1
+	_mount_lerp_time = _mount_lerp_duration  # Reset to prevent stale state
+	_mount_initial_offset = Vector3.ZERO
+
+	# Recapture mouse for gameplay
+	if _player.is_local:
+		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+
+func _re_enable_bench_collision(collision: CollisionShape3D) -> void:
+	if is_instance_valid(collision):
+		collision.disabled = false
+
+
+func _restore_collision() -> void:
+	# Re-enable collision shapes
+	if _player.has_node("CollisionShape2"):
+		_player.get_node("CollisionShape2").disabled = false
+	if _player.has_node("Feet"):
+		_player.get_node("Feet").disabled = false
+
+	# Re-enable collision
+	_player.collision_layer = _original_collision_layer
+	_player.collision_mask = _original_collision_mask
+
+
+func accept_rider(rider: Node) -> void:
+	mounted_by = rider
+	_has_rider = true
+
+
+func remove_rider(rider: Node) -> void:
+	if mounted_by == rider:
+		mounted_by = null
+		_has_rider = false
+
+
+func apply_network_mount_state(is_mounted_state: bool, peer_id: int, mount_node: Node) -> void:
+	_is_mounted = is_mounted_state
+	mount_peer_id = peer_id
+	mounted_on = mount_node
+
+	if is_mounted_state and is_instance_valid(mount_node):
+		# Initialize lerp transition for network mount
+		_mount_lerp_time = 0.0
+		var initial_target: Vector3 = mount_node.global_position + Vector3(0, MOUNT_HEIGHT_OFFSET, 0)
+		_mount_initial_offset = _player.global_position - initial_target
+
+		# Disable all collision while mounted
+		_player.velocity = Vector3.ZERO
+		_player.collision_layer = 0
+		_player.collision_mask = 0
+		if _player.has_node("CollisionShape2"):
+			_player.get_node("CollisionShape2").disabled = true
+		if _player.has_node("Feet"):
+			_player.get_node("Feet").disabled = true
+		# Force crouched position
+		if _crouch_system:
+			_crouch_system.force_crouched_position()
+	else:
+		_restore_collision()
+		mounted_on = null
+		mount_peer_id = -1

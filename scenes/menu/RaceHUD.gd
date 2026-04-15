@@ -47,6 +47,9 @@ var _hints_given:     Array[String]  = []
 # ── State ─────────────────────────────────────────────────────────────────────
 var _visited_pages:   Array[String]  = []
 
+## Stored lambdas for signal cleanup
+var _reading_font_lambda: Callable = Callable()
+
 
 func _ready() -> void:
 	add_to_group("race_hud")
@@ -55,7 +58,8 @@ func _ready() -> void:
 	_build_ui()
 	_apply_theme(ThemeManager.is_dark_mode)
 	ThemeManager.dark_mode_changed.connect(_apply_theme)
-	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme(ThemeManager.is_dark_mode))
+	_reading_font_lambda = func(f): _serif_font = f; _apply_theme(ThemeManager.is_dark_mode)
+	ThemeManager.reading_font_changed.connect(_reading_font_lambda)
 	RaceManager.race_started.connect(_on_race_started)
 	RaceManager.race_cancelled.connect(_on_race_cancelled)
 	RaceManager.race_timer_updated.connect(_on_race_timer_updated)
@@ -73,6 +77,22 @@ func _ready() -> void:
 	var hud_s: Variant = SettingsManager.get_settings("hud")
 	if hud_s is Dictionary:
 		set_hud_position(hud_s.get("race_hud_position", 0))
+
+
+func _exit_tree() -> void:
+	ThemeManager.dark_mode_changed.disconnect(_apply_theme)
+	if _reading_font_lambda.is_valid():
+		ThemeManager.reading_font_changed.disconnect(_reading_font_lambda)
+	RaceManager.race_started.disconnect(_on_race_started)
+	RaceManager.race_cancelled.disconnect(_on_race_cancelled)
+	RaceManager.race_timer_updated.disconnect(_on_race_timer_updated)
+	SettingsEvents.set_current_room.disconnect(_on_room_changed)
+	SettingsEvents.accessibility_changed.disconnect(_on_accessibility_changed)
+	EventManager.event_started.disconnect(_on_event_started)
+	EventManager.event_ended.disconnect(_on_event_ended)
+	var hint_manager = get_node_or_null("/root/HintManager")
+	if hint_manager and hint_manager.hint_revealed.is_connected(_on_hint_revealed):
+		hint_manager.hint_revealed.disconnect(_on_hint_revealed)
 
 
 # ── Accessibility ─────────────────────────────────────────────────────────────

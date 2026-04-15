@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Museum of All Things</title>
+    <meta name="description" content="An infinitely expanding, procedurally generated museum built from the knowledge of Wikipedia. Explore, race, and discover — alone or with friends.">
+    <meta property="og:title" content="Museum of All Things">
+    <meta property="og:description" content="An infinitely expanding, procedurally generated museum built from Wikipedia.">
+    <meta property="og:type" content="website">
+    <link rel="icon" href="graphics/favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ===== HERO ===== -->
+    <header class="hero" id="hero">
+        <canvas id="particleCanvas" aria-hidden="true"></canvas>
+        <div class="hero-content">
+            <div class="logo-container">
+                <svg id="heroLogo" viewBox="0 0 300 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Museum of All Things logo">
+                    <defs>
+                        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#d4a853;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#b8860b;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <text x="150" y="55" text-anchor="middle" font-family="'Cormorant Garamond', Georgia, serif" font-size="14" font-weight="400" fill="#c9b99a" letter-spacing="2">THE</text>
+                    <text x="150" y="80" text-anchor="middle" font-family="'Cormorant Garamond', Georgia, serif" font-size="32" font-weight="700" fill="url(#goldGrad)" letter-spacing="3">MUSEUM OF ALL THINGS</text>
+                    <line x1="60" y1="90" x2="240" y2="90" stroke="#b8860b" stroke-width="0.5" opacity="0.6"/>
+                    <text x="150" y="108" text-anchor="middle" font-family="'Inter', Helvetica, sans-serif" font-size="9" font-weight="300" fill="#8a7e6b" letter-spacing="4">INFINITE · PROCEDURAL · MULTIPLAYER</text>
+                </svg>
+            </div>
+            <p class="hero-tagline">Explore an endlessly expanding museum built from every article on Wikipedia. Walk the halls alone or race against friends.</p>
+            <div class="hero-buttons">
+                <a href="https://github.com/seanmorl/museum-of-all-things-mm/releases" class="btn btn-primary" target="_blank" rel="noopener">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                    Download
+                </a>
+                <a href="#features" class="btn btn-secondary">Learn More</a>
+            </div>
+            <div class="hero-stats">
+                <div class="stat"><span class="stat-number" data-target="13">0</span><span class="stat-label">Languages</span></div>
+                <div class="stat"><span class="stat-number" data-target="52">0</span><span class="stat-label">Events</span></div>
+                <div class="stat"><span class="stat-number" data-target="6">0</span><span class="stat-label">Platforms</span></div>
+            </div>
+        </div>
+        <a href="#features" class="scroll-indicator" aria-label="Scroll to features">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></svg>
+        </a>
+    </header>
+
+    <!-- ===== FEATURES ===== -->
+    <section class="section features" id="features">
+        <div class="container">
+            <h2 class="section-title">What Awaits Inside</h2>
+            <p class="section-subtitle">Every exhibit is generated from Wikipedia — no two visits are the same.</p>
+            <div class="feature-grid">
+                <div class="feature-card" data-animate>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="36" rx="2"/><path d="M18 6v36M6 18h36M6 30h36M30 6v36"/></svg>
+                    </div>
+                    <h3>Infinite Exhibits</h3>
+                    <p>Any Wikipedia article becomes an explorable exhibit. Halls connect based on real article links — follow your curiosity endlessly.</p>
+                </div>
+                <div class="feature-card" data-animate>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="24" r="6"/><circle cx="32" cy="24" r="6"/><path d="M22 24h4"/></svg>
+                    </div>
+                    <h3>Multiplayer</h3>
+                    <p>Explore together. Host a lobby, invite friends, and navigate the museum in real-time with chat, mounts, and shared discoveries.</p>
+                </div>
+                <div class="feature-card" data-animate>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M24 4l6 12 13 2-9 9 2 13-12-6-12 6 2-13-9-9 13-2z"/></svg>
+                    </div>
+                    <h3>Wiki Races</h3>
+                    <p>Compete to reach a target article first. Environmental events — fog, earthquakes, reverse controls — keep every race unpredictable.</p>
+                </div>
+                <div class="feature-card" data-animate>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 36V12l16-6 16 6v24"/><rect x="18" y="24" width="12" height="12"/><path d="M24 24v-8"/></svg>
+                    </div>
+                    <h3>Tournaments</h3>
+                    <p>Bracket-style tournaments with live standings. Per-round results, champion crowns, and the glory of knowledge.</p>
+                </div>
+                <div class="feature-card" data-animate>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="24" cy="24" r="18"/><path d="M24 12v12l8 4"/></svg>
+                    </div>
+                    <h3>52 Environmental Events</h3>
+                    <p>Low gravity, silence, color shifts, weather, darkness — random events transform the museum during races for chaotic fun.</p>
+                </div>
+                <div class="feature-card" data-animate>
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="24" cy="16" r="8"/><path d="M12 40c0-8 5-14 12-14s12 6 12 14"/><circle cx="36" cy="18" r="5"/><path d="M36 23v4"/></svg>
+                    </div>
+                    <h3>13 Languages</h3>
+                    <p>Fully localized interface and lobby content in English, Spanish, French, German, Portuguese, Japanese, Chinese, Bengali, Italian, Korean, Dutch, Polish, and Russian.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== SCREENSHOTS ===== -->
+    <section class="section screenshots" id="screenshots">
+        <div class="container">
+            <h2 class="section-title">Inside the Museum</h2>
+            <p class="section-subtitle">A glimpse at what you'll discover.</p>
+            <div class="screenshot-gallery">
+                <div class="screenshot-placeholder" data-animate>
+                    <svg viewBox="0 0 400 225" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="400" height="225" fill="#2a2318"/>
+                        <rect x="40" y="30" width="320" height="140" rx="4" fill="#3a3025" stroke="#b8860b" stroke-width="0.5" stroke-dasharray="4 4"/>
+                        <text x="200" y="110" text-anchor="middle" font-family="serif" font-size="14" fill="#c9b99a">Exhibit Hall</text>
+                        <text x="200" y="130" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#8a7e6b">Screenshot placeholder</text>
+                    </svg>
+                    <span class="screenshot-caption">The Grand Lobby</span>
+                </div>
+                <div class="screenshot-placeholder" data-animate>
+                    <svg viewBox="0 0 400 225" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="400" height="225" fill="#1a1f28"/>
+                        <rect x="40" y="30" width="320" height="140" rx="4" fill="#2a3040" stroke="#b8860b" stroke-width="0.5" stroke-dasharray="4 4"/>
+                        <text x="200" y="110" text-anchor="middle" font-family="serif" font-size="14" fill="#c9b99a">Multiplayer Race</text>
+                        <text x="200" y="130" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#8a7e6b">Screenshot placeholder</text>
+                    </svg>
+                    <span class="screenshot-caption">Multiplayer Wiki Race</span>
+                </div>
+                <div class="screenshot-placeholder" data-animate>
+                    <svg viewBox="0 0 400 225" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="400" height="225" fill="#1a2820"/>
+                        <rect x="40" y="30" width="320" height="140" rx="4" fill="#2a3a30" stroke="#b8860b" stroke-width="0.5" stroke-dasharray="4 4"/>
+                        <text x="200" y="110" text-anchor="middle" font-family="serif" font-size="14" fill="#c9b99a">Tournament Bracket</text>
+                        <text x="200" y="130" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#8a7e6b">Screenshot placeholder</text>
+                    </svg>
+                    <span class="screenshot-caption">Tournament Mode</span>
+                </div>
+            </div>
+            <p class="screenshot-note">Replace these placeholders with actual screenshots from your game export.</p>
+        </div>
+    </section>
+
+    <!-- ===== DOWNLOAD ===== -->
+    <section class="section download" id="download">
+        <div class="container">
+            <h2 class="section-title">Get the Game</h2>
+            <p class="section-subtitle">Available for free on all major platforms.</p>
+            <div class="download-grid">
+                <a href="https://github.com/seanmorl/museum-of-all-things-mm/releases" class="download-card" target="_blank" rel="noopener" data-animate>
+                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                    <h3>GitHub Releases</h3>
+                    <p>Latest builds for Linux, Windows, and more</p>
+                </a>
+                <a href="#" class="download-card" data-animate>
+                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="6" width="36" height="36" rx="4"/><path d="M16 16l8 8-8 8M28 32h8"/></svg>
+                    <h3>itch.io</h3>
+                    <p>Coming soon — play in your browser</p>
+                </a>
+                <a href="#" class="download-card" data-animate>
+                    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 6h24v30H12z"/><path d="M18 6V4M30 6V4"/><circle cx="24" cy="24" r="6"/></svg>
+                    <h3>Steam</h3>
+                    <p>On the roadmap</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== ROADMAP ===== -->
+    <section class="section roadmap" id="roadmap">
+        <div class="container">
+            <h2 class="section-title">What's Next</h2>
+            <p class="section-subtitle">The museum is always growing.</p>
+            <div class="timeline">
+                <div class="timeline-item" data-animate>
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-badge done">v0.5.0</span>
+                        <h3>Environmental Events</h3>
+                        <p>52 events including weather, earthquakes, low gravity, and more. Tournament bracket HUD. 5 new language translations.</p>
+                    </div>
+                </div>
+                <div class="timeline-item" data-animate>
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-badge planned">Upcoming</span>
+                        <h3>Browser Play (Web Export)</h3>
+                        <p>Play directly in your browser via HTML5 export — no download needed. Share a link and start exploring.</p>
+                    </div>
+                </div>
+                <div class="timeline-item" data-animate>
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-badge planned">Planned</span>
+                        <h3>Dedicated Servers & Matchmaking</h3>
+                        <p>Persistent hosted lobbies, player matching, spectator mode, and race replays.</p>
+                    </div>
+                </div>
+                <div class="timeline-item" data-animate>
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-badge planned">Planned</span>
+                        <h3>Architectural Variety</h3>
+                        <p>Procedural columns, arches, vaulted ceilings, and ornate moldings to make each museum feel unique.</p>
+                    </div>
+                </div>
+            </div>
+            <a href="https://github.com/seanmorl/museum-of-all-things-mm/blob/SpiffingUnstable/docs/ROADMAP.md" class="btn btn-secondary" target="_blank" rel="noopener">View Full Roadmap</a>
+        </div>
+    </section>
+
+    <!-- ===== CONTRIBUTING ===== -->
+    <section class="section contribute" id="contribute">
+        <div class="container">
+            <h2 class="section-title">Contribute</h2>
+            <p class="section-subtitle">The museum belongs to everyone.</p>
+            <div class="contribute-grid">
+                <div class="contribute-card" data-animate>
+                    <div class="contribute-icon">
+                        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 12h32M8 24h32M8 36h20"/><circle cx="40" cy="36" r="4"/></svg>
+                    </div>
+                    <h3>Add a Translation</h3>
+                    <p>Help us reach more players. Translating the interface takes ~30 minutes and no coding knowledge.</p>
+                    <a href="translation-guide.md" class="link-arrow">Translation Guide <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l-1.41 1.41L13.17 8H0v2h13.17l-6.58 6.59L8 18l9-9z"/></svg></a>
+                </div>
+                <div class="contribute-card" data-animate>
+                    <div class="contribute-icon">
+                        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M24 4C12.95 4 4 12.95 4 24s8.95 20 20 20 20-8.95 20-20S35.05 4 24 4z"/><path d="M16 24l6 6 10-12"/></svg>
+                    </div>
+                    <h3>Report Bugs</h3>
+                    <p>Found something broken in the halls? Open an issue on GitHub with details and screenshots.</p>
+                    <a href="https://github.com/seanmorl/museum-of-all-things-mm/issues" class="link-arrow" target="_blank" rel="noopener">Open an Issue <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l-1.41 1.41L13.17 8H0v2h13.17l-6.58 6.59L8 18l9-9z"/></svg></a>
+                </div>
+                <div class="contribute-card" data-animate>
+                    <div class="contribute-icon">
+                        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 8l16 16-16 16"/><path d="M32 8L16 24l16 16"/></svg>
+                    </div>
+                    <h3>Write Code</h3>
+                    <p>Built with Godot 4 in GDScript. Fork the repo, pick an issue, and submit a PR.</p>
+                    <a href="https://github.com/seanmorl/museum-of-all-things-mm" class="link-arrow" target="_blank" rel="noopener">View Repository <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0l-1.41 1.41L13.17 8H0v2h13.17l-6.58 6.59L8 18l9-9z"/></svg></a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="site-footer">
+        <div class="container footer-content">
+            <div class="footer-brand">
+                <svg viewBox="0 0 160 40" width="160" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <text x="80" y="18" text-anchor="middle" font-family="'Cormorant Garamond', Georgia, serif" font-size="9" font-weight="400" fill="#8a7e6b" letter-spacing="1">THE</text>
+                    <text x="80" y="32" text-anchor="middle" font-family="'Cormorant Garamond', Georgia, serif" font-size="14" font-weight="700" fill="#c9b99a" letter-spacing="2">MUSEUM OF ALL THINGS</text>
+                </svg>
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/seanmorl/museum-of-all-things-mm" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/seanmorl/museum-of-all-things-mm/releases" target="_blank" rel="noopener">Releases</a>
+                <a href="https://github.com/seanmorl/museum-of-all-things-mm/blob/SpiffingUnstable/docs/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
+                <a href="translation-guide.md">Translations</a>
+                <a href="https://github.com/seanmorl/museum-of-all-things-mm/blob/SpiffingUnstable/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+            </div>
+            <div class="footer-credits">
+                <p>Built with <a href="https://godotengine.org/" target="_blank" rel="noopener">Godot Engine</a> &middot; Powered by <a href="https://www.wikipedia.org/" target="_blank" rel="noopener">Wikipedia</a></p>
+                <p>Content from Wikipedia &middot; <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a></p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js" defer></script>
+</body>
+</html>

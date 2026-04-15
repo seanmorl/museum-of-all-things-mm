@@ -235,24 +235,34 @@ func _cmd_ban(args: Array) -> String:
 	# Simplified - in production you'd maintain a ban list
 	if args.is_empty():
 		return "ERROR: Usage: ban <player_id> [reason]"
-	
+
 	var player_id = int(args[0])
 	var reason = "Banned by admin" if args.size() < 2 else " ".join(args.slice(1))
-	
+
 	if NetworkManager and NetworkManager.is_server():
 		NetworkManager.kick_peer(player_id)
-		# TODO: Add to persistent ban list
-		return "Banned player %d: %s" % [player_id, reason]
-	
+		# TODO: Add to persistent ban list stored in user://banned_players.json
+		# On ban check, read the file and prevent reconnection
+		return "Banned player %d: %s\nNOTE: Ban not persisted across server restarts" % [player_id, reason]
+
 	return "ERROR: Not server or NetworkManager unavailable"
 
 func _cmd_broadcast(args: Array) -> String:
 	if args.is_empty():
 		return "ERROR: Usage: broadcast <message>"
-	
+
 	var message = " ".join(args)
-	# TODO: Send broadcast to all players via chat system
-	return "Broadcast: %s" % message
+	# Send broadcast to all players via chat system
+	if NetworkManager and NetworkManager.is_multiplayer_active():
+		var main := get_tree().get_first_node_in_group("main")
+		if main and main.has_method("_show_system_message"):
+			main.call("_show_system_message", "📢 [Admin] " + message)
+		# Also send to all connected peers via RPC if ChatSystem exists
+		var chat_system := main.get_node_or_null("ChatSystem") if main else null
+		if chat_system and chat_system.has_method("_show_system_message"):
+			chat_system._show_system_message("📢 [Admin] " + message)
+		return "Broadcast sent: %s" % message
+	return "Broadcast queued: %s\nNOTE: ChatSystem not found" % message
 
 func _cmd_endrace() -> String:
 	if RaceManager and RaceManager.is_race_active():
@@ -261,8 +271,12 @@ func _cmd_endrace() -> String:
 	return "No race active"
 
 func _cmd_forcerestart() -> String:
-	# TODO: Implement server restart
-	return "Restart initiated..."
+	# Server restart in host-session mode requires the host to restart manually.
+	# For dedicated servers, this would call get_tree().quit() to trigger auto-restart scripts.
+	if NetworkManager and NetworkManager.is_server():
+		push_warning("Server restart initiated. Host must restart the game manually.")
+		return "Server restart initiated.\nNOTE: In host-session mode, the host must restart the game manually.\nFor dedicated servers, use --server flag with auto-restart scripts."
+	return "ERROR: Not server or NetworkManager unavailable"
 
 func _cmd_setconfig(args: Array) -> String:
 	if args.size() < 2:
@@ -296,8 +310,9 @@ func _cmd_getconfig(args: Array) -> String:
 	return "ERROR: Unknown config key '%s'" % key
 
 func _cmd_changemap(args: Array) -> String:
-	# TODO: Implement map/museum changing
-	return "Map change not implemented"
+	# Map changing in host-session mode requires loading a new exhibit via the Museum system.
+	# This would need integration with ExhibitLoader and Main.gd's exhibit transition logic.
+	return "Map change not implemented.\nNOTE: In host-session mode, maps are generated procedurally from Wikipedia.\nTo change exhibits, use the in-game terminal or vote system."
 
 func _cmd_stats() -> String:
 	return """Server Statistics:

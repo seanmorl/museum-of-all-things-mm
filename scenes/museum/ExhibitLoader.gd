@@ -547,19 +547,20 @@ func _init_item(exhibit: Node3D, item: Node3D, data: Dictionary) -> void:
 		exhibit.add_child(item)
 		var t: String = data.get("type", "") as String
 		if t == "audio":
-			var get_res = ExhibitFetcher.get_result(data.get("title", ""))
+			var file_title: String = data.get("title", "")
+			var get_res = ExhibitFetcher.get_result(file_title)
 			var media_url: String = ""
 			if get_res and get_res.has("url"):
 				media_url = get_res.url
-				Log.info("ExhibitLoader", "Audio URL found for '%s': %s" % [data.get("title", ""), media_url])
+				Log.info("ExhibitLoader", "Audio URL found for '%s': %s" % [file_title, media_url])
 			else:
-				Log.warn("ExhibitLoader", "No audio URL for '%s' - get_res=%s" % [data.get("title", ""), "YES" if get_res else "NO"])
-			item.init(exhibit.title, data.get("text", ""), media_url)
+				Log.warn("ExhibitLoader", "No audio URL for '%s' - will fetch on demand" % file_title)
+			item.init(exhibit.title, data.get("text", ""), media_url, file_title)
 			
 			# Check if this audio should be stolen (missing)
 			var main: Node = _museum.get_parent()
 			if main and main.has_method("check_audio_stolen"):
-				if main.check_audio_stolen(exhibit.title, data.get("title", "")):
+				if main.check_audio_stolen(exhibit.title, file_title):
 					item.set_stolen(true)
 		else:
 			item.init(data)

@@ -226,14 +226,22 @@ func load_replay(path: String) -> bool:
 		return false
 	
 	var file = FileAccess.open(path, FileAccess.READ)
-	if file:
-		var json = file.get_as_text()
-		file.close()
-		
-		var parsed = JSON.parse_string(json)
-		if parsed is Dictionary:
-			_playback_replay = ReplayData.from_dict(parsed)
-			return true
+	if not file:
+		Log.error("RaceReplay", "Failed to open replay file: %s" % path)
+		return false
+	var json = file.get_as_text()
+	file.close()
+	if json.is_empty():
+		Log.error("RaceReplay", "Replay file is empty: %s" % path)
+		return false
+	
+	var parsed = JSON.parse_string(json)
+	if parsed == null:
+		Log.error("RaceReplay", "Failed to parse replay JSON: %s" % path)
+		return false
+	if parsed is Dictionary:
+		_playback_replay = ReplayData.from_dict(parsed)
+		return true
 	
 	return false
 

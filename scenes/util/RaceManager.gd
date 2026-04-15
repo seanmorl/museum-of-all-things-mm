@@ -404,7 +404,14 @@ func _send_vote(candidate_index: int) -> void:
 	_receive_vote(multiplayer.get_remote_sender_id(), candidate_index)
 
 func _receive_vote(peer_id: int, candidate_index: int) -> void:
+	if peer_id <= 0:
+		Log.warn("RaceManager", "Invalid peer_id in vote: %d" % peer_id)
+		return
 	if candidate_index < 0 or candidate_index >= _vote_candidates.size():
+		Log.warn("RaceManager", "Invalid candidate index: %d" % candidate_index)
+		return
+	if _state != State.VOTING:
+		Log.debug("RaceManager", "Vote received but not in voting state")
 		return
 	_votes[peer_id] = candidate_index
 	Log.debug("RaceManager", "Vote from peer %d for %s" % [peer_id, _vote_candidates[candidate_index]])

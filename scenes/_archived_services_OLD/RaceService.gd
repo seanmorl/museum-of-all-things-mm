@@ -19,6 +19,8 @@ var _player_paths: Dictionary = {}  # peer_id -> Array[String] (path taken)
 var _leaderboard: Array[Dictionary] = []  # [{name, time, date}, ...]
 
 func _ready() -> void:
+	# @deprecated - This service is archived. Use RaceManager directly.
+	push_warning("RaceService is deprecated. Use RaceManager directly.")
 	pass
 
 func initialize() -> void:

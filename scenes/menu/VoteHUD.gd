@@ -29,6 +29,10 @@ var _candidate_buttons:   Array[Button]  = []
 var _is_animating:        bool           = false
 var _chat_system:         Node           = null
 
+# ── Signal connections for cleanup ──────────────────────────────────────────
+var _dark_mode_lambda: Callable          = Callable()
+var _reading_font_lambda: Callable       = Callable()
+
 # ── Host panel refs ───────────────────────────────────────────────────────────
 var _cancel_vote_button:   Button        = null
 var _difficulty_row:       HBoxContainer = null
@@ -48,8 +52,10 @@ func _ready() -> void:
 	_build_ui()
 	add_to_group("mouse_overlay")
 	_apply_theme(ThemeManager.is_dark_mode)
-	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme(ThemeManager.is_dark_mode))
-	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme(ThemeManager.is_dark_mode))
+	_dark_mode_lambda = func(_d): _apply_theme(ThemeManager.is_dark_mode)
+	_reading_font_lambda = func(f): _serif_font = f; _apply_theme(ThemeManager.is_dark_mode)
+	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
+	ThemeManager.reading_font_changed.connect(_reading_font_lambda)
 	RaceManager.vote_started.connect(_on_vote_started)
 	RaceManager.vote_ended.connect(_on_vote_ended)
 	RaceManager.race_started.connect(_on_race_started)
@@ -57,13 +63,27 @@ func _ready() -> void:
 	RaceManager.difficulty_changed.connect(_on_difficulty_changed)
 	RaceManager.category_override_changed.connect(_on_category_override_changed)
 	RaceManager.vote_cancelled.connect(_on_vote_cancelled)
-	EventBus.subscribe(EventBus.VoteStartedEvent, _on_event_vote_started)
 	EventBus.subscribe(EventBus.CountdownStartedEvent, _on_event_countdown_started)
 	var main := get_tree().get_first_node_in_group("main")
 	if main and main.has_node("ChatSystem"):
 		_chat_system = main.get_node("ChatSystem")
 	if RaceManager.is_vote_active():
 		_on_vote_started(RaceManager.get_vote_candidates())
+
+
+func _exit_tree() -> void:
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
+	if _reading_font_lambda.is_valid():
+		ThemeManager.reading_font_changed.disconnect(_reading_font_lambda)
+	RaceManager.vote_started.disconnect(_on_vote_started)
+	RaceManager.vote_ended.disconnect(_on_vote_ended)
+	RaceManager.race_started.disconnect(_on_race_started)
+	RaceManager.race_countdown_started.disconnect(_on_race_countdown_started)
+	RaceManager.difficulty_changed.disconnect(_on_difficulty_changed)
+	RaceManager.category_override_changed.disconnect(_on_category_override_changed)
+	RaceManager.vote_cancelled.disconnect(_on_vote_cancelled)
+	EventBus.unsubscribe(EventBus.CountdownStartedEvent, _on_event_countdown_started)
 
 
 # ── UI construction ───────────────────────────────────────────────────────────
@@ -935,9 +955,6 @@ func _kick_player(peer_id: int) -> void:
 	if NetworkManager.is_server(): NetworkManager.kick_peer(peer_id)
 
 # ── EventBus handlers ─────────────────────────────────────────────────────────
-
-func _on_event_vote_started(_event: EventBus.VoteStartedEvent) -> void:
-	pass
 
 func _on_event_countdown_started(_event: EventBus.CountdownStartedEvent) -> void:
 	visible = false

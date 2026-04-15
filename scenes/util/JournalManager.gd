@@ -407,9 +407,16 @@ func _load() -> void:
 func _load_from_file() -> void:
 	var file: FileAccess = FileAccess.open(JOURNAL_FILE, FileAccess.READ)
 	if not file:
+		Log.warn("JournalManager", "Failed to open journal file")
 		return
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	var json_str := file.get_as_text()
 	file.close()
+	if json_str.is_empty():
+		return
+	var parsed: Variant = JSON.parse_string(json_str)
+	if parsed == null:
+		Log.warn("JournalManager", "Failed to parse journal JSON")
+		return
 	if not parsed is Dictionary:
 		return
 	_entries.clear()

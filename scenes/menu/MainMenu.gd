@@ -825,3 +825,10 @@ func _style_patch_btn(btn: Button, primary: bool) -> void:
 func _on_quit_pressed() -> void:
 
 	get_tree().quit()
+
+
+func _exit_tree() -> void:
+	ThemeManager.dark_mode_changed.disconnect(_on_dark_mode_changed)
+	ThemeManager.reading_font_changed.disconnect(_on_reading_font_changed)
+	UIEvents.ui_cancel_pressed.disconnect(_on_ui_cancel_pressed)
+	SettingsEvents.language_changed.disconnect(_on_language_changed_from_settings)

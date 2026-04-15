@@ -16,6 +16,10 @@ var _serif_font: Font = null
 var _content_panel_style: StyleBoxFlat = null
 var _current_tab: int = 0
 
+## Stored lambdas for signal cleanup
+var _dark_mode_lambda: Callable = Callable()
+var _reading_font_lambda: Callable = Callable()
+
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
 	add_to_group("mouse_overlay")
@@ -25,8 +29,18 @@ func _ready() -> void:
 			_tab_bar.set_tab_disabled(i, true)
 			_tab_bar.set_tab_hidden(i, true)
 	_apply_theme()
-	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
-	ThemeManager.reading_font_changed.connect(func(f): _serif_font = f; _apply_theme())
+	_dark_mode_lambda = func(_d): _apply_theme()
+	_reading_font_lambda = func(f): _serif_font = f; _apply_theme()
+	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
+	ThemeManager.reading_font_changed.connect(_reading_font_lambda)
+
+
+func _exit_tree() -> void:
+	UIEvents.ui_cancel_pressed.disconnect(_on_resume)
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
+	if _reading_font_lambda.is_valid():
+		ThemeManager.reading_font_changed.disconnect(_reading_font_lambda)
 
 func _apply_theme() -> void:
 	## Apply ThemeManager colors to the settings panel and tab bar.

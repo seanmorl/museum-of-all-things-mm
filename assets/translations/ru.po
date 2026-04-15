@@ -424,184 +424,184 @@ msgstr ""
 
 ### Settings UI - Accessibility Tab
 msgid "Interface"
-msgstr ""
+msgstr "Интерфейс"
 
 msgid "Reset to 100%"
-msgstr ""
+msgstr "Сбросить на 100%"
 
 msgid "UI Scale"
-msgstr ""
+msgstr "Масштаб интерфейса"
 
 msgid "Scales all menus, HUD, and overlays. Shortcuts: Ctrl+= / Ctrl+- / Ctrl+0"
-msgstr ""
+msgstr "Масштабирует все меню, HUD и наложения. Горячие клавиши: Ctrl+= / Ctrl+- / Ctrl+0"
 
 msgid "Show chat"
-msgstr ""
+msgstr "Показать чат"
 
 msgid "Hides the chat overlay while playing."
-msgstr ""
+msgstr "Скрывает наложение чата во время игры."
 
 msgid "Typing sound"
-msgstr ""
+msgstr "Звук набора"
 
 msgid "Plays a subtle sound on each keypress in the chat box."
-msgstr ""
+msgstr "Воспроизводит тихий звук при каждом нажатии клавиши в окне чата."
 
 msgid "Open chat"
-msgstr ""
+msgstr "Открыть чат"
 
 msgid "Press the button then press any key to rebind."
-msgstr ""
+msgstr "Нажмите кнопку, затем любую клавишу для переназначения."
 
 msgid "Screen Reader"
-msgstr ""
+msgstr "Экранный читец"
 
 msgid "Enable screen reader (AccessKit)"
-msgstr ""
+msgstr "Включить экранный читец (AccessKit)"
 
 msgid "Exposes UI elements to OS screen readers via AccessKit. "
-msgstr ""
+msgstr "Предоставляет элементам UI доступ к экранным чтецам ОС через AccessKit. "
 
 msgid "Requires Godot's DisplayServer accessibility API (4.3+). "
-msgstr ""
+msgstr "Требуется API доступности DisplayServer в Godot (4.3+). "
 
 msgid "Changes take effect immediately — no restart needed."
-msgstr ""
+msgstr "Изменения вступают в силу немедленно — перезапуск не требуется."
 
 msgid "Verbosity"
-msgstr ""
+msgstr "Подробность"
 
 msgid "All controls"
-msgstr ""
+msgstr "Все элементы"
 
 msgid "Focused only"
-msgstr ""
+msgstr "Только фокус"
 
 msgid "Off"
-msgstr ""
+msgstr "Выкл"
 
 msgid "Vision"
-msgstr ""
+msgstr "Зрение"
 
 msgid "Reading font"
-msgstr ""
+msgstr "Шрифт для чтения"
 
 msgid "Default (Cormorant Garamond)"
-msgstr ""
+msgstr "По умолчанию (Cormorant Garamond)"
 
 msgid "OpenDyslexic"
-msgstr ""
+msgstr "OpenDyslexic"
 
 msgid "Atkinson Hyperlegible"
-msgstr ""
+msgstr "Atkinson Hyperlegible"
 
 msgid "OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. "
-msgstr ""
+msgstr "OpenDyslexic и Atkinson Hyperlegible разработаны для улучшенной читаемости. "
 
 msgid "Fonts must be present at:"
-msgstr ""
+msgstr "Шрифты должны находиться в:"
 
 msgid "High-contrast exhibit text"
-msgstr ""
+msgstr "Высококонтрастный текст экспозиций"
 
 msgid "Renders article wall-card text as black-on-white regardless of dark mode."
-msgstr ""
+msgstr "Отображает текст карточки статьи чёрным по белому независимо от тёмного режима."
 
 msgid "Exhibit text size"
-msgstr ""
+msgstr "Размер текста экспозиции"
 
 msgid "Scales the font size of Wikipedia article text on exhibit walls."
-msgstr ""
+msgstr "Масштабирует размер шрифта текста статей Wikipedia на стенах экспозиций."
 
 msgid "Floating exhibit signs"
-msgstr ""
+msgstr "Парящие указатели экспозиций"
 
 msgid "Replaces physical sign boards with floating text. "
-msgstr ""
+msgstr "Заменяет физические таблички парящим текстом. "
 
 msgid "Text remains visible but the board mesh is hidden. "
-msgstr ""
+msgstr "Текст остаётся видимым, но меш таблички скрыт. "
 
 msgid "Makes exhibit names easier to read during races."
-msgstr ""
+msgstr "Облегчает чтение названий экспозиций во время гонок."
 
 msgid "Colour & Contrast"
-msgstr ""
+msgstr "Цвет и контраст"
 
 msgid "Colourblind filter"
-msgstr ""
+msgstr "Фильтр дальтонизма"
 
 msgid "Protanopia  (red-blind)"
-msgstr ""
+msgstr "Протанопия  (не различает красный)"
 
 msgid "Deuteranopia  (green-blind)"
-msgstr ""
+msgstr "Дейтеранопия  (не различает зелёный)"
 
 msgid "Tritanopia  (blue-blind)"
-msgstr ""
+msgstr "Тританопия  (не различает синий)"
 
 msgid "Applies a full-screen post-processing shader to correct for colour vision deficiency. "
-msgstr ""
+msgstr "Применяет полноэкранный шейдер постобработки для коррекции нарушений цветового зрения. "
 
 msgid "Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a "
-msgstr ""
+msgstr "Требует шейдер в res://assets/shaders/colorblind_correction.gdshader и "
 
 msgid "CanvasLayer + ColorRect named ColorblindOverlay in your main scene."
-msgstr ""
+msgstr "CanvasLayer + ColorRect с именем ColorblindOverlay в главной сцене."
 
 msgid "Motion"
-msgstr ""
+msgstr "Движение"
 
 msgid "Reduce motion"
-msgstr ""
+msgstr "Уменьшить движение"
 
 msgid "Disables slide/fade animations on menus and the race HUD. Fog transitions remain."
-msgstr ""
+msgstr "Отключает анимации скольжения/затухания в меню и HUD гонки. Переходы тумана остаются."
 
 msgid "HUD & Hints"
-msgstr ""
+msgstr "HUD и подсказки"
 
 msgid "Large HUD text"
-msgstr ""
+msgstr "Крупный текст HUD"
 
 msgid "Increases font size of the race timer, target name, and hint banners."
-msgstr ""
+msgstr "Увеличивает размер шрифта таймера гонки, имени цели и баннеров подсказок."
 
 msgid "Keep hints visible"
-msgstr ""
+msgstr "Держать подсказки видимыми"
 
 msgid "Hint banners stay on screen until the race ends instead of fading after a few seconds."
-msgstr ""
+msgstr "Баннеры подсказок остаются на экране до конца гонки вместо исчезновения через несколько секунд."
 
 msgid "Audio & Visual"
-msgstr ""
+msgstr "Аудио и визуал"
 
 msgid "Show playing audio indicator"
-msgstr ""
+msgstr "Показать индикатор воспроизведения"
 
 msgid "Displays a visual icon when audio items are playing. Helps deaf/hard-of-hearing players."
-msgstr ""
+msgstr "Отображает визуальную иконку при воспроизведении аудио. Помогает глухим/слабослышащим игрокам."
 
 msgid "Photosensitivity warning"
-msgstr ""
+msgstr "Предупреждение о фоточувствительности"
 
 msgid "Shows a warning before exhibits with flashing or strobing content."
-msgstr ""
+msgstr "Показывает предупреждение перед экспозициями с мигающим или стробоскопическим контентом."
 
 msgid "HUD opacity"
-msgstr ""
+msgstr "Прозрачность HUD"
 
 msgid "Makes the race HUD more transparent to see more of the game world."
-msgstr ""
+msgstr "Делает HUD гонки более прозрачным, чтобы видеть больше игрового мира."
 
 msgid "Motor"
-msgstr ""
+msgstr "Моторика"
 
 msgid "Hold to activate buttons"
-msgstr ""
+msgstr "Удержание для активации кнопок"
 
 msgid "Buttons require holding for 0.5s instead of clicking. Helps with motor control issues."
-msgstr ""
+msgstr "Кнопки требуют удержания 0,5с вместо клика. Помогает при нарушениях моторного контроля."
 
 msgid "Accessibility"
-msgstr ""
+msgstr "Доступность"

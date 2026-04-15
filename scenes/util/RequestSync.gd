@@ -21,6 +21,7 @@ func request(url, headers=COMMON_HEADERS, verbose=true):
 
 	var err = http_client.connect_to_host(host, port, TLSOptions.client())
 	if err != OK:
+		http_client.close()
 		return [err, 0, null]
 
 	while (
@@ -31,6 +32,7 @@ func request(url, headers=COMMON_HEADERS, verbose=true):
 		Util.delay_msec(DELAY_MS)
 
 	if http_client.get_status() != HTTPClient.STATUS_CONNECTED:
+		http_client.close()
 		return [FAILED, 0, null, null]
 
 	http_client.request(HTTPClient.METHOD_GET, path, headers)
@@ -40,6 +42,7 @@ func request(url, headers=COMMON_HEADERS, verbose=true):
 		Util.delay_msec(DELAY_MS)
 
 	if http_client.get_status() != HTTPClient.STATUS_BODY:
+		http_client.close()
 		return [FAILED, 0, null, null]
 
 	var response = PackedByteArray()
@@ -52,6 +55,7 @@ func request(url, headers=COMMON_HEADERS, verbose=true):
 
 	var response_code = http_client.get_response_code()
 	var response_headers = http_client.get_response_headers()
+	http_client.close()
 	return [OK, response_code, response_headers, response]
 
 class ResponseAsync:

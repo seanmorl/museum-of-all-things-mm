@@ -4,6 +4,9 @@ extends PlayerState
 # and flies through the air to reach it.
 
 
+# Gravity value matching Move.gd's gravity setting
+const ZIP_EXIT_GRAVITY := -80.0
+
 var speed: = 10.0
 var target: = Vector3.ZERO
 
@@ -38,6 +41,6 @@ func enter(msg: Dictionary = {}) -> void:
 
 
 func exit() -> void:
-	# FIXME: redo this bit
-	_parent.gravity = -80.0
+	# Restore normal gravity when exiting zip state
+	_parent.gravity = ZIP_EXIT_GRAVITY
 	target = Vector3.ZERO

@@ -183,6 +183,8 @@ func _read_url(url: String) -> Variant:
 	var file_path : String = CacheControl.cache_dir + filename
 	var f := FileAccess.open(file_path, FileAccess.READ)
 	if not f:
+		var err := FileAccess.get_open_error()
+		Log.warn("DataManager", "Failed to read file '%s': %s" % [file_path, error_string(err)])
 		_fs_lock.unlock()
 		return null
 	var data := f.get_buffer(f.get_length())

@@ -6,21 +6,47 @@ var title: String = ""
 var text: String = ""
 var url: String = ""
 var is_playing: bool = false
-var _stream: AudioStreamOggVorbis = null
+var _stream: AudioStream = null
 var _loading: bool = false
 var _interact_queued: bool = false
 
 @onready var _player: AudioStreamPlayer3D = $AudioPlayer
 
 func _ready() -> void:
-	pass
+	add_to_group("sound_item")
+	ExhibitFetcher.images_complete.connect(_on_images_fetched)
 
-func init(exhibit_title: String, item_text: String, audio_url: String) -> void:
+
+func _on_images_fetched(file_titles: Array, _caller_ctx: Variant) -> void:
+	Log.debug("Gramophone", "Images fetch complete for: %s (looking for: %s)" % [file_titles, _pending_file_title])
+	for ft in file_titles:
+		if ft == _pending_file_title:
+			var result = ExhibitFetcher.get_result(ft)
+			Log.debug("Gramophone", "Found result for %s: %s" % [ft, "yes" if result else "no"])
+			if result and result.has("url"):
+				Log.info("Gramophone", "Got audio URL on demand: %s" % result.url)
+				url = result.url
+				_pending_file_title = ""
+				_fetch_audio()
+				return
+	Log.warn("Gramophone", "Audio fetch completed but no URL found")
+
+
+var _pending_file_title: String = ""
+
+
+func init(exhibit_title: String, item_text: String, audio_url: String, file_title: String = "") -> void:
 	title = exhibit_title
 	text = item_text
 	url = audio_url
 	_loading = true
-	_fetch_audio()
+	if url != "":
+		_fetch_audio()
+	elif file_title != "":
+		_fetch_audio_on_demand(file_title)
+	else:
+		_loading = false
+		Log.warn("Gramophone", "No audio URL or file title for '%s'" % text)
 
 func _fetch_audio() -> void:
 	if url == "":
@@ -40,6 +66,29 @@ func _fetch_audio() -> void:
 	else:
 		Log.debug("Gramophone", "HTTP request started successfully")
 
+
+func _fetch_audio_on_demand(file_title: String) -> void:
+	Log.info("Gramophone", "Fetching audio URL on demand for: %s" % file_title)
+	_pending_file_title = file_title
+	ExhibitFetcher.fetch_images([file_title], null)
+	call_deferred("_check_audio_url_on_demand")
+
+
+func _check_audio_url_on_demand() -> void:
+	if _pending_file_title == "":
+		return
+	
+	var result = ExhibitFetcher.get_result(_pending_file_title)
+	if result and result.has("url"):
+		Log.info("Gramophone", "Got audio URL on demand: %s" % result.url)
+		url = result.url
+		_pending_file_title = ""
+		_fetch_audio()
+	else:
+		await get_tree().create_timer(0.5).timeout
+		if _pending_file_title != "":
+			_check_audio_url_on_demand()
+
 func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, http: HTTPRequest) -> void:
 	http.queue_free()
 	_loading = false
@@ -53,8 +102,8 @@ func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStrin
 			_set_error_state("Empty audio file")
 			return
 
-		# Load audio stream (no await - direct load)
-		_stream = AudioStreamOggVorbis.load_from_buffer(body)
+		# Try to load audio based on file extension
+		_stream = _load_audio_stream(body, url)
 
 		if _stream:
 			_player.stream = _stream
@@ -68,17 +117,7 @@ func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStrin
 				_play_audio()
 		else:
 			Log.error("Gramophone", "Failed to create audio stream from buffer (%d bytes)" % body.size())
-			# Try one retry without await
-			_stream = AudioStreamOggVorbis.load_from_buffer(body)
-			if _stream:
-				_player.stream = _stream
-				is_playing = false
-				Log.info("Gramophone", "Audio stream loaded on retry")
-				if _interact_queued:
-					_interact_queued = false
-					_play_audio()
-			else:
-				_set_error_state("Invalid audio format")
+			_set_error_state("Unsupported audio format")
 	else:
 		Log.error("Gramophone", "Failed to download audio. Result: %d, Response: %d" % [result, response_code])
 		_set_error_state("Download failed")
@@ -99,12 +138,13 @@ func set_stolen(stolen: bool) -> void:
 		_player.play()
 
 func interact() -> void:
+	Log.debug("Gramophone", "interact() called: _loading=%s, _stream=%s, url=%s" % [_loading, _stream != null, url])
 	if _loading:
 		# Audio still loading - queue the interaction
 		Log.debug("Gramophone", "Audio loading, queuing interact for '%s'" % text)
 		_interact_queued = true
 		return
-	
+
 	if not _stream:
 		if url == "":
 			Log.warn("Gramophone", "Interact called but no audio URL was provided")
@@ -129,6 +169,37 @@ func _play_audio() -> void:
 		tween.tween_property(_player, "volume_db", 0.0, 1.0).set_trans(Tween.TRANS_SINE)
 
 
+func _load_audio_stream(body: PackedByteArray, file_url: String) -> AudioStream:
+	# Detect format from URL extension
+	var ext := ""
+	if "." in file_url:
+		ext = file_url.get_slice(".", -1).to_lower()
+	
+	Log.debug("Gramophone", "Attempting to load audio format: .%s" % ext)
+	
+	# Try OGG first (most common on Wikimedia)
+	var stream: AudioStream = AudioStreamOggVorbis.load_from_buffer(body)
+	if stream:
+		Log.debug("Gramophone", "Successfully loaded OGG audio")
+		return stream
+	
+	# Try MP3
+	stream = AudioStreamMP3.load_from_buffer(body)
+	if stream:
+		Log.debug("Gramophone", "Successfully loaded MP3 audio")
+		return stream
+	
+	# Try WAV
+	stream = AudioStreamWAV.load_from_buffer(body)
+	if stream:
+		Log.debug("Gramophone", "Successfully loaded WAV audio")
+		return stream
+	
+	# No format worked
+	Log.warn("Gramophone", "No supported audio format found for .%s" % ext)
+	return null
+
+
 func get_interaction_text() -> String:
 	if _loading:
 		return "⏳ Loading..."
@@ -137,3 +208,7 @@ func get_interaction_text() -> String:
 			return "🔇 " + title
 		return "🔇 Loading..."
 	return "⏹ Stop Music" if is_playing else "▶ Play Music"
+
+
+func _exit_tree() -> void:
+	ExhibitFetcher.images_complete.disconnect(_on_images_fetched)

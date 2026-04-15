@@ -6,7 +6,7 @@ class_name SoundItem
 signal loaded
 
 var audio_url: String
-var _stream: AudioStreamOggVorbis = null
+var _stream: AudioStream = null
 var text: String
 var title: String
 var is_stolen: bool = false
@@ -20,6 +20,26 @@ func _ready() -> void:
 	add_to_group("sound_item")
 	add_to_group("ExhibitItem")
 	_setup_audio_player()
+	ExhibitFetcher.images_complete.connect(_on_images_fetched)
+
+
+func _on_images_fetched(file_titles: Array, _caller_ctx: Variant) -> void:
+	Log.debug("SoundItem", "Images fetch complete for: %s (looking for: %s)" % [file_titles, _pending_file_title])
+	# Check if any of the fetched titles matches our file
+	for ft in file_titles:
+		if ft == _pending_file_title:
+			var result = ExhibitFetcher.get_result(ft)
+			Log.debug("SoundItem", "Found result for %s: %s" % [ft, "yes" if result else "no"])
+			if result and result.has("url"):
+				Log.info("SoundItem", "Got audio URL on demand: %s" % result.url)
+				audio_url = result.url
+				_pending_file_title = ""
+				_fetch_audio()
+				return
+	Log.warn("SoundItem", "Audio fetch completed but no URL found for pending file: %s" % _pending_file_title)
+
+
+var _pending_file_title: String = ""
 
 func _setup_audio_player() -> void:
 	# Create AudioStreamPlayer3D if not present
@@ -32,16 +52,21 @@ func _setup_audio_player() -> void:
 		_player.bus = &"Sound"
 		add_child(_player)
 
-func init(exhibit_title: String, item_text: String, audio_url: String) -> void:
+func init(exhibit_title: String, item_text: String, audio_url: String, file_title: String = "") -> void:
 	title = exhibit_title
 	text = item_text
-	self.audio_url = audio_url
 	_loading = true
+	_interact_queued = false
+	
 	if audio_url != "":
+		self.audio_url = audio_url
 		_fetch_audio()
+	elif file_title != "":
+		Log.info("SoundItem", "No URL, fetching on demand for: %s" % file_title)
+		_fetch_audio_on_demand(file_title)
 	else:
 		_loading = false
-		Log.warn("SoundItem", "No audio URL provided for '%s'" % text)
+		Log.warn("SoundItem", "No audio URL or file title for '%s'" % text)
 
 func _fetch_audio() -> void:
 	if audio_url == "":
@@ -60,6 +85,31 @@ func _fetch_audio() -> void:
 	else:
 		Log.debug("SoundItem", "HTTP request started successfully")
 
+
+func _fetch_audio_on_demand(file_title: String) -> void:
+	Log.info("SoundItem", "Fetching audio URL on demand for: %s" % file_title)
+	_pending_file_title = file_title
+	ExhibitFetcher.fetch_images([file_title], null)
+	# Poll for result after a short delay (API calls are async)
+	call_deferred("_check_audio_url_on_demand")
+
+
+func _check_audio_url_on_demand() -> void:
+	if _pending_file_title == "":
+		return
+	
+	var result = ExhibitFetcher.get_result(_pending_file_title)
+	if result and result.has("url"):
+		Log.info("SoundItem", "Got audio URL on demand: %s" % result.url)
+		audio_url = result.url
+		_pending_file_title = ""
+		_fetch_audio()
+	else:
+		# Try again after a short delay
+		await get_tree().create_timer(0.5).timeout
+		if _pending_file_title != "":
+			_check_audio_url_on_demand()
+
 func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, http: HTTPRequest) -> void:
 	http.queue_free()
 	_loading = false
@@ -72,7 +122,7 @@ func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStrin
 			_set_error_state("Empty audio file")
 			return
 
-		_stream = AudioStreamOggVorbis.load_from_buffer(body)
+		_stream = _load_audio_stream(body, audio_url)
 
 		if _stream:
 			_player.stream = _stream
@@ -84,17 +134,7 @@ func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStrin
 				_play_audio()
 		else:
 			Log.error("SoundItem", "Failed to create audio stream from buffer (%d bytes)" % body.size())
-			_stream = AudioStreamOggVorbis.load_from_buffer(body)
-			if _stream:
-				_player.stream = _stream
-				is_playing = false
-				Log.info("SoundItem", "Audio stream loaded on retry")
-				loaded.emit()
-				if _interact_queued:
-					_interact_queued = false
-					_play_audio()
-			else:
-				_set_error_state("Invalid audio format")
+			_set_error_state("Unsupported audio format")
 	else:
 		Log.error("SoundItem", "Failed to download audio. Result: %d, Response: %d" % [result, response_code])
 		_set_error_state("Download failed")
@@ -143,6 +183,33 @@ func _play_audio() -> void:
 		_player.play()
 		tween.tween_property(_player, "volume_db", 0.0, 1.0).set_trans(Tween.TRANS_SINE)
 
+
+func _load_audio_stream(body: PackedByteArray, file_url: String) -> AudioStream:
+	var ext := ""
+	if "." in file_url:
+		ext = file_url.get_slice(".", -1).to_lower()
+	
+	Log.debug("SoundItem", "Attempting to load audio format: .%s" % ext)
+	
+	var stream: AudioStream = AudioStreamOggVorbis.load_from_buffer(body)
+	if stream:
+		Log.debug("SoundItem", "Successfully loaded OGG audio")
+		return stream
+	
+	stream = AudioStreamMP3.load_from_buffer(body)
+	if stream:
+		Log.debug("SoundItem", "Successfully loaded MP3 audio")
+		return stream
+	
+	stream = AudioStreamWAV.load_from_buffer(body)
+	if stream:
+		Log.debug("SoundItem", "Successfully loaded WAV audio")
+		return stream
+	
+	Log.warn("SoundItem", "No supported audio format found for .%s" % ext)
+	return null
+
+
 func get_interaction_text() -> String:
 	if _loading:
 		return "⏳ Loading..."
@@ -157,5 +224,6 @@ func _on_pointer_event(event: Variant) -> void:
 		interact()
 
 func _exit_tree() -> void:
+	ExhibitFetcher.images_complete.disconnect(_on_images_fetched)
 	if _player:
 		_player.stop()
