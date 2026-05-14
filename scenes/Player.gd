@@ -530,6 +530,9 @@ func _find_interactive_parent(node: Node) -> Node:
 		# Only return specific interactive types, not generic nodes with interact()
 		if current is Gramophone or current is SoundItem or current is Bench or current is Terminal:
 			return current
+		# Also return nodes that have get_interaction_text (catches TextItem, RichTextItem, etc.)
+		if current.has_method("get_interaction_text"):
+			return current
 		current = current.get_parent()
 	return null
 
