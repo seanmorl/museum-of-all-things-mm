@@ -6,19 +6,19 @@ extends RefCounted
 enum Mood { DEFAULT, HISTORY, SCIENCE, NATURE, ASTRO, MEDIA, ART, GEOGRAPHY, PHILOSOPHY, SPORTS, FOOD, POLITICS, ECONOMY, MYSTERY }
 
 const MOOD_KEYWORDS: Dictionary = {
-	Mood.HISTORY: ["history", "century", "ancient", "medieval", "war", "empire", "dynasty", "civilization", "kingdom", "revolution", "colonial", "heritage", "archaeology"],
-	Mood.SCIENCE: ["science", "physics", "chemistry", "biology", "mathematics", "technology", "engineering", "medicine", "computer", "algorithm", "game", "mechanics", "system", "theory", "research"],
-	Mood.NATURE: ["nature", "species", "animal", "plant", "ecology", "forest", "ocean", "wildlife", "bird", "fish", "insect", "mammal", "flora", "fauna", "environment", "habitat"],
-	Mood.ASTRO: ["astronomy", "space", "planet", "star", "galaxy", "cosmos", "solar", "lunar", "orbit", "nasa", "telescope", "nebula", "universe", "cosmic"],
-	Mood.MEDIA: ["film", "television", "album", "song", "music", "novel", "literature", "actor", "actress", "director", "band", "soundtrack", "video game", "gaming", "entertainment", "broadcast"],
-	Mood.ART: ["art", "painting", "sculpture", "artist", "museum", "gallery", "portrait", "landscape", "impressionism", "renaissance", "modern art", "abstract", "photography"],
-	Mood.GEOGRAPHY: ["geography", "mountain", "river", "lake", "island", "coast", "desert", "volcano", "continent", "region", "climate", "terrain", "landscape"],
-	Mood.PHILOSOPHY: ["philosophy", "religion", "theology", "ethics", "metaphysics", "logic", "theology", "spirituality", "mythology", "consciousness", "existence"],
-	Mood.SPORTS: ["sport", "football", "soccer", "basketball", "olympics", "athlete", "tennis", "cricket", "baseball", "swimming", "track", "championship"],
-	Mood.FOOD: ["food", "cuisine", "cooking", "recipe", "restaurant", "chef", "bread", "wine", "beer", "vegetable", "fruit", "spice", "ingredient", "dish"],
-	Mood.POLITICS: ["politics", "government", "president", "parliament", "congress", "election", "democracy", "diplomacy", "treaty", "policy", "legislation", "minister"],
-	Mood.ECONOMY: ["economy", "finance", "bank", "trade", "commerce", "industry", "market", "stock", "currency", "business", "corporation", "investment", "wealth"],
-	Mood.MYSTERY: ["mystery", "legend", "folklore", "myth", "supernatural", "ghost", "conspiracy", "unsolved", "paranormal", "occult", "cryptid"],
+	Mood.HISTORY: ["history", "century", "ancient", "medieval", "war", "empire", "dynasty", "civilization", "kingdom", "revolution", "colonial", "heritage", "archaeology", "monarchy", "crusade", "invasion", "battle", "military", "monument", "cathedral", "castle", "antiquity"],
+	Mood.SCIENCE: ["science", "physics", "chemistry", "biology", "mathematics", "technology", "engineering", "medicine", "computer", "algorithm", "game", "mechanics", "system", "theory", "research", "laboratory", "experiment", "quantum", "neuroscience", "psychology", "statistics", "formula", "equation", "genetics", "evolution", "molecular"],
+	Mood.NATURE: ["nature", "species", "animal", "plant", "ecology", "forest", "ocean", "wildlife", "bird", "fish", "insect", "mammal", "flora", "fauna", "environment", "habitat", "botanical", "conservation", "ecosystem", "organism", "marine", "tropical", "endangered", "extinction"],
+	Mood.ASTRO: ["astronomy", "space", "planet", "star", "galaxy", "cosmos", "solar", "lunar", "orbit", "nasa", "telescope", "nebula", "universe", "cosmic", "astronaut", "constellation", "comet", "asteroid", "observatory", "satellite", "astrophysics"],
+	Mood.MEDIA: ["film", "television", "album", "song", "music", "novel", "literature", "actor", "actress", "director", "band", "soundtrack", "video game", "gaming", "entertainment", "broadcast", "cinema", "movie", "series", "episode", "franchise", "comic", "animation", "anime", "manga", "pop culture"],
+	Mood.ART: ["art", "painting", "sculpture", "artist", "museum", "gallery", "portrait", "landscape", "impressionism", "renaissance", "modern art", "abstract", "photography", "design", "architecture", "craft", "decorative", "vanguard", "surrealism", "baroque", "rococo"],
+	Mood.GEOGRAPHY: ["geography", "mountain", "river", "lake", "island", "coast", "desert", "volcano", "continent", "region", "climate", "terrain", "landscape", "geological", "tectonic", "polar", "temperate", "atlas", "map", "canyon", "valley", "peninsula"],
+	Mood.PHILOSOPHY: ["philosophy", "religion", "theology", "ethics", "metaphysics", "logic", "theology", "spirituality", "mythology", "consciousness", "existence", "doctrine", "ideology", "rationalism", "wisdom", "belief", "meditation", "enlightenment", "monk", "monastic", "monastery", "cloister", "hermit", "abbey", "friar", "nun", "religious", "saint", "order", "vow", "abbot", "holy", "sacred", "prayer", "worship", "contemplative", "ascetic", "devotion", "canonization", "martyr", "beatification"],
+	Mood.SPORTS: ["sport", "football", "soccer", "basketball", "olympics", "athlete", "tennis", "cricket", "baseball", "swimming", "track", "championship", "tournament", "league", "stadium", "gym", "skiing", "hockey", "golf", "cycling", "martial", "racing"],
+	Mood.FOOD: ["food", "cuisine", "cooking", "recipe", "restaurant", "chef", "bread", "wine", "beer", "vegetable", "fruit", "spice", "ingredient", "dish", "culinary", "pastry", "dairy", "seafood", "beverage", "alcohol", "chocolate", "coffee", "tea", "sauce"],
+	Mood.POLITICS: ["politics", "government", "president", "parliament", "congress", "election", "democracy", "diplomacy", "treaty", "policy", "legislation", "minister", "senator", "governor", "ambassador", "constitution", "law", "justice", "reform", "activist", "suffrage"],
+	Mood.ECONOMY: ["economy", "finance", "bank", "trade", "commerce", "industry", "market", "stock", "currency", "business", "corporation", "investment", "wealth", "fiscal", "monetary", "capital", "revenue", "profit", "tax", "infrastructure", "manufacturing"],
+	Mood.MYSTERY: ["mystery", "legend", "folklore", "myth", "supernatural", "ghost", "conspiracy", "unsolved", "paranormal", "occult", "cryptid", "witchcraft", "magic", "haunted", "alien", "ufo", "cryptozoology", "divination", "prophecy"],
 }
 
 const MOOD_FOG_COLOR: Dictionary = {
@@ -30,7 +30,7 @@ const MOOD_FOG_COLOR: Dictionary = {
 	Mood.MEDIA: Color(1.0, 0.92, 0.8),
 	Mood.ART: Color(1.0, 0.95, 0.9),
 	Mood.GEOGRAPHY: Color(0.8, 0.9, 0.95),
-	Mood.PHILOSOPHY: Color(0.85, 0.8, 0.9),
+	Mood.PHILOSOPHY: Color(0.9, 0.7, 0.3),
 	Mood.SPORTS: Color(1.0, 0.95, 0.85),
 	Mood.FOOD: Color(1.0, 0.9, 0.75),
 	Mood.POLITICS: Color(0.85, 0.85, 0.9),
@@ -47,7 +47,7 @@ const MOOD_FOG_DEPTH: Dictionary = {
 	Mood.MEDIA: 10.0,
 	Mood.ART: 11.0,
 	Mood.GEOGRAPHY: 15.0,
-	Mood.PHILOSOPHY: 9.0,
+	Mood.PHILOSOPHY: 11.0,
 	Mood.SPORTS: 10.0,
 	Mood.FOOD: 10.0,
 	Mood.POLITICS: 10.0,
@@ -64,7 +64,7 @@ const MOOD_AMBIENT_COLOR: Dictionary = {
 	Mood.MEDIA: Color(1.0, 0.95, 0.85),
 	Mood.ART: Color(1.0, 0.97, 0.92),
 	Mood.GEOGRAPHY: Color(0.85, 0.92, 0.97),
-	Mood.PHILOSOPHY: Color(0.88, 0.83, 0.93),
+	Mood.PHILOSOPHY: Color(0.9, 0.7, 0.3),
 	Mood.SPORTS: Color(1.0, 0.97, 0.9),
 	Mood.FOOD: Color(1.0, 0.92, 0.8),
 	Mood.POLITICS: Color(0.88, 0.88, 0.93),
@@ -81,7 +81,7 @@ const MOOD_AMBIENT_ENERGY: Dictionary = {
 	Mood.MEDIA: 0.13,
 	Mood.ART: 0.15,
 	Mood.GEOGRAPHY: 0.15,
-	Mood.PHILOSOPHY: 0.1,
+	Mood.PHILOSOPHY: 0.12,
 	Mood.SPORTS: 0.18,
 	Mood.FOOD: 0.13,
 	Mood.POLITICS: 0.13,
@@ -99,7 +99,7 @@ const MOOD_WALL_TINT: Dictionary = {
 	Mood.MEDIA: Color(1.0, 0.95, 0.85),       # Warm theatrical
 	Mood.ART: Color(1.0, 0.97, 0.93),         # Gallery white
 	Mood.GEOGRAPHY: Color(0.9, 0.95, 0.97),   # Sky blue
-	Mood.PHILOSOPHY: Color(0.92, 0.88, 0.95), # Contemplative lavender
+	Mood.PHILOSOPHY: Color(0.95, 0.8, 0.4),    # Saffron robe warmth
 	Mood.SPORTS: Color(1.0, 0.97, 0.9),       # Energetic warm
 	Mood.FOOD: Color(1.0, 0.93, 0.82),        # Kitchen warmth
 	Mood.POLITICS: Color(0.92, 0.92, 0.95),   # Institutional gray-blue

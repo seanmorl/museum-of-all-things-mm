@@ -702,7 +702,9 @@ func _show_patch_notes() -> void:
 			"Directional skylights changed to OmniLight (stopped global bleed)",
 			"Exhibit ambient energy recalibrated for new lighting model",
 			"Wall sconce lights no longer clip through walls (position offset fixed)",
-			"Wall sconce decoration lights removed entirely"
+			"Wall sconce decoration lights removed entirely",
+			"Exhibit mood keyword lists expanded — more articles get themed lighting",
+			"PHILOSOPHY mood recolored to warm monastic ochre (#D05112)"
 		]},
 		{"title": "🐛 Bug Fixes", "items": [
 			"Main.tscn invalid/corrupt error resolved",

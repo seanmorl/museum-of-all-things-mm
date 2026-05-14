@@ -76,7 +76,7 @@ func _exit_tree() -> void:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  WCAG 2.4.7 — Focus-ring factory					  ║
+# ║  WCAG 2.4.7 — Focus-ring factory				      ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _create_focus_ring(corner_radius: float = -1.0) -> StyleBoxFlat:
@@ -125,7 +125,7 @@ func _create_slider_focus_grabber() -> StyleBoxFlat:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Theming — top-level & recursive					   ║
+# ║  Theming — top-level & recursive				       ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _apply_theme() -> void:
@@ -427,7 +427,7 @@ func _style_line_edit(edit: LineEdit) -> void:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Visibility & input handling						 ║
+# ║  Visibility & input handling						   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _on_visibility_changed() -> void:
@@ -461,7 +461,7 @@ func _input(event: InputEvent) -> void:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Tab navigation								 ║
+# ║  Tab navigation								   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _on_tab_bar_tab_changed(tab: int) -> void:
@@ -509,7 +509,7 @@ func _on_resume() -> void:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Interface / Multiplayer tab						 ║
+# ║  Interface / Multiplayer tab						   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _build_multiplayer_settings() -> Control:
@@ -609,7 +609,7 @@ func _build_multiplayer_settings() -> Control:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Accessibility tab							 ║
+# ║  Accessibility tab						   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _build_accessibility_settings() -> Control:
@@ -806,6 +806,18 @@ func _build_accessibility_settings() -> Control:
 		tr("Buttons require holding for 0.5s instead of clicking. Helps with motor control issues.")
 	))
 
+	# ── Keyboard Shortcuts (Feature 8) ───────────────────────────────────────
+	var sk_on: bool = saved.get("show_shortcut_hints", true)
+	container.add_child(_make_toggle_row(tr("Show keyboard shortcut hints"), sk_on,
+		func(on: bool):
+			_save_accessibility("show_shortcut_hints", on)
+			_save_ui_setting("show_shortcut_hints", on)
+			_emit_accessibility_event("show_shortcut_hints", on)
+	))
+	container.add_child(_make_hint(
+		tr("Displays shortcut keys next to menu buttons (P = Play, S = Settings, etc.). Toggleable for players who find them cluttering.")
+	))
+
 	# ── Secret Disco Button (easter egg, very subtle) ─────────────────────
 	var disco_row := HBoxContainer.new()
 	disco_row.alignment = BoxContainer.ALIGNMENT_END
@@ -825,7 +837,7 @@ func _build_accessibility_settings() -> Control:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Reusable row builders (DRY — all include WCAG focus indicators)	   ║
+# ║  Reusable row builders (DRY — all include WCAG focus indicators)       ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _make_heading(text: String) -> Label:
@@ -928,7 +940,7 @@ func _make_slider_row(
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Setting handlers								 ║
+# ║  Setting handlers								   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _on_ui_scale_changed(scale: float) -> void:
@@ -1007,6 +1019,27 @@ func _save_accessibility(key: String, value: Variant) -> void:
 	SettingsManager.save_settings("accessibility", data)
 
 
+func _save_ui_setting(key: String, value: Variant) -> void:
+	"""Saves a UI setting to the 'ui' settings category."""
+	var data: Dictionary = SettingsManager.get_settings("ui") \
+		if SettingsManager.get_settings("ui") else {}
+	data[key] = value
+	SettingsManager.save_settings("ui", data)
+
+
 func _emit_accessibility_event(key: String, value: Variant) -> void:
 	if SettingsEvents.has_signal("accessibility_changed"):
 		SettingsEvents.accessibility_changed.emit(key, value)
+
+
+# ── Feature 13: Accessibility Menu Shortcut ──────────────────────────────────
+
+func jump_to_tab(tab_index: int) -> void:
+	"""Public API — switches the settings tab to the given index.
+	Used by the main menu accessibility shortcut button."""
+	if not _tab_bar or tab_index < 0 or tab_index >= _tab_scenes.size():
+		return
+	if _tab_scenes[tab_index] == null:
+		return
+	_tab_bar.set_current_tab(tab_index)
+	_on_tab_bar_tab_changed(tab_index)

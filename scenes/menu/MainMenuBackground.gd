@@ -703,3 +703,11 @@ func _reset_mote(m: _Mote, vp: Vector2) -> void:
 func _resized() -> void:
 		_vp_size = get_viewport_rect().size
 		queue_redraw()
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+func get_variant_name() -> String:
+		if _v:
+				return _v.name
+		return "The Orrery"
