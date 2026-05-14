@@ -12,6 +12,12 @@ extends Control
 ## theme (dark / light) and guarantees at least 3 : 1 contrast against the
 ## panel background — satisfying both WCAG 2.4.7 (Level AA) and the stricter
 ## 2.4.11 (Level AAA) focus-appearance criterion.
+##
+## Hover → focus sync
+## -------------------
+## Mouse hover on any interactive control also grabs keyboard focus so the
+## focus indicator follows the pointer, keeping keyboard and mouse input
+## modes in sync (WCAG 2.4.7 / 1.4.11).
 
 signal resume
 
@@ -26,7 +32,6 @@ var _tab_scenes: Array = []
 # ── State ──────────────────────────────────────────────────────────────────────
 
 var _serif_font: Font = null
-var _content_panel_style: StyleBoxFlat = null
 var _current_tab: int = 0
 
 var _dark_mode_lambda: Callable = Callable()
@@ -71,12 +76,12 @@ func _exit_tree() -> void:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  WCAG 2.4.7 — Focus-ring factory                                          ║
+# ║  WCAG 2.4.7 — Focus-ring factory					  ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _create_focus_ring(corner_radius: float = -1.0) -> StyleBoxFlat:
 	"""Returns a StyleBoxFlat that draws a clearly visible 2 px accent border
-	with a soft outer glow.  Suitable as the 'focus' override for any
+	with a soft outer glow.	 Suitable as the 'focus' override for any
 	interactive Control.  The accent colour adapts to the current theme so
 	contrast against the panel background is always ≥ 3 : 1."""
 	var dark := ThemeManager.is_dark_mode
@@ -120,7 +125,7 @@ func _create_slider_focus_grabber() -> StyleBoxFlat:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Theming — top-level & recursive                                           ║
+# ║  Theming — top-level & recursive					   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _apply_theme() -> void:
@@ -142,7 +147,7 @@ func _apply_theme() -> void:
 	var panel := get_node_or_null("ScrollContainer/MarginContainer/Panel")
 	if panel:
 		panel.add_theme_stylebox_override("panel", bg)
-	if not panel and get_node_or_null("ScrollContainer") is ScrollContainer:
+	elif get_node_or_null("ScrollContainer") is ScrollContainer:
 		get_node("ScrollContainer").add_theme_stylebox_override("panel", bg)
 
 	# ── Tab bar ──────────────────────────────────────────────────────────
@@ -287,6 +292,10 @@ func _style_action_button(btn: Button) -> void:
 	# ★ WCAG 2.4.7 — Visible focus ring
 	btn.add_theme_stylebox_override("focus", _create_focus_ring())
 
+	# Hover → focus sync
+	if not btn.is_connected("mouse_entered", btn.grab_focus):
+		btn.mouse_entered.connect(btn.grab_focus)
+
 
 func _style_check(cb: CheckBox) -> void:
 	"""CheckBox — preserve theme check indicator, just set font color + focus ring."""
@@ -305,6 +314,11 @@ func _style_check(cb: CheckBox) -> void:
 		cb.add_theme_stylebox_override(state, bg)
 
 	cb.add_theme_stylebox_override("focus", _create_focus_ring())
+
+	# Hover → focus sync
+	cb.focus_mode = Control.FOCUS_ALL
+	if not cb.is_connected("mouse_entered", cb.grab_focus):
+		cb.mouse_entered.connect(cb.grab_focus)
 
 
 func _style_toggle(cb: CheckButton) -> void:
@@ -325,14 +339,17 @@ func _style_toggle(cb: CheckButton) -> void:
 
 	cb.add_theme_stylebox_override("focus", _create_focus_ring())
 
+	# Hover → focus sync
+	cb.focus_mode = Control.FOCUS_ALL
+	if not cb.is_connected("mouse_entered", cb.grab_focus):
+		cb.mouse_entered.connect(cb.grab_focus)
+
 
 func _style_slider(slider: HSlider) -> void:
 	"""HSlider — accent-bordered grabber on focus for WCAG 2.4.7."""
-	# Ensure keyboard focusability
 	slider.focus_mode = Control.FOCUS_ALL
 
 	# Style the grabber highlight (shown on hover AND focus) with a visible ring.
-	# This is the primary focus indicator since HSlider has no dedicated "focus" stylebox.
 	slider.add_theme_stylebox_override("grabber_highlight", _create_slider_focus_grabber())
 
 	# Connect focus signals to add a secondary visual cue: a subtle background tint
@@ -341,6 +358,10 @@ func _style_slider(slider: HSlider) -> void:
 		slider.focus_entered.connect(_on_slider_focus_changed.bind(slider, true))
 	if not slider.is_connected("focus_exited", _on_slider_focus_changed.bind(slider, false)):
 		slider.focus_exited.connect(_on_slider_focus_changed.bind(slider, false))
+
+	# Hover → focus sync
+	if not slider.is_connected("mouse_entered", slider.grab_focus):
+		slider.mouse_entered.connect(slider.grab_focus)
 
 
 func _on_slider_focus_changed(slider: HSlider, focused: bool) -> void:
@@ -355,7 +376,6 @@ func _on_slider_focus_changed(slider: HSlider, focused: bool) -> void:
 		track.content_margin_bottom = 4
 		slider.add_theme_stylebox_override("slider", track)
 	else:
-		# Restore default (remove override)
 		slider.remove_theme_stylebox_override("slider")
 
 
@@ -367,6 +387,11 @@ func _style_option(btn: OptionButton) -> void:
 		btn.get_popup().add_theme_font_override("font", _serif_font)
 	# ★ WCAG 2.4.7 — Ensure a visible focus ring even if ThemeManager omits one
 	btn.add_theme_stylebox_override("focus", _create_focus_ring())
+
+	# Hover → focus sync
+	btn.focus_mode = Control.FOCUS_ALL
+	if not btn.is_connected("mouse_entered", btn.grab_focus):
+		btn.mouse_entered.connect(btn.grab_focus)
 
 
 func _style_line_edit(edit: LineEdit) -> void:
@@ -395,9 +420,14 @@ func _style_line_edit(edit: LineEdit) -> void:
 		focus.bg_color = styles.focus.bg_color
 	edit.add_theme_stylebox_override("focus", focus)
 
+	# Hover → focus sync
+	edit.focus_mode = Control.FOCUS_ALL
+	if not edit.is_connected("mouse_entered", edit.grab_focus):
+		edit.mouse_entered.connect(edit.grab_focus)
+
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Visibility & input handling                                               ║
+# ║  Visibility & input handling						 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _on_visibility_changed() -> void:
@@ -431,13 +461,12 @@ func _input(event: InputEvent) -> void:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Tab navigation                                                            ║
+# ║  Tab navigation								 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _on_tab_bar_tab_changed(tab: int) -> void:
 	if _tab_scenes == null:
 		return
-	var prev_scene: Control = _tab_scenes[_current_tab] if _current_tab < _tab_scenes.size() else null
 	_current_tab = tab
 	var next_scene: Control = _tab_scenes[tab] if tab < _tab_scenes.size() else null
 
@@ -460,20 +489,15 @@ func _on_tab_bar_tab_changed(tab: int) -> void:
 
 
 func _on_tab_bar_tab_clicked(_tab: int) -> void:
-	# TabBar emits tab_clicked on mouse click (even if the tab is already
-	# selected). We don't need extra logic here — tab_changed handles the
-	# switch — but the signal must exist because the .tscn connects it.
 	pass
 
 
 func _on_tab_left() -> void:
-	# Keyboard nav: Left arrow → previous tab
 	if visible:
 		_tab_bar.select_previous_available()
 
 
 func _on_tab_right() -> void:
-	# Keyboard nav: Right arrow → next tab
 	if visible:
 		_tab_bar.select_next_available()
 
@@ -485,7 +509,7 @@ func _on_resume() -> void:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Interface / Multiplayer tab                                               ║
+# ║  Interface / Multiplayer tab						 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _build_multiplayer_settings() -> Control:
@@ -502,7 +526,7 @@ func _build_multiplayer_settings() -> Control:
 	if saved_ui and saved_ui.has("scale"):
 		current_scale = float(saved_ui.scale)
 
-	# UI Scale row
+	# UI Scale row — built inline because it has a custom reset-to-100% callback.
 	var scale_val_lbl := Label.new()
 	scale_val_lbl.custom_minimum_size = Vector2(44, 0)
 	scale_val_lbl.text = "%.0f%%" % (current_scale * 100)
@@ -513,14 +537,13 @@ func _build_multiplayer_settings() -> Control:
 	scale_slider.step = 0.05
 	scale_slider.value = current_scale
 	scale_slider.custom_minimum_size = Vector2(180, 0)
-	# WCAG: focusable
 	scale_slider.focus_mode = Control.FOCUS_ALL
 
-	var reset_btn := Button.new()
-	reset_btn.text = tr("Reset")
-	reset_btn.custom_minimum_size = Vector2(54, 0)
-	reset_btn.tooltip_text = tr("Reset to 100%")
-	reset_btn.pressed.connect(func():
+	var scale_reset_btn := Button.new()
+	scale_reset_btn.text = tr("Reset")
+	scale_reset_btn.custom_minimum_size = Vector2(54, 0)
+	scale_reset_btn.tooltip_text = tr("Reset to 100%")
+	scale_reset_btn.pressed.connect(func():
 		scale_slider.value = 1.0
 		scale_val_lbl.text = "100%"
 		_on_ui_scale_changed(1.0)
@@ -539,7 +562,7 @@ func _build_multiplayer_settings() -> Control:
 	scale_row.add_child(scale_lbl)
 	scale_row.add_child(scale_slider)
 	scale_row.add_child(scale_val_lbl)
-	scale_row.add_child(reset_btn)
+	scale_row.add_child(scale_reset_btn)
 	container.add_child(scale_row)
 
 	container.add_child(_make_hint(
@@ -554,11 +577,9 @@ func _build_multiplayer_settings() -> Control:
 	if saved and saved.has("chat_enabled"):
 		chat_on = saved.chat_enabled
 
-	# Show chat toggle
 	container.add_child(_make_toggle_row(tr("Show chat"), chat_on, _on_chat_toggle))
 	container.add_child(_make_hint(tr("Hides the chat overlay while playing.")))
 
-	# Typing sound toggle
 	var sound_on: bool = true
 	if saved and saved.has("typing_sound_enabled"):
 		sound_on = saved.typing_sound_enabled
@@ -588,7 +609,7 @@ func _build_multiplayer_settings() -> Control:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Accessibility tab                                                         ║
+# ║  Accessibility tab							 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _build_accessibility_settings() -> Control:
@@ -617,50 +638,28 @@ func _build_accessibility_settings() -> Control:
 	))
 
 	# Verbosity
-	var sr_verbosity_row := HBoxContainer.new()
-	var sr_v_lbl := Label.new()
-	sr_v_lbl.text = tr("Verbosity")
-	sr_v_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sr_verbosity_row.add_child(sr_v_lbl)
-	var sr_option := OptionButton.new()
-	sr_option.add_item(tr("All controls"))
-	sr_option.add_item(tr("Focused only"))
-	sr_option.add_item(tr("Off"))
-	var sr_verbosity: int = saved.get("screen_reader_verbosity", 0)
-	sr_option.selected = sr_verbosity
-	sr_option.item_selected.connect(func(idx: int):
-		_save_accessibility("screen_reader_verbosity", idx)
-		_apply_screen_reader(saved.get("screen_reader", false))
-	)
-	ThemeManager.style_option_button(sr_option)
-	sr_verbosity_row.add_child(sr_option)
-	container.add_child(sr_verbosity_row)
+	container.add_child(_make_option_row(
+		tr("Verbosity"),
+		[tr("All controls"), tr("Focused only"), tr("Off")],
+		saved.get("screen_reader_verbosity", 0),
+		func(idx: int):
+			_save_accessibility("screen_reader_verbosity", idx)
+			_apply_screen_reader(saved.get("screen_reader", false))
+	))
 
 	# ── Vision ────────────────────────────────────────────────────────────
 	container.add_child(_make_heading(tr("Vision")))
 
 	# Reading font selector
-	var font_row := HBoxContainer.new()
-	font_row.add_theme_constant_override("separation", 8)
-	var font_lbl := Label.new()
-	font_lbl.text = tr("Reading font")
-	font_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	font_row.add_child(font_lbl)
-	var font_option := OptionButton.new()
-	font_option.add_item(tr("Default (Cormorant Garamond)"))
-	font_option.add_item(tr("DM Sans"))
-	font_option.add_item(tr("OpenDyslexic"))
-	font_option.add_item(tr("Atkinson Hyperlegible"))
-	var font_choice: int = saved.get("reading_font", 0)
-	font_option.selected = font_choice
-	font_option.item_selected.connect(func(idx: int):
-		_save_accessibility("reading_font", idx)
-		ThemeManager.set_reading_font(idx)
-		_emit_accessibility_event("reading_font", idx)
-	)
-	ThemeManager.style_option_button(font_option)
-	font_row.add_child(font_option)
-	container.add_child(font_row)
+	container.add_child(_make_option_row(
+		tr("Reading font"),
+		[tr("Default (Cormorant Garamond)"), tr("DM Sans"), tr("OpenDyslexic"), tr("Atkinson Hyperlegible")],
+		saved.get("reading_font", 0),
+		func(idx: int):
+			_save_accessibility("reading_font", idx)
+			ThemeManager.set_reading_font(idx)
+			_emit_accessibility_event("reading_font", idx)
+	))
 	container.add_child(_make_hint(
 		tr("OpenDyslexic and Atkinson Hyperlegible are designed for improved legibility. ") +
 		tr("Fonts must be present at:") + "\n" +
@@ -705,26 +704,15 @@ func _build_accessibility_settings() -> Control:
 	# ── Colour & Contrast ─────────────────────────────────────────────────
 	container.add_child(_make_heading(tr("Colour & Contrast")))
 
-	var cb_row := HBoxContainer.new()
-	cb_row.add_theme_constant_override("separation", 8)
-	var cb_lbl := Label.new()
-	cb_lbl.text = tr("Colourblind filter")
-	cb_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cb_row.add_child(cb_lbl)
-	var cb_option := OptionButton.new()
-	cb_option.add_item(tr("None"))
-	cb_option.add_item(tr("Protanopia  (red-blind)"))
-	cb_option.add_item(tr("Deuteranopia  (green-blind)"))
-	cb_option.add_item(tr("Tritanopia  (blue-blind)"))
 	var cb_mode: int = saved.get("colorblind_mode", 0)
-	cb_option.selected = cb_mode
-	cb_option.item_selected.connect(func(idx: int):
-		_save_accessibility("colorblind_mode", idx)
-		_apply_colorblind_filter(idx)
-	)
-	ThemeManager.style_option_button(cb_option)
-	cb_row.add_child(cb_option)
-	container.add_child(cb_row)
+	container.add_child(_make_option_row(
+		tr("Colourblind filter"),
+		[tr("None"), tr("Protanopia  (red-blind)"), tr("Deuteranopia  (green-blind)"), tr("Tritanopia  (blue-blind)")],
+		cb_mode,
+		func(idx: int):
+			_save_accessibility("colorblind_mode", idx)
+			_apply_colorblind_filter(idx)
+	))
 	container.add_child(_make_hint(
 		tr("Applies a full-screen post-processing shader to correct for colour vision deficiency. ") +
 		tr("Requires the shader at res://assets/shaders/colorblind_correction.gdshader and a ") +
@@ -837,7 +825,7 @@ func _build_accessibility_settings() -> Control:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Reusable row builders (DRY — all include WCAG focus indicators)           ║
+# ║  Reusable row builders (DRY — all include WCAG focus indicators)	   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _make_heading(text: String) -> Label:
@@ -868,10 +856,28 @@ func _make_toggle_row(label_text: String, current_val: bool, callback: Callable)
 	var check := CheckButton.new()
 	check.button_pressed = current_val
 	check.toggled.connect(callback)
-	# Focus ring is applied during the _theme_control_tree pass, but we also
-	# set focus_mode explicitly for clarity.
 	check.focus_mode = Control.FOCUS_ALL
 	row.add_child(check)
+	return row
+
+
+func _make_option_row(label_text: String, items: Array, selected: int, on_change: Callable) -> HBoxContainer:
+	"""Builds a label + OptionButton row.  The OptionButton receives a visible
+	focus ring for WCAG 2.4.7 compliance and is pre-styled via ThemeManager."""
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(lbl)
+	var option := OptionButton.new()
+	for item in items:
+		option.add_item(item)
+	option.selected = selected
+	option.item_selected.connect(on_change)
+	option.focus_mode = Control.FOCUS_ALL
+	ThemeManager.style_option_button(option)
+	row.add_child(option)
 	return row
 
 
@@ -882,6 +888,7 @@ func _make_slider_row(
 	max_val: float,
 	step_val: float,
 	on_change: Callable,
+	default_val: float = 1.0,
 ) -> HBoxContainer:
 	"""Builds a label + HSlider + value label + Reset button row.
 	All interactive elements receive WCAG 2.4.7 focus indicators."""
@@ -901,7 +908,7 @@ func _make_slider_row(
 	reset_btn.text = tr("Reset")
 	reset_btn.custom_minimum_size = Vector2(54, 0)
 	reset_btn.tooltip_text = tr("Reset to default")
-	reset_btn.pressed.connect(func(): slider.value = 1.0)
+	reset_btn.pressed.connect(func(): slider.value = default_val)
 
 	slider.value_changed.connect(func(v: float):
 		val_lbl.text = "%.0f%%" % (v * 100.0)
@@ -921,7 +928,7 @@ func _make_slider_row(
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  Setting handlers                                                          ║
+# ║  Setting handlers								 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 func _on_ui_scale_changed(scale: float) -> void:
@@ -981,7 +988,6 @@ func _apply_screen_reader(enabled: bool) -> void:
 	if DisplayServer.has_feature(DisplayServer.FEATURE_ACCESSIBILITY_SCREEN_READER):
 		if DisplayServer.has_method("accessibility_screen_reader_is_active"):
 			var _currently_active: bool = DisplayServer.call("accessibility_screen_reader_is_active")
-		_emit_accessibility_event("screen_reader", enabled)
 	else:
 		push_warning(
 			"Settings: AccessKit screen reader requires Godot 4.3+ DisplayServer. " +

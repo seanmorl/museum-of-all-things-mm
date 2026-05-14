@@ -65,13 +65,13 @@ theme_override_font_sizes/font_size = 16
 text = "The Museum of All Things"
 
 [node name="Spacer" type="Control" parent="MainLayout/LeftCol/BrandingVBox" unique_id=1521059499]
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 
 [node name="ButtonContainer" type="VBoxContainer" parent="MainLayout/LeftCol/BrandingVBox" unique_id=240212156]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 8
 
 [node name="Footer" type="VBoxContainer" parent="MainLayout/LeftCol/BrandingVBox" unique_id=1211904979]
 layout_mode = 2

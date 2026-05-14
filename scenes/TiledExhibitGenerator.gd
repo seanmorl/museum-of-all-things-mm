@@ -877,65 +877,9 @@ func _try_place_wall_decoration(wall_pos: Vector3, slot_pos: Vector3, dir: Vecto
 		return
 
 	# Safety: verify the slot position is reasonable
-	var world_pos := GridUtils.grid_to_world(slot_pos) + dir * 0.15
+	var world_pos := GridUtils.grid_to_world(slot_pos) - dir * 0.15
 
-	match _mood:
-		ExhibitMood.Mood.HISTORY:
-			_place_wall_sconce(world_pos, dir, Color(1.0, 0.85, 0.5))
-		ExhibitMood.Mood.ART:
-			_place_wall_sconce(world_pos, dir, Color(1.0, 0.95, 0.9))
-		ExhibitMood.Mood.MYSTERY:
-			_place_wall_sconce(world_pos, dir, Color(0.5, 0.4, 0.7))
-		ExhibitMood.Mood.SCIENCE:
-			_place_wall_sconce(world_pos, dir, Color(0.7, 0.85, 1.0))
-		ExhibitMood.Mood.POLITICS:
-			_place_wall_sconce(world_pos, dir, Color(1.0, 0.9, 0.7))
-		ExhibitMood.Mood.ECONOMY:
-			_place_wall_sconce(world_pos, dir, Color(1.0, 0.95, 0.6))
-
-
-func _place_wall_sconce(world_pos: Vector3, dir: Vector3, color: Color) -> void:
-	var sconce := Node3D.new()
-	sconce.name = "WallSconce"
-
-	var mesh := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.15, 0.3, 0.15)
-	mesh.mesh = box
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.4, 0.35, 0.3)
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mesh.material_override = mat
-	mesh.position = Vector3(0, 2.5, 0)
-	sconce.add_child(mesh)
-
-	# Glow
-	var glow := MeshInstance3D.new()
-	var gbox := BoxMesh.new()
-	gbox.size = Vector3(0.1, 0.15, 0.1)
-	glow.mesh = gbox
-	var gmat := StandardMaterial3D.new()
-	gmat.albedo_color = color
-	gmat.emission_enabled = true
-	gmat.emission = color
-	gmat.emission_energy_multiplier = 2.0
-	gmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	glow.material_override = gmat
-	glow.position = Vector3(0, 2.5, 0.05)
-	sconce.add_child(glow)
-
-	# Small light
-	var light := OmniLight3D.new()
-	light.light_energy = 0.5
-	light.light_color = color
-	light.omni_range = 3.0
-	light.position = Vector3(0, 2.5, 0)
-	sconce.add_child(light)
-
-	sconce.position = world_pos + Vector3(0, 0, 0)
-	# Face the sconce toward the room center
-	sconce.rotation.y = GridUtils.vec_to_rot(-dir)
-	add_child(sconce)
+	pass
 
 
 func _room_to_bounds(center: Vector3, width: int, length: int) -> Array:

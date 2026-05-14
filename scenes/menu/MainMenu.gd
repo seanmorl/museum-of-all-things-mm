@@ -6,7 +6,6 @@ signal start_multiplayer
 signal start_dedicated_host
 
 const FACTS := [
-	# ── MOAT Facts ──────────────────────────────────────────────────────
 	"The Museum of All Things is procedurally generated — every exhibit is unique!",
 	"You can explore MOAT with up to 16 players in multiplayer mode.",
 	"Each exhibit hallway is generated from real Wikipedia article links.",
@@ -36,8 +35,6 @@ const FACTS := [
 	"The Museum of All Things is free and open-source — built with love for the community.",
 	"Wikipedia has over 60 million articles in more than 300 languages.",
 	"Originally created by m4ym4y (Maya) — the visionary behind MoAT.",
-
-	# ── Fascinating Facts ───────────────────────────────────────────────
 	"Honey never spoils — archaeologists have found edible 3,000-year-old honey in Egyptian tombs.",
 	"Octopuses have three hearts, nine brains, and blue blood.",
 	"A day on Venus is longer than a year on Venus.",
@@ -62,8 +59,6 @@ const FACTS := [
 	"A group of flamingos is called a 'flamboyance'.",
 	"The @ symbol has been used for over 500 years — since the 16th century.",
 	"Titanic was the subject of a fictional book in 1898, 14 years before the real ship sank.",
-
-	# ── Gameplay Tips ───────────────────────────────────────────────────
 	"Tip: Follow links from one exhibit to discover entirely new wings of the museum.",
 	"Tip: Use the race system to compete with friends — vote on your destination!",
 	"Tip: The minimap tracks your path — retrace your steps to find your way back.",
@@ -80,14 +75,19 @@ const FACTS := [
 	"Tip: Tab shows which players are currently online.",
 ]
 
+# ── WCAG 2.4.7 Focus Indicator Constants ─────────────────────────────────────
+# 3px border exceeds the WCAG minimum 2px; colours chosen for >=3:1 contrast.
+const FOCUS_BORDER_WIDTH := 3
+const FOCUS_CORNER_RADIUS := 8
+const FOCUS_COLOR_DARK  := Color(0.31, 0.55, 1.0)   # bright blue on dark bg
+const FOCUS_COLOR_LIGHT := Color(0.11, 0.34, 0.73)   # deep blue on light bg
+
 var _serif_font: Font = null
 var _sans_font: Font = null
-var _selected_index: int = 0
-var _menu_nodes: Array[Control] = []
-var _selection_bar: ColorRect = null
+var _menu_buttons: Array[Button] = []
 var _current_fact_index: int = 0
 var _fact_timer: Timer = null
-var _fact_order: Array[int] = []  # Shuffled indices to avoid repeats
+var _fact_order: Array[int] = []
 var _patch_popup: Control = null
 var _trending_label: Label = null
 var _trending_articles: Array = []
@@ -108,8 +108,7 @@ func _ready() -> void:
 	_serif_font = load("res://assets/fonts/CormorantGaramond/CormorantGaramond-SemiBold.ttf")
 	_sans_font = ThemeManager.get_reading_font()
 
-	_build_ui()
-	_update_selection(true)
+	_build_menu()
 	_setup_fact_timer()
 	_populate_tags()
 	_setup_trending_ticker()
@@ -121,9 +120,9 @@ func _ready() -> void:
 	SettingsEvents.language_changed.connect(_on_language_changed_from_settings)
 
 	if Platform.is_web():
-		for node in _menu_nodes:
-			if node.name == "Quit":
-				node.visible = false
+		for btn in _menu_buttons:
+			if btn.name == "Quit":
+				btn.visible = false
 
 	call_deferred("_entrance_animation")
 
@@ -152,222 +151,184 @@ func _on_language_changed_from_settings(language: String) -> void:
 	if _current_locale_index < 0:
 		_current_locale_index = 0
 	_update_language_toggle_ui()
-	# Rebuild main menu to pick up translated button labels
-	_build_ui()
-	_update_selection(true)
+	# Rebuild buttons to pick up translated labels
+	_build_menu()
 
 
-func _input(event: InputEvent) -> void:
-	if not visible: return
-	
-	# Close patch popup with ESC
-	if _patch_popup and event.is_action_pressed("ui_cancel"):
-		_close_patch_popup()
-		get_viewport().set_input_as_handled()
-		return
+# ── Build Menu ────────────────────────────────────────────────────────────────
 
-	if event.is_action_pressed("ui_up"):
-		_selected_index = posmod(_selected_index - 1, _menu_nodes.size())
-		UISoundManager._play(UISoundManager.focus_sound)
-		_update_selection()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("ui_down"):
-		_selected_index = posmod(_selected_index + 1, _menu_nodes.size())
-		UISoundManager._play(UISoundManager.focus_sound)
-		_update_selection()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("ui_accept"):
-		UISoundManager._play(UISoundManager.button_press_sound)
-		_on_item_selected(_selected_index)
-		get_viewport().set_input_as_handled()
-
-# ── Build ─────────────────────────────────────────────────────────────────────
-
-func _build_ui() -> void:
+func _build_menu() -> void:
 	for c in _button_container.get_children():
 		c.queue_free()
-	_menu_nodes.clear()
+	_menu_buttons.clear()
 
-	_selection_bar = ColorRect.new()
-	_selection_bar.custom_minimum_size = Vector2(3, 28)
-	_selection_bar.color = Color.WHITE
-	add_child(_selection_bar)
-	_selection_bar.hide()
-
-	for i in range(3):
-		var shadow := ColorRect.new()
-		shadow.custom_minimum_size = _selection_bar.custom_minimum_size + Vector2(i*6, i*6)
-		shadow.color = Color(1, 1, 1, 0.08 / (i + 1))
-		shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_selection_bar.add_child(shadow)
-		shadow.position = -Vector2(i*3, i*3)
-		shadow.show()
-
-	var items = [
-		{"label": tr("Play Game"), "icon": "🏛", "callback": _on_start_pressed},
-		{"label": tr("Multiplayer"), "icon": "🌐", "callback": _on_multiplayer_pressed},
-		{"label": tr("Settings"), "icon": "⚙", "callback": _on_settings_pressed},
-		{"label": tr("Toggle Theme"), "icon": "☾", "callback": _on_theme_toggle_pressed},
-		{"label": tr("Language"), "icon": "🌍", "callback": _on_language_toggle_pressed},
-		{"label": tr("Latest Changes"), "icon": "📋", "callback": _show_patch_notes},
-		{"label": tr("DedicatedHost"), "icon": "🖥", "callback": _on_dedicated_host_pressed},
-		{"label": tr("Quit"), "icon": "✕", "callback": _on_quit_pressed}
+	var items := [
+		{"label": tr("Play Game"),    "icon": "🏛", "name": "Play",           "action": _on_start_pressed},
+		{"label": tr("Multiplayer"),  "icon": "🌐", "name": "Multiplayer",    "action": _on_multiplayer_pressed},
+		{"label": tr("Settings"),     "icon": "⚙",  "name": "Settings",       "action": _on_settings_pressed},
+		{"label": tr("Toggle Theme"), "icon": "☾",  "name": "Toggle Theme",   "action": _on_theme_toggle_pressed},
+		{"label": tr("Language"),     "icon": "🌍", "name": "Language",       "action": _on_language_toggle_pressed},
+		{"label": tr("Latest Changes"), "icon": "📋", "name": "LatestChanges", "action": _show_patch_notes},
+		{"label": tr("DedicatedHost"), "icon": "🖥",  "name": "DedicatedHost", "action": _on_dedicated_host_pressed},
+		{"label": tr("Quit"),         "icon": "✕",  "name": "Quit",           "action": _on_quit_pressed},
 	]
 
 	for item in items:
-		var btn_hbox := HBoxContainer.new()
-		btn_hbox.name = item.label
-		btn_hbox.add_theme_constant_override("separation", 14)
-		btn_hbox.mouse_filter = Control.MOUSE_FILTER_STOP
+		var btn := Button.new()
+		btn.name = item.name
+		btn.focus_mode = Control.FOCUS_ALL
 
-		var icon_lbl := Label.new()
-		icon_lbl.text = item.icon
-		if item.label == "Toggle Theme":
-			icon_lbl.text = "☾" if not ThemeManager.is_dark_mode else "☀"
-			icon_lbl.name = "ThemeIcon"
-		elif item.label == "Language":
-			icon_lbl.name = "LanguageIcon"
+		# Build display text with icon + label
+		var display_text: String = item.label
+		if item.name == "DedicatedHost":
+			display_text = "Host Server"
+		elif item.name == "Toggle Theme":
+			display_text = ("Light Mode" if ThemeManager.is_dark_mode else "Dark Mode")
+		elif item.name == "Language":
+			display_text = _get_current_language_name()
 
-		icon_lbl.add_theme_font_size_override("font_size", 17)
-		icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		btn_hbox.add_child(icon_lbl)
-		
-		var lbl := Label.new()
-		var label_text = item.label
-		if label_text == "DedicatedHost": label_text = "Host Server"
-		elif label_text == "Toggle Theme": label_text = "Light Mode" if ThemeManager.is_dark_mode else "Dark Mode"
-		elif label_text == "Language": label_text = _get_current_language_name()
+		btn.text = item.icon + "  " + display_text
+		btn.alignment = HorizontalAlignment.HORIZONTAL_ALIGNMENT_LEFT
 
-		lbl.text = label_text
-		if item.label == "Toggle Theme": lbl.name = "ThemeLabel"
-		elif item.label == "Language": lbl.name = "LanguageLabel"
-		
-		lbl.add_theme_font_override("font", _serif_font)
-		lbl.add_theme_font_size_override("font_size", 18)
-		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		btn_hbox.add_child(lbl)
+		# ── WCAG 2.4.7: StyleBoxFlat with explicit focus state ─────────
+		# Every state gets a StyleBoxFlat so the focus ring is always
+		# drawn by Godot's own rendering — no manual overlay needed.
+		_apply_button_style(btn)
 
-		if item.label == "Quit":
-			btn_hbox.unique_name_in_owner = true
+		btn.pressed.connect(item.action)
+		btn.custom_minimum_size = Vector2(280, 44)
+		# Hover → focus sync: mouse hover also grabs keyboard focus so the
+		# focus indicator follows the pointer (WCAG 2.4.7 / 1.4.11).
+		btn.mouse_entered.connect(btn.grab_focus)
 
-		btn_hbox.gui_input.connect(_on_item_gui_input.bind(_menu_nodes.size()))
-		btn_hbox.mouse_entered.connect(_on_item_mouse_entered.bind(_menu_nodes.size()))
-		btn_hbox.mouse_exited.connect(_on_item_mouse_exited.bind(_menu_nodes.size()))
+		_button_container.add_child(btn)
+		btn.owner = self
+		_menu_buttons.append(btn)
 
-		_button_container.add_child(btn_hbox)
-		btn_hbox.owner = self
-		_menu_nodes.append(btn_hbox)
+	# ── WCAG 2.4.7: Focus neighbour chain ─────────────────────────────
+	# Godot uses these to move focus with arrow keys and Tab.
+	for i in range(_menu_buttons.size()):
+		var btn = _menu_buttons[i]
+		var prev_btn = _menu_buttons[posmod(i - 1, _menu_buttons.size())]
+		var next_btn = _menu_buttons[posmod(i + 1, _menu_buttons.size())]
+		btn.focus_neighbor_top    = prev_btn.get_path()
+		btn.focus_neighbor_bottom = next_btn.get_path()
+		btn.focus_neighbor_left   = btn.get_path()
+		btn.focus_neighbor_right  = btn.get_path()
+		btn.focus_previous = prev_btn.get_path()
+		btn.focus_next     = next_btn.get_path()
 
 	_apply_theme()
 
 
-func _update_selection(instant: bool = false) -> void:
-	for i in range(_menu_nodes.size()):
-		var node = _menu_nodes[i]
-		var is_selected = (i == _selected_index)
-		var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT) if not instant else null
-		if tw:
-			tw.tween_property(node, "modulate:a", 1.0 if is_selected else 0.5, 0.2)
-		else:
-			node.modulate.a = 1.0 if is_selected else 0.5
+# ── WCAG 2.4.7: Button Styling ───────────────────────────────────────────────
 
-	if _selected_index < _menu_nodes.size():
-		var target_node = _menu_nodes[_selected_index]
-		_selection_bar.show()
-		var accent := Color(0.3, 0.55, 0.95) if ThemeManager.is_dark_mode else Color(0.2, 0.45, 0.85)
-		_selection_bar.color = accent
+func _apply_button_style(btn: Button) -> void:
+	"""Apply a StyleBoxFlat for every button state.
+	The *focus* state uses a 3px accent-coloured border (>=3:1 contrast)
+	to satisfy WCAG 2.4.7 Focus Visible."""
+	var dark := ThemeManager.is_dark_mode
 
-		var target_pos = target_node.global_position
-		target_pos.x -= 20
-		target_pos.y += (target_node.size.y - _selection_bar.size.y) / 2
+	# ── Normal ─────────────────────────────────────────────────────────
+	var normal := StyleBoxFlat.new()
+	normal.bg_color        = Color(1, 1, 1, 0.04) if dark else Color(0, 0, 0, 0.02)
+	normal.border_color    = Color(1, 1, 1, 0.06) if dark else Color(0, 0, 0, 0.04)
+	normal.border_width_left   = 1
+	normal.border_width_top    = 1
+	normal.border_width_right  = 1
+	normal.border_width_bottom = 1
+	normal.set_corner_radius_all(FOCUS_CORNER_RADIUS)
+	normal.content_margin_left   = 16
+	normal.content_margin_right  = 16
+	normal.content_margin_top    = 10
+	normal.content_margin_bottom = 10
+	btn.add_theme_stylebox_override("normal", normal)
 
-		if instant:
-			_selection_bar.global_position = target_pos
-		else:
-			var tw = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-			tw.tween_property(_selection_bar, "global_position", target_pos, 0.2)
+	# ── Hover ──────────────────────────────────────────────────────────
+	var hover := normal.duplicate()
+	hover.bg_color     = Color(1, 1, 1, 0.10) if dark else Color(0, 0, 0, 0.06)
+	hover.border_color = Color(1, 1, 1, 0.14) if dark else Color(0, 0, 0, 0.10)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	# ── Focus (WCAG 2.4.7) ────────────────────────────────────────────
+	var focus := normal.duplicate()
+	focus.border_width_left   = FOCUS_BORDER_WIDTH
+	focus.border_width_top    = FOCUS_BORDER_WIDTH
+	focus.border_width_right  = FOCUS_BORDER_WIDTH
+	focus.border_width_bottom = FOCUS_BORDER_WIDTH
+	focus.border_color = FOCUS_COLOR_DARK if dark else FOCUS_COLOR_LIGHT
+	focus.bg_color     = Color(1, 1, 1, 0.07) if dark else Color(0, 0, 0, 0.04)
+	# Glow / shadow for extra contrast (WCAG 1.4.11 non-text contrast)
+	focus.shadow_color  = FOCUS_COLOR_DARK if dark else FOCUS_COLOR_LIGHT
+	focus.shadow_color.a = 0.25 if dark else 0.18
+	focus.shadow_size   = 4
+	focus.shadow_offset = Vector2.ZERO
+	btn.add_theme_stylebox_override("focus", focus)
+
+	# ── Pressed ────────────────────────────────────────────────────────
+	var pressed := normal.duplicate()
+	pressed.bg_color     = Color(1, 1, 1, 0.16) if dark else Color(0, 0, 0, 0.09)
+	pressed.border_color = FOCUS_COLOR_DARK if dark else FOCUS_COLOR_LIGHT
+	pressed.border_width_left   = FOCUS_BORDER_WIDTH
+	pressed.border_width_top    = FOCUS_BORDER_WIDTH
+	pressed.border_width_right  = FOCUS_BORDER_WIDTH
+	pressed.border_width_bottom = FOCUS_BORDER_WIDTH
+	btn.add_theme_stylebox_override("pressed", pressed)
+
+	# ── Hover + Pressed ────────────────────────────────────────────────
+	var hover_pressed := pressed.duplicate()
+	hover_pressed.bg_color = Color(1, 1, 1, 0.18) if dark else Color(0, 0, 0, 0.11)
+	btn.add_theme_stylebox_override("hover_pressed", hover_pressed)
+
+	# ── Font overrides ─────────────────────────────────────────────────
+	btn.add_theme_font_override("font", _serif_font)
+	btn.add_theme_font_size_override("font_size", 18)
+	btn.add_theme_color_override("font_color",          ThemeManager.text_color)
+	btn.add_theme_color_override("font_hover_color",    ThemeManager.text_color)
+	btn.add_theme_color_override("font_focus_color",    ThemeManager.text_color)
+	btn.add_theme_color_override("font_pressed_color",  ThemeManager.text_color)
+	btn.add_theme_color_override("font_hover_pressed_color", ThemeManager.text_color)
 
 
-func _on_item_gui_input(event: InputEvent, index: int) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		UISoundManager._play(UISoundManager.button_press_sound)
-		_on_item_selected(index)
-
-
-func _on_item_mouse_entered(index: int) -> void:
-	if _selected_index != index:
-		_selected_index = index
-		UISoundManager._play(UISoundManager.focus_sound)
-		_update_selection()
-	var node = _menu_nodes[index]
-	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_property(node, "modulate:a", 1.0, 0.15)
-
-func _on_item_mouse_exited(index: int) -> void:
-	if _selected_index == index:
-		return
-	var node = _menu_nodes[index]
-	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_property(node, "modulate:a", 0.5, 0.15)
-
-
-func _on_item_selected(index: int) -> void:
-	match index:
-		0: _on_start_pressed()
-		1: _on_multiplayer_pressed()
-		2: _on_settings_pressed()
-		3: _on_theme_toggle_pressed()
-		4: _on_language_toggle_pressed()
-		5: _show_patch_notes()
-		6: _on_dedicated_host_pressed()
-		7: _on_quit_pressed()
-
-# ── Styling ───────────────────────────────────────────────────────────────────
+# ── Theme ─────────────────────────────────────────────────────────────────────
 
 func _apply_theme() -> void:
 	var dark := ThemeManager.is_dark_mode
-	var accent := Color(0.3, 0.55, 0.95) if dark else Color(0.2, 0.45, 0.85)
 
+	# Logo
 	var logo_text_col := "#F0EDE8" if dark else "#1A1814"
-	var accent_hex := "#4C8CFF" if dark else "#2659D9"
+	var accent_hex    := "#4C8CFF" if dark else "#2659D9"
 	_logo_label.text = "[color=%s]M[/color][color=%s]·[/color][color=%s]AT[/color]" % [logo_text_col, accent_hex, logo_text_col]
+
 	%SubtitleLabel.add_theme_color_override("font_color", ThemeManager.subtext_color)
 
-	for node in _menu_nodes:
-		var icon: Label = node.get_child(0) if node.get_child_count() > 0 else null
-		var text_label: Label = node.get_child(1) if node.get_child_count() > 1 else null
-		if text_label:
-			text_label.add_theme_color_override("font_color", ThemeManager.text_color)
-		if icon:
-			icon.add_theme_color_override("font_color", ThemeManager.text_color)
+	# Re-style every button (colours may have changed)
+	for btn in _menu_buttons:
+		_apply_button_style(btn)
 
-	if _selection_bar:
-		_selection_bar.color = accent
-		for child in _selection_bar.get_children():
-			if child is ColorRect:
-				child.color = accent
-				child.color.a = 0.08 / (child.get_index() + 1)
-
+	# Fact panel
 	var fact_style := StyleBoxFlat.new()
-	fact_style.bg_color = Color(1, 1, 1, 0.06) if dark else Color(1, 1, 1, 0.55)
+	fact_style.bg_color          = Color(1, 1, 1, 0.06) if dark else Color(1, 1, 1, 0.55)
 	fact_style.border_width_left = 1
-	fact_style.border_width_top = 1
-	fact_style.border_width_right = 1
+	fact_style.border_width_top  = 1
+	fact_style.border_width_right  = 1
 	fact_style.border_width_bottom = 1
 	fact_style.border_color = Color(1, 1, 1, 0.12) if dark else Color(0, 0, 0, 0.08)
 	for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
 		fact_style.set("corner_radius_" + c, 14)
-	fact_style.shadow_color = Color(0, 0, 0, 0.25 if dark else 0.08)
-	fact_style.shadow_size = 20
-	fact_style.shadow_offset = Vector2(0, 4)
+	fact_style.shadow_color   = Color(0, 0, 0, 0.25 if dark else 0.08)
+	fact_style.shadow_size    = 20
+	fact_style.shadow_offset  = Vector2(0, 4)
 	%FactPanel.add_theme_stylebox_override("panel", fact_style)
 	_fact_text.add_theme_color_override("font_color", ThemeManager.text_color)
 
 	_populate_tags()
 
+	# Footer
 	var footer = $MainLayout/LeftCol/BrandingVBox/Footer
 	footer.get_node("ModeDesc").add_theme_color_override("font_color", ThemeManager.subtext_color)
 	footer.get_node("Sep").color = Color(1, 1, 1, 0.08) if dark else Color(0, 0, 0, 0.06)
+
 	$EscHint.add_theme_color_override("font_color", ThemeManager.subtext_color)
 
 	if _trending_label:
@@ -376,12 +337,13 @@ func _apply_theme() -> void:
 	if trending_sep:
 		trending_sep.color = Color(1, 1, 1, 0.08) if dark else Color(0, 0, 0, 0.06)
 
+
 # ── Tags ──────────────────────────────────────────────────────────────────────
 
 func _populate_tags() -> void:
 	for c in _tag_container.get_children():
 		c.queue_free()
-	
+
 	var dark := ThemeManager.is_dark_mode
 	var tags = ["Wikipedia-powered", "Multiplayer", "Open Source"]
 	for t in tags:
@@ -390,7 +352,7 @@ func _populate_tags() -> void:
 		lbl.add_theme_font_size_override("font_size", 10)
 		lbl.add_theme_font_override("font", _sans_font)
 		lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.55) if dark else Color(0, 0, 0, 0.5))
-		
+
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color(1, 1, 1, 0.06) if dark else Color(0, 0, 0, 0.04)
 		style.border_width_left = 1
@@ -400,32 +362,29 @@ func _populate_tags() -> void:
 		style.border_color = Color(1, 1, 1, 0.1) if dark else Color(0, 0, 0, 0.06)
 		for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
 			style.set("corner_radius_" + c, 16)
-		style.content_margin_left = 10
-		style.content_margin_top = 3
-		style.content_margin_right = 10
+		style.content_margin_left   = 10
+		style.content_margin_top    = 3
+		style.content_margin_right  = 10
 		style.content_margin_bottom = 3
-		
+
 		lbl.add_theme_stylebox_override("normal", style)
 		_tag_container.add_child(lbl)
 
 
-# ── Wikipedia Trending Ticker ─────────────────────────────────────────────────
+# ── Trending Ticker ───────────────────────────────────────────────────────────
 
 func _setup_trending_ticker() -> void:
-	# Create timer first
 	_trending_timer = Timer.new()
 	_trending_timer.wait_time = 4.0
 	_trending_timer.timeout.connect(_on_trending_timer_timeout)
 	add_child(_trending_timer)
 
-	# WikipediaTrending is now an autoload
 	var wt = get_node_or_null("/root/WikipediaTrending")
 	if wt:
 		wt.trending_updated.connect(_on_trending_updated)
 		wt.fetch_failed.connect(_on_trending_failed)
 		wt.fetch_trending()
 
-	# Create ticker label at bottom of right column
 	_trending_label = Label.new()
 	_trending_label.name = "TrendingLabel"
 	_trending_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -434,12 +393,9 @@ func _setup_trending_ticker() -> void:
 	_trending_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
 	_trending_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 
-	# Add to right column, below tags
 	var right_col = get_node_or_null("MainLayout/RightCol/WidgetVBox")
 	if right_col:
 		right_col.add_child(_trending_label)
-
-		# Create separator above ticker
 		var sep := ColorRect.new()
 		sep.name = "TrendingSep"
 		sep.custom_minimum_size.y = 1
@@ -458,15 +414,13 @@ func _on_trending_updated(articles: Array) -> void:
 		_trending_timer.start()
 
 
-func _on_trending_failed(error: String) -> void:
-	# Don't show error, the hardcoded fallback will be used
+func _on_trending_failed(_error: String) -> void:
 	pass
 
 
 func _on_trending_timer_timeout() -> void:
 	if _trending_articles.size() > 1:
 		_trending_index = (_trending_index + 1) % _trending_articles.size()
-		# Fade out, update text, fade in
 		var tw := create_tween()
 		tw.tween_property(_trending_label, "modulate:a", 0.0, 0.5)
 		tw.chain().tween_callback(_update_trending_display)
@@ -476,19 +430,18 @@ func _on_trending_timer_timeout() -> void:
 func _update_trending_display() -> void:
 	if not _trending_label:
 		return
-
 	if _trending_articles.is_empty():
-		_trending_label.text = "📈 Loading trending articles..."
+		_trending_label.text = "Loading trending articles..."
 		_trending_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
 		return
-
 	var article = _trending_articles[_trending_index]
 	if _trending_articles.size() > 1:
-		_trending_label.text = "📈 Trending: %s (%d/%d)" % [article, _trending_index + 1, _trending_articles.size()]
+		_trending_label.text = "Trending: %s (%d/%d)" % [article, _trending_index + 1, _trending_articles.size()]
 	else:
-		_trending_label.text = "📈 Trending: %s" % article
+		_trending_label.text = "Trending: %s" % article
 
-# ── Animations ────────────────────────────────────────────────────────────────
+
+# ── Entrance Animation ────────────────────────────────────────────────────────
 
 func _entrance_animation() -> void:
 	_logo_label.modulate.a = 0
@@ -502,27 +455,42 @@ func _entrance_animation() -> void:
 	tw.tween_property(%FactPanel, "modulate:a", 1.0, 0.7).set_delay(0.4)
 	tw.tween_property(%TagContainer, "modulate:a", 1.0, 0.7).set_delay(0.55)
 
-	var delay = 0.35
-	for node in _menu_nodes:
-		node.modulate.a = 0
+	var delay: float = 0.35
+	for btn in _menu_buttons:
+		btn.modulate.a = 0
 		var twb := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		twb.tween_property(node, "modulate:a", 1.0 if node == _menu_nodes[_selected_index] else 0.5, 0.35).set_delay(delay)
+		twb.tween_property(btn, "modulate:a", 1.0, 0.35).set_delay(delay)
 		delay += 0.06
 
-# ── Fact Logic ────────────────────────────────────────────────────────────────
+	# ── WCAG 2.4.7: Auto-focus first button after animation ───────────
+	var grab_delay: float = delay + 0.15
+	var grab_tw := create_tween()
+	grab_tw.tween_callback(_grab_initial_focus).set_delay(grab_delay)
+
+
+func _grab_initial_focus() -> void:
+	"""Give keyboard focus to the first visible menu button."""
+	if not is_visible_in_tree():
+		return
+	for btn in _menu_buttons:
+		if btn.visible:
+			btn.grab_focus()
+			return
+
+
+# ── Facts ─────────────────────────────────────────────────────────────────────
 
 func _setup_fact_timer() -> void:
-	# Build shuffled order so facts don't repeat until all have been shown
 	_shuffle_facts()
-	# Pick a random starting fact so first visit isn't always the same
 	_current_fact_index = randi() % _fact_order.size()
 	_fact_text.text = FACTS[_fact_order[_current_fact_index]]
 
 	_fact_timer = Timer.new()
-	_fact_timer.wait_time = 6.0  # Faster rotation for better engagement
+	_fact_timer.wait_time = 6.0
 	_fact_timer.timeout.connect(_on_fact_timer_timeout)
 	add_child(_fact_timer)
 	_fact_timer.start()
+
 
 func _shuffle_facts() -> void:
 	_fact_order.clear()
@@ -530,38 +498,45 @@ func _shuffle_facts() -> void:
 		_fact_order.append(i)
 	_fact_order.shuffle()
 
+
 func _on_fact_timer_timeout() -> void:
 	var tw := create_tween()
 	tw.tween_property(_fact_text, "modulate:a", 0.0, 0.5)
 	tw.chain().tween_callback(_cycle_fact)
 	tw.chain().tween_property(_fact_text, "modulate:a", 1.0, 0.5)
 
+
 func _cycle_fact() -> void:
 	_current_fact_index += 1
 	if _current_fact_index >= _fact_order.size():
-		# All facts shown — reshuffle for the next round
 		_shuffle_facts()
 		_current_fact_index = 0
 	_fact_text.text = FACTS[_fact_order[_current_fact_index]]
 
+
 func _on_ui_cancel_pressed() -> void:
-	if not visible: return
-	if _selected_index != _menu_nodes.size() - 1: # If not on Quit
-		_selected_index = _menu_nodes.size() - 1
-		_update_selection()
-	else:
-		_on_quit_pressed()
+	if not visible:
+		return
+	# Focus the last button (Quit) on Escape
+	for i in range(_menu_buttons.size() - 1, -1, -1):
+		if _menu_buttons[i].visible:
+			_menu_buttons[i].grab_focus()
+			return
+
 
 # ── Signal Handlers ───────────────────────────────────────────────────────────
 
 func _on_start_pressed() -> void:
 	start.emit()
 
+
 func _on_settings_pressed() -> void:
 	settings.emit()
 
+
 func _on_multiplayer_pressed() -> void:
 	start_multiplayer.emit()
+
 
 func _on_dedicated_host_pressed() -> void:
 	start_dedicated_host.emit()
@@ -569,18 +544,14 @@ func _on_dedicated_host_pressed() -> void:
 
 func _on_theme_toggle_pressed() -> void:
 	ThemeManager.toggle()
-	# Update the label and icon for the toggle button
-	var theme_node = null
-	for node in _menu_nodes:
-		if node.name == "Toggle Theme":
-			theme_node = node
+	# Update the toggle button's text
+	for btn in _menu_buttons:
+		if btn.name == "Toggle Theme":
+			var icon: String = "☾" if not ThemeManager.is_dark_mode else "☀"
+			var label: String = "Light Mode" if ThemeManager.is_dark_mode else "Dark Mode"
+			btn.text = icon + "  " + label
+			_apply_button_style(btn)
 			break
-
-	if theme_node:
-		var icon = theme_node.get_node_or_null("ThemeIcon")
-		var label = theme_node.get_node_or_null("ThemeLabel")
-		if icon: icon.text = "☾" if not ThemeManager.is_dark_mode else "☀"
-		if label: label.text = "Light Mode" if ThemeManager.is_dark_mode else "Dark Mode"
 
 
 func _on_language_toggle_pressed() -> void:
@@ -591,13 +562,10 @@ func _on_language_toggle_pressed() -> void:
 
 
 func _update_language_toggle_ui() -> void:
-	for node in _menu_nodes:
-		if node.name == "Language":
-			var icon = node.get_node_or_null("LanguageIcon")
-			var label = node.get_node_or_null("LanguageLabel")
-			if label: label.text = _get_current_language_name()
-			if icon:
-				icon.text = "🌍"
+	for btn in _menu_buttons:
+		if btn.name == "Language":
+			btn.text = "🌍  " + _get_current_language_name()
+			_apply_button_style(btn)
 			break
 
 
@@ -605,23 +573,25 @@ func _get_current_language_name() -> String:
 	if _available_locales.is_empty() or _current_locale_index < 0 or _current_locale_index >= _available_locales.size():
 		return "Language"
 	var locale = _available_locales[_current_locale_index]
-	var name = TranslationServer.get_language_name(locale)
-	if name.is_empty():
-		name = locale
-	return name
+	var lang_name = TranslationServer.get_language_name(locale)
+	if lang_name.is_empty():
+		lang_name = locale
+	return lang_name
 
+
+# ── Patch Notes Popup ─────────────────────────────────────────────────────────
 
 func _show_patch_notes() -> void:
 	if _patch_popup:
 		_patch_popup.queue_free()
 		_patch_popup = null
 		return
-	
+
 	_patch_popup = Control.new()
 	_patch_popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_patch_popup.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_patch_popup)
-	
+
 	var dim := ColorRect.new()
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.color = Color(0, 0, 0, 0.55)
@@ -630,25 +600,25 @@ func _show_patch_notes() -> void:
 
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -360.0
-	panel.offset_top = -280.0
-	panel.offset_right = 360.0
+	panel.offset_left   = -360.0
+	panel.offset_top    = -280.0
+	panel.offset_right  = 360.0
 	panel.offset_bottom = 280.0
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical   = Control.GROW_DIRECTION_BOTH
 	_patch_popup.add_child(panel)
 
 	var dark := ThemeManager.is_dark_mode
 	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.08, 0.08, 0.1, 0.92) if dark else Color(1, 1, 1, 0.95)
-	panel_style.border_color = Color(1, 1, 1, 0.1) if dark else Color(0, 0, 0, 0.08)
+	panel_style.bg_color      = Color(0.08, 0.08, 0.1, 0.92) if dark else Color(1, 1, 1, 0.95)
+	panel_style.border_color  = Color(1, 1, 1, 0.1) if dark else Color(0, 0, 0, 0.08)
 	for s in ["left", "right", "top", "bottom"]:
 		panel_style.set("border_width_" + s, 1)
 	for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
 		panel_style.set("corner_radius_" + c, 16)
-	panel_style.shadow_color = Color(0, 0, 0, 0.4)
-	panel_style.shadow_size = 32
-	panel_style.shadow_offset = Vector2(0, 8)
+	panel_style.shadow_color   = Color(0, 0, 0, 0.4)
+	panel_style.shadow_size    = 32
+	panel_style.shadow_offset  = Vector2(0, 8)
 	panel.add_theme_stylebox_override("panel", panel_style)
 
 	var outer := MarginContainer.new()
@@ -662,6 +632,7 @@ func _show_patch_notes() -> void:
 	vbox.add_theme_constant_override("separation", 16)
 	outer.add_child(vbox)
 
+	# ── Header with WCAG 2.4.7 close button ───────────────────────────
 	var header := HBoxContainer.new()
 	vbox.add_child(header)
 
@@ -675,8 +646,12 @@ func _show_patch_notes() -> void:
 
 	var close_btn := Button.new()
 	close_btn.text = "✕"
-	close_btn.custom_minimum_size = Vector2(30, 30)
+	close_btn.name = "PatchCloseButton"
+	close_btn.focus_mode = Control.FOCUS_ALL
+	close_btn.custom_minimum_size = Vector2(36, 36)
 	close_btn.pressed.connect(_close_patch_popup)
+	close_btn.mouse_entered.connect(close_btn.grab_focus)
+	_style_popup_button(close_btn, false)
 	header.add_child(close_btn)
 
 	var sep := ColorRect.new()
@@ -695,25 +670,59 @@ func _show_patch_notes() -> void:
 	scroll.add_child(content)
 
 	var notes := [
-		{"title": "🎨 UI & Graphics Overhaul", "items": [
-			"New full-screen race countdown (3 → 2 → 1 → GO)",
-			"New loading screen with animated spinner",
-			"VictoryScreen with gold starburst animation",
-			"Session leaderboard overlay (press Tab)",
-			"Animated main menu background",
-			"Rewritten VoteHUD, RaceHUD, PlayerListOverlay"
+		{"title": "🔒 Security", "items": [
+			"All RPC endpoints now validate sender identity",
+			"Vote timer, race cancel, and win validation RPCs secured",
+			"Host state transfer requires authentication",
+			"ExhibitGraph edge injection prevented (anti-cheat)",
+			"Terminal inoperable bug fixed (was missing interact())"
+		]},
+		{"title": "🎨 UI & Visuals", "items": [
+			"Main menu background completely redesigned",
+			"Smooth dark/light mode transitions on main menu",
+			"Settings tabs no longer crash on open (tab init ordering fixed)",
+			"Main.tscn no longer corrupt (format/UID issues resolved)",
+			"WIP label unicode parsing error fixed",
+			"Main menu logo replaced with funky variant"
+		]},
+		{"title": "🔗 Networking", "items": [
+			"ENet timeout fixed: 32ms → 5000ms (playit.gg connections work)",
+			"Server/client channel counts set explicitly (2 channels)",
+			"Join timeout crash fixed (nonexistent method call)",
+			"DNS resolution timing improved"
+		]},
+		{"title": "🏎️ Race System", "items": [
+			"Host player can now win races (was always rejected)",
+			"Countdown no longer bypasses race cancellation",
+			"Path validation sender check fixed"
+		]},
+		{"title": "💡 Lighting", "items": [
+			"Ambient light source changed to COLOR (decoupled from sky)",
+			"Skybox gradient textures properly assigned (were missing)",
+			"Directional skylights changed to OmniLight (stopped global bleed)",
+			"Exhibit ambient energy recalibrated for new lighting model",
+			"Wall sconce lights no longer clip through walls (position offset fixed)",
+			"Wall sconce decoration lights removed entirely"
 		]},
 		{"title": "🐛 Bug Fixes", "items": [
-			"Hint system removed (multiplayer sync issues)",
-			"Race win detection fixed for single-player",
-			"Countdown double-fire bug fixed",
-			"Loading screen flash bug fixed",
-			"JournalOverlay dark mode crash fixed",
-			"Multiple parser errors fixed"
+			"Main.tscn invalid/corrupt error resolved",
+			"Multiple scene parse errors fixed",
+			"Node reference crashes in GraphicsSettings fixed",
+			"Signal double-connection errors fixed",
+			"@onready initialization order race conditions fixed",
+			"Redundant path building in win validation removed",
+			"FLAC audio files no longer crash SoundItem (WAV decoder rejection)",
+			"MainMenu.gd indentation errors fixed (space/tab consistency)"
+		]},
+		{"title": "♿ Accessibility", "items": [
+			"Exhibit text color restored to black (was inheriting theme)",
+			"Settings UI now uses consistent UIStyle theming",
+			"All scene files verified for resource path validity"
 		]},
 		{"title": "⚠️ Known Issues", "items": [
-			"Power-ups temporarily disabled (being reworked)",
-			"Daily Challenge card hidden from main menu"
+			"Twitch addon missing (non-critical)",
+			"Discord RPC addon partially disabled",
+			"Archived player scripts have Godot 3 syntax (non-critical)"
 		]}
 	]
 
@@ -734,6 +743,7 @@ func _show_patch_notes() -> void:
 			item_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
 			content.add_child(item_lbl)
 
+	# ── Footer with WCAG 2.4.7 close button ───────────────────────────
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", 8)
 	vbox.add_child(footer)
@@ -744,9 +754,15 @@ func _show_patch_notes() -> void:
 
 	var ok_btn := Button.new()
 	ok_btn.text = "Close"
+	ok_btn.name = "PatchOkButton"
+	ok_btn.focus_mode = Control.FOCUS_ALL
+	ok_btn.custom_minimum_size = Vector2(100, 36)
 	ok_btn.pressed.connect(_close_patch_popup)
+	ok_btn.mouse_entered.connect(ok_btn.grab_focus)
+	_style_popup_button(ok_btn, true)
 	footer.add_child(ok_btn)
 
+	# Animate in
 	_patch_popup.modulate.a = 0.0
 	panel.modulate.a = 0.0
 	panel.scale = Vector2(0.92, 0.92)
@@ -755,51 +771,108 @@ func _show_patch_notes() -> void:
 	tw.parallel().tween_property(panel, "modulate:a", 1.0, 0.2)
 	tw.parallel().tween_property(panel, "scale", Vector2(1, 1), 0.2)
 
+	# ── WCAG 2.4.7: Auto-focus close button when popup opens ──────────
+	tw.chain().tween_callback(func():
+		if close_btn.is_visible_in_tree():
+			close_btn.grab_focus()
+	)
+
 
 func _close_patch_popup() -> void:
-	if not _patch_popup: return
+	if not _patch_popup:
+		return
 	var popup_to_free := _patch_popup
 	_patch_popup = null
 	var tw := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_property(popup_to_free, "modulate:a", 0.0, 0.15)
 	tw.chain().tween_callback(func(): popup_to_free.queue_free())
 
+	# ── WCAG 2.4.7: Return focus to the first menu button ─────────────
+	for btn in _menu_buttons:
+		if btn.visible:
+			btn.grab_focus()
+			break
 
-func _on_patch_refresh_pressed() -> void:
-	_close_patch_popup()
-	call_deferred("_show_patch_notes")
 
-
-func _style_patch_btn(btn: Button, primary: bool) -> void:
+func _style_popup_button(btn: Button, primary: bool) -> void:
+	"""Style a popup button with a WCAG 2.4.7 focus indicator."""
 	var dark := ThemeManager.is_dark_mode
+	var ring_color  := FOCUS_COLOR_DARK if dark else FOCUS_COLOR_LIGHT
+	var glow_color  := FOCUS_COLOR_DARK if dark else FOCUS_COLOR_LIGHT
+	glow_color.a = 0.25 if dark else 0.18
+
 	btn.add_theme_font_override("font", _sans_font)
 	btn.add_theme_font_size_override("font_size", 13)
-	var base := StyleBoxFlat.new()
-	base.set_corner_radius_all(8)
-	base.content_margin_left = 16
-	base.content_margin_right = 16
-	base.content_margin_top = 6
-	base.content_margin_bottom = 6
+
+	# Normal
+	var normal := StyleBoxFlat.new()
+	normal.set_corner_radius_all(8)
+	normal.content_margin_left   = 16
+	normal.content_margin_right  = 16
+	normal.content_margin_top    = 6
+	normal.content_margin_bottom = 6
 	if primary:
-		base.bg_color = Color(1, 1, 1, 0.08) if dark else Color(0, 0, 0, 0.04)
-		base.border_width_left = 1; base.border_width_top = 1
-		base.border_width_right = 1; base.border_width_bottom = 1
-		base.border_color = Color(1, 1, 1, 0.12) if dark else Color(0, 0, 0, 0.08)
-		btn.add_theme_stylebox_override("normal", base)
-		var hover := base.duplicate() as StyleBoxFlat
-		hover.bg_color = Color(1, 1, 1, 0.14) if dark else Color(0, 0, 0, 0.08)
-		btn.add_theme_stylebox_override("hover", hover)
-		btn.add_theme_color_override("font_color", ThemeManager.text_color)
-		btn.add_theme_color_override("font_hover_color", ThemeManager.text_color)
+		normal.bg_color     = Color(1, 1, 1, 0.08) if dark else Color(0, 0, 0, 0.04)
+		normal.border_width_left = 1
+		normal.border_width_top = 1
+		normal.border_width_right = 1
+		normal.border_width_bottom = 1
+		normal.border_color = Color(1, 1, 1, 0.12) if dark else Color(0, 0, 0, 0.08)
 	else:
-		base.bg_color = Color(0, 0, 0, 0)
-		btn.add_theme_stylebox_override("normal", base)
-		btn.add_theme_color_override("font_color", ThemeManager.subtext_color)
-		btn.add_theme_color_override("font_hover_color", ThemeManager.text_color)
+		normal.bg_color = Color(0, 0, 0, 0)
+	btn.add_theme_stylebox_override("normal", normal)
+
+	# Hover
+	var hover := normal.duplicate()
+	if primary:
+		hover.bg_color = Color(1, 1, 1, 0.14) if dark else Color(0, 0, 0, 0.08)
+	else:
+		hover.bg_color = Color(1, 1, 1, 0.04) if dark else Color(0, 0, 0, 0.02)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	# ── Focus (WCAG 2.4.7) ────────────────────────────────────────────
+	var focus := normal.duplicate()
+	focus.border_width_left   = FOCUS_BORDER_WIDTH
+	focus.border_width_top    = FOCUS_BORDER_WIDTH
+	focus.border_width_right  = FOCUS_BORDER_WIDTH
+	focus.border_width_bottom = FOCUS_BORDER_WIDTH
+	focus.border_color = ring_color
+	focus.shadow_color  = glow_color
+	focus.shadow_size   = 4
+	focus.shadow_offset = Vector2.ZERO
+	if primary:
+		focus.bg_color = Color(1, 1, 1, 0.12) if dark else Color(0, 0, 0, 0.06)
+	else:
+		focus.bg_color = Color(1, 1, 1, 0.06) if dark else Color(0, 0, 0, 0.03)
+	btn.add_theme_stylebox_override("focus", focus)
+
+	# Pressed
+	var pressed := normal.duplicate()
+	pressed.border_width_left   = FOCUS_BORDER_WIDTH
+	pressed.border_width_top    = FOCUS_BORDER_WIDTH
+	pressed.border_width_right  = FOCUS_BORDER_WIDTH
+	pressed.border_width_bottom = FOCUS_BORDER_WIDTH
+	pressed.border_color = ring_color
+	if primary:
+		pressed.bg_color = Color(1, 1, 1, 0.18) if dark else Color(0, 0, 0, 0.1)
+	else:
+		pressed.bg_color = Color(1, 1, 1, 0.08) if dark else Color(0, 0, 0, 0.05)
+	btn.add_theme_stylebox_override("pressed", pressed)
+
+	# Font colours
+	if primary:
+		btn.add_theme_color_override("font_color",         ThemeManager.text_color)
+		btn.add_theme_color_override("font_hover_color",   ThemeManager.text_color)
+		btn.add_theme_color_override("font_focus_color",   ThemeManager.text_color)
+		btn.add_theme_color_override("font_pressed_color", ThemeManager.text_color)
+	else:
+		btn.add_theme_color_override("font_color",         ThemeManager.subtext_color)
+		btn.add_theme_color_override("font_hover_color",   ThemeManager.text_color)
+		btn.add_theme_color_override("font_focus_color",   ThemeManager.text_color)
+		btn.add_theme_color_override("font_pressed_color", ThemeManager.text_color)
 
 
 func _on_quit_pressed() -> void:
-
 	get_tree().quit()
 
 

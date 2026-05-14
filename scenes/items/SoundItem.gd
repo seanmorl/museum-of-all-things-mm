@@ -250,13 +250,9 @@ func _load_audio_stream(body: PackedByteArray, file_url: String) -> AudioStream:
 				Log.debug("SoundItem", "Successfully loaded WAV audio")
 				return stream
 		
-		# Try FLAC
+		# FLAC is not supported by Godot's built-in audio decoders
 		if magic == "fLaC":
-			# Godot doesn't have AudioStreamFLAC, try WAV decoder
-			var stream = AudioStreamWAV.load_from_buffer(body)
-			if stream:
-				Log.debug("SoundItem", "Loaded FLAC as WAV")
-				return stream
+			Log.debug("SoundItem", "FLAC audio not supported, skipping (file starts with 'fLaC')")
 	
 	# Fallback: try based on URL extension
 	var ext := ""

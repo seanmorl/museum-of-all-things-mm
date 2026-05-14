@@ -1,6 +1,9 @@
 extends Node
 class_name MainMenuController
 ## Handles menu navigation, opening/closing, and navigation stack.
+## WCAG 2.4.7: Restores keyboard focus when transitioning between
+## menus so the visible focus indicator always reflects the current
+## interactive element.
 
 enum Menu { NONE, MAIN, PAUSE, SETTINGS, TERMINAL, MULTIPLAYER }
 
@@ -28,7 +31,7 @@ func open_menu(menu: Menu) -> void:
 	var settings_menu = _menu_layer.get_node_or_null("Settings")
 	var terminal_menu = _menu_layer.get_node_or_null("PopupTerminalMenu")
 	var multiplayer_menu = _menu_layer.get_node_or_null("MultiplayerMenu")
-	
+
 	if main_menu: main_menu.visible = menu == Menu.MAIN
 	if pause_menu: pause_menu.visible = menu == Menu.PAUSE
 	if settings_menu: settings_menu.visible = menu == Menu.SETTINGS
@@ -42,7 +45,6 @@ func close_menus() -> void:
 
 func open_main_menu() -> void:
 	open_menu(Menu.MAIN)
-	# Trigger entrance animation when opening main menu
 	_trigger_main_menu_entrance()
 
 
@@ -58,7 +60,6 @@ func open_terminal_menu() -> void:
 	open_menu(Menu.TERMINAL)
 
 func is_terminal_open() -> bool:
-	"""Check if terminal menu is currently open."""
 	if _menu_layer == null or not _menu_layer.visible:
 		return false
 	var terminal_node = _menu_layer.get_node_or_null("PopupTerminalMenu")
@@ -73,7 +74,6 @@ func is_menu_visible() -> bool:
 
 
 func _trigger_main_menu_entrance() -> void:
-	"""Re-trigger the Main Menu entrance animation when returning from sub-menus."""
 	if not _menu_layer:
 		push_warning("MainMenuController: _menu_layer is null")
 		return
@@ -89,13 +89,52 @@ func _trigger_main_menu_entrance() -> void:
 	main_menu.call("_entrance_animation")
 
 
+# ── WCAG 2.4.7: Focus Restoration ────────────────────────────────────────────
+
+func _restore_focus_to_menu(menu_node: Control) -> void:
+	"""Try the menu's _grab_initial_focus, or fall back to finding
+	the first focusable child."""
+	if not menu_node:
+		return
+	if menu_node.has_method("_grab_initial_focus"):
+		menu_node.call("_grab_initial_focus")
+		return
+	_restore_focus_recursive(menu_node)
+
+
+func _restore_focus_recursive(node: Node) -> bool:
+	"""Find the first visible Control with focus_mode != FOCUS_NONE."""
+	if node is Control:
+		var ctrl = node as Control
+		if ctrl.focus_mode != Control.FOCUS_NONE and ctrl.visible:
+			ctrl.grab_focus()
+			return true
+	for child in node.get_children():
+		if _restore_focus_recursive(child):
+			return true
+	return false
+
+
+func _grab_focus_on_visible_menu() -> void:
+	"""Restore focus to whichever menu is currently visible."""
+	if not _menu_layer or not _menu_layer.visible:
+		return
+
+	var main_menu = _menu_layer.get_node_or_null("MainMenu")
+	var pause_menu = _menu_layer.get_node_or_null("PauseMenu")
+
+	if main_menu and main_menu.visible:
+		_restore_focus_to_menu(main_menu)
+	elif pause_menu and pause_menu.visible:
+		_restore_focus_recursive(pause_menu)
+
+
 func on_main_menu_settings() -> void:
 	_menu_nav_queue.append(open_main_menu)
 	open_settings_menu()
 
 
 func on_main_menu_start_pressed() -> void:
-	# Start game directly from main menu
 	game_start_requested.emit()
 
 
@@ -113,6 +152,7 @@ func on_multiplayer_menu_back() -> void:
 	var prev: Callable = _menu_nav_queue.pop_back()
 	if prev:
 		prev.call()
+		_grab_focus_on_visible_menu()
 	else:
 		open_main_menu()
 
@@ -121,6 +161,7 @@ func on_settings_back() -> void:
 	var prev: Callable = _menu_nav_queue.pop_back()
 	if prev:
 		prev.call()
+		_grab_focus_on_visible_menu()
 	else:
 		open_main_menu()
 
