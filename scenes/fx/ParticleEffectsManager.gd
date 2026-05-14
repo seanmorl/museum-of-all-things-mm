@@ -41,6 +41,7 @@ class ParticleConfig:
 	var sphere_radius: float
 	var direction: Vector3
 	var spread: float
+	var flatness: float = 0.0
 	var gravity: Vector3
 	var vel_min: float
 	var vel_max: float
@@ -51,6 +52,10 @@ class ParticleConfig:
 	var color_start: Color
 	var color_end: Color
 	var turbulence: bool
+	var lifetime_randomness: float = 0.0
+	var hue_variation: float = 0.0
+	var damping_min: float = 0.2
+	var damping_max: float = 0.5
 
 	func _init(p_amount: int, p_lifetime: float, p_shape: int, p_extents: Vector3, p_radius: float, p_dir: Vector3, p_spread: float, p_grav: Vector3, p_vmin: float, p_vmax: float, p_smin: float, p_smax: float, p_amin: float, p_amax: float, p_c1: Color, p_c2: Color, p_turb: bool) -> void:
 		amount = p_amount
@@ -91,16 +96,15 @@ func _build_particle_mesh() -> void:
 	var center = 64.0
 	for x in 128:
 		for y in 128:
-			var dist = sqrt(pow(x - center, 2) + pow(y - center, 2))
-			var alpha = clampf(1.0 - dist / center, 0.0, 1.0)
-			alpha = pow(alpha, 1.5)
+			var dist = sqrt(pow(x - center, 2) + pow(y - center, 2)) / center
+			var alpha = exp(-dist * dist * 3.0)
 			img.set_pixel(x, y, Color(1, 1, 1, alpha))
 	var tex = ImageTexture.create_from_image(img)
 	var mat = StandardMaterial3D.new()
 	mat.albedo_texture = tex
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	# Use ADD blend for visible particles
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	# Use MIX blend for atmospheric particles that blend naturally
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_MIX
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.vertex_color_use_as_albedo = true
@@ -112,110 +116,131 @@ func _build_particle_mesh() -> void:
 func _build_config_table() -> void:
 	CONFIGS = {
 		"dust": ParticleConfig.new(
-			40, 12.0,
+			50, 15.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(10, 5, 10), 0.0,
-			Vector3(0, 1, 0), 0.3, Vector3.ZERO,
-			0.05, 0.15, 0.1, 0.25, -0.05, 0.05,
-			Color(0.95, 0.9, 0.75, 0.35), Color(0.85, 0.8, 0.65, 0.15),
+			Vector3(0, 0.3, 0), 0.2, Vector3(0, -0.01, 0),
+			0.02, 0.08, 0.12, 0.3, -0.02, 0.02,
+			Color(0.85, 0.82, 0.75, 0.5), Color(0.75, 0.72, 0.65, 0.15),
 			false
 		),
 		"light_dust": ParticleConfig.new(
-			30, 14.0,
+			40, 16.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(12, 6, 12), 0.0,
-			Vector3(0, 1, 0), 0.2, Vector3.ZERO,
-			0.03, 0.12, 0.08, 0.2, -0.03, 0.03,
-			Color(0.9, 0.92, 1.0, 0.3), Color(0.8, 0.85, 0.95, 0.12),
+			Vector3(0, 0.2, 0), 0.15, Vector3.ZERO,
+			0.01, 0.06, 0.1, 0.25, -0.01, 0.01,
+			Color(0.85, 0.88, 0.95, 0.45), Color(0.75, 0.8, 0.9, 0.12),
 			false
 		),
 		"spores": ParticleConfig.new(
-			25, 10.0,
+			30, 12.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(8, 4, 8), 0.0,
-			Vector3(0, 1, 0), 0.2, Vector3(0, -0.05, 0),
-			0.03, 0.12, 0.06, 0.14, 0.0, 0.0,
-			Color(0.6, 0.95, 0.6, 0.4), Color(0.4, 0.75, 0.4, 0.12),
+			Vector3(0, 0.4, 0), 0.15, Vector3(0, -0.02, 0),
+			0.02, 0.08, 0.08, 0.2, 0.0, 0.0,
+			Color(0.55, 0.8, 0.55, 0.55), Color(0.4, 0.65, 0.4, 0.15),
 			true
 		),
 		"leaves": ParticleConfig.new(
 			20, 8.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(10, 1, 10), 0.0,
-			Vector3(0, -1, 0), 0.5, Vector3(0, -0.3, 0),
-			0.08, 0.2, 0.12, 0.25, -0.3, 0.3,
-			Color(0.7, 0.45, 0.2, 0.5), Color(0.55, 0.35, 0.1, 0.15),
+			Vector3(0, -0.5, 0), 0.4, Vector3(0, -0.2, 0),
+			0.06, 0.15, 0.15, 0.3, -0.2, 0.2,
+			Color(0.6, 0.4, 0.2, 0.55), Color(0.5, 0.3, 0.1, 0.15),
 			true
 		),
 		"sparkles": ParticleConfig.new(
-			20, 6.0,
+			25, 8.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_SPHERE, Vector3.ZERO, 8.0,
-			Vector3(0, 1, 0), 0.1, Vector3.ZERO,
-			0.02, 0.08, 0.04, 0.08, 0.0, 0.0,
-			Color(0.95, 0.97, 1.0, 0.5), Color(0.75, 0.85, 1.0, 0.15),
+			Vector3(0, 0.5, 0), 0.15, Vector3.ZERO,
+			0.01, 0.04, 0.03, 0.06, 0.0, 0.0,
+			Color(0.9, 0.93, 1.0, 0.7), Color(0.7, 0.8, 0.95, 0.2),
 			false
 		),
 		"film_grain": ParticleConfig.new(
-			60, 2.0,
+			80, 2.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(10, 5, 10), 0.0,
 			Vector3(0, 0, 0), 1.0, Vector3.ZERO,
-			0.01, 0.04, 0.03, 0.08, 0.0, 0.0,
-			Color(1.0, 1.0, 1.0, 0.12), Color(0.7, 0.7, 0.7, 0.02),
+			0.005, 0.02, 0.02, 0.06, 0.0, 0.0,
+			Color(0.6, 0.6, 0.6, 0.2), Color(0.4, 0.4, 0.4, 0.04),
 			false
 		),
 		"paint_mote": ParticleConfig.new(
-			20, 10.0,
+			25, 12.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(8, 4, 8), 0.0,
-			Vector3(0, 1, 0), 0.3, Vector3(0, -0.03, 0),
-			0.03, 0.1, 0.08, 0.2, 0.0, 0.0,
-			Color(1.0, 0.7, 0.8, 0.4), Color(0.7, 0.5, 0.9, 0.1),
+			Vector3(0, 0.3, 0), 0.2, Vector3(0, -0.02, 0),
+			0.02, 0.08, 0.1, 0.25, 0.0, 0.0,
+			Color(0.85, 0.6, 0.7, 0.55), Color(0.65, 0.45, 0.75, 0.15),
 			true
 		),
 		"mist": ParticleConfig.new(
-			25, 18.0,
+			30, 20.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(12, 2, 12), 0.0,
-			Vector3(0, 1, 0), 0.1, Vector3.ZERO,
-			0.01, 0.04, 0.3, 0.6, 0.0, 0.0,
-			Color(0.8, 0.9, 0.85, 0.2), Color(0.7, 0.85, 0.8, 0.05),
+			Vector3(0, 0.15, 0), 0.08, Vector3.ZERO,
+			0.005, 0.02, 0.4, 0.8, 0.0, 0.0,
+			Color(0.72, 0.82, 0.78, 0.3), Color(0.65, 0.75, 0.72, 0.06),
 			true
 		),
 		"wisp": ParticleConfig.new(
-			12, 14.0,
+			15, 16.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_SPHERE, Vector3.ZERO, 6.0,
-			Vector3(0, 1, 0), 0.1, Vector3(0, 0.02, 0),
-			0.01, 0.04, 0.15, 0.35, 0.0, 0.0,
-			Color(0.95, 0.88, 0.75, 0.3), Color(0.85, 0.75, 0.6, 0.03),
+			Vector3(0, 0.3, 0), 0.1, Vector3(0, 0.01, 0),
+			0.008, 0.03, 0.2, 0.4, 0.0, 0.0,
+			Color(0.85, 0.8, 0.7, 0.45), Color(0.75, 0.7, 0.55, 0.08),
 			true
 		),
 		"confetti": ParticleConfig.new(
-			50, 4.0,
+			50, 5.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(10, 1, 10), 0.0,
-			Vector3(0, -1, 0), 0.8, Vector3(0, -0.8, 0),
-			0.2, 0.5, 0.1, 0.2, 1.0, 3.0,
-			Color(1.0, 0.85, 0.3, 0.9), Color(0.3, 0.8, 1.0, 0.3),
+			Vector3(0, -0.8, 0), 0.6, Vector3(0, -0.6, 0),
+			0.15, 0.4, 0.1, 0.25, 1.0, 3.0,
+			Color(0.9, 0.75, 0.3, 0.8), Color(0.3, 0.7, 0.9, 0.3),
 			true
 		),
 		"steam": ParticleConfig.new(
-			50, 6.0,
+			40, 7.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(6, 3, 6), 0.0,
-			Vector3(0, 1, 0), 0.3, Vector3(0, 0.3, 0),
-			0.1, 0.4, 0.3, 0.7, 0.0, 0.0,
-			Color(1.0, 1.0, 1.0, 0.5), Color(0.95, 0.9, 0.8, 0.05),
+			Vector3(0, 0.6, 0), 0.25, Vector3(0, 0.2, 0),
+			0.08, 0.25, 0.35, 0.75, 0.0, 0.0,
+			Color(0.92, 0.9, 0.85, 0.55), Color(0.88, 0.85, 0.78, 0.08),
 			true
 		),
 		"gold_mote": ParticleConfig.new(
-			35, 7.0,
+			30, 8.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_SPHERE, Vector3.ZERO, 7.0,
-			Vector3(0, 1, 0), 0.1, Vector3.ZERO,
-			0.03, 0.1, 0.08, 0.2, 0.0, 0.0,
-			Color(1.0, 0.85, 0.3, 0.8), Color(0.8, 0.65, 0.2, 0.1),
+			Vector3(0, 0.3, 0), 0.1, Vector3.ZERO,
+			0.02, 0.06, 0.1, 0.25, 0.0, 0.0,
+			Color(0.9, 0.78, 0.3, 0.7), Color(0.7, 0.58, 0.18, 0.15),
 			false
 		),
 		"smoke": ParticleConfig.new(
-			70, 10.0,
+			60, 12.0,
 			ParticleProcessMaterial.EMISSION_SHAPE_BOX, Vector3(8, 3, 8), 0.0,
-			Vector3(0, 1, 0), 0.2, Vector3(0, 0.1, 0),
-			0.05, 0.15, 0.3, 0.6, 0.0, 0.0,
-			Color(0.4, 0.35, 0.45, 0.5), Color(0.25, 0.2, 0.3, 0.05),
+			Vector3(0, 0.4, 0), 0.15, Vector3(0, 0.08, 0),
+			0.03, 0.1, 0.4, 0.8, 0.0, 0.0,
+			Color(0.35, 0.3, 0.38, 0.55), Color(0.2, 0.18, 0.25, 0.08),
 			true
 		),
 	}
+
+	# Per-type enhancements
+	for type_name in ["spores", "leaves", "paint_mote", "confetti", "smoke", "steam"]:
+		var c: ParticleConfig = CONFIGS[type_name]
+		c.hue_variation = 0.15
+		c.lifetime_randomness = 0.3
+		c.flatness = 0.2
+
+	for type_name in ["mist", "wisp"]:
+		var c: ParticleConfig = CONFIGS[type_name]
+		c.lifetime_randomness = 0.4
+		c.damping_min = 0.05
+		c.damping_max = 0.15
+
+	for type_name in ["sparkles", "gold_mote"]:
+		var c: ParticleConfig = CONFIGS[type_name]
+		c.lifetime_randomness = 0.5
+
+	for type_name in ["dust", "light_dust", "film_grain"]:
+		var c: ParticleConfig = CONFIGS[type_name]
+		c.lifetime_randomness = 0.2
 
 
 func _build_shared_curves() -> void:
@@ -251,6 +276,7 @@ func _build_material(type_name: String) -> ParticleProcessMaterial:
 		mat.emission_sphere_radius = cfg.sphere_radius
 	mat.direction = cfg.direction
 	mat.spread = cfg.spread
+	mat.flatness = cfg.flatness
 	mat.gravity = cfg.gravity
 	mat.initial_velocity_min = cfg.vel_min
 	mat.initial_velocity_max = cfg.vel_max
@@ -258,6 +284,9 @@ func _build_material(type_name: String) -> ParticleProcessMaterial:
 	mat.scale_max = cfg.scale_max
 	mat.angular_velocity_min = cfg.ang_vel_min
 	mat.angular_velocity_max = cfg.ang_vel_max
+	mat.lifetime_randomness = cfg.lifetime_randomness
+	mat.hue_variation_min = cfg.hue_variation
+	mat.hue_variation_max = cfg.hue_variation * 0.5
 
 	var grad = Gradient.new()
 	grad.set_color(0, cfg.color_start)
@@ -267,16 +296,18 @@ func _build_material(type_name: String) -> ParticleProcessMaterial:
 	mat.color_ramp = ramp
 
 	mat.scale_curve = _fade_curve
+	mat.alpha_curve = _alpha_fade_curve
 
 	if cfg.turbulence:
 		mat.turbulence_enabled = true
-		mat.turbulence_noise_strength = 0.6
-		mat.turbulence_noise_scale = 6.0
-		mat.turbulence_noise_speed = Vector3(0.2, 0.3, 0.2)
-		mat.turbulence_influence_max = 0.15
+		mat.turbulence_noise_strength = 0.4
+		mat.turbulence_noise_scale = 4.0
+		mat.turbulence_noise_speed = Vector3(0.1, 0.15, 0.1)
+		mat.turbulence_influence_min = 0.05
+		mat.turbulence_influence_max = 0.25
 
-	mat.damping_min = 0.2
-	mat.damping_max = 0.5
+	mat.damping_min = cfg.damping_min
+	mat.damping_max = cfg.damping_max
 
 	return mat
 

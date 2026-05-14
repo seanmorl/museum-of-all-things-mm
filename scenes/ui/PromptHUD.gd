@@ -49,7 +49,30 @@ func _on_target_changed(new_target: Node) -> void:
 	_target = new_target
 	_update_prompt()
 
+var _showing_text: bool = false
+var _pending_prompt_update: bool = false
+
+func show_text(content: String) -> void:
+	_kill_all_tweens()
+	var display := content.substr(0, 500)
+	if content.length() > 500:
+		display += "..."
+	_label.text = "[center]%s[/center]" % [display]
+	_is_visible = true
+	visible = true
+	_showing_text = true
+	_pending_prompt_update = true
+	modulate.a = 1.0
+	_panel.scale = Vector2(1.0, 1.0)
+	_panel.offset_top = -120.0
+	await get_tree().create_timer(6.0).timeout
+	_showing_text = false
+	if _pending_prompt_update:
+		_update_prompt()
+
 func _process(_delta: float) -> void:
+	if _showing_text:
+		return
 	if _target and is_instance_valid(_target):
 		_update_prompt()
 	elif _is_visible:

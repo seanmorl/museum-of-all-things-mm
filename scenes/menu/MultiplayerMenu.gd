@@ -635,8 +635,8 @@ func _on_join_connect_pressed() -> void:
 	# Neutral colour while connecting (not red)
 	_error_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
 
-	# Connect with timeout (10 seconds) - simplified approach
-	var timeout_timer := get_tree().create_timer(10.0)
+	# Connect with timeout (20 seconds) — Playit.gg tunnels can be slow to establish
+	var timeout_timer := get_tree().create_timer(20.0)
 	var join_complete := false
 	var error: Error = OK
 	

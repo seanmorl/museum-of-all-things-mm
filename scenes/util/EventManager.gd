@@ -227,9 +227,8 @@ func _start_event(event_type: int, duration: float) -> void:
 	# Apply the event effect
 	_apply_event_effect(event_type)
 
-	# Broadcast to all clients
+	# Broadcast to all clients (RPC handler with call_local emits event_started for all peers)
 	_rpc_event_started.rpc(event_type, duration)
-	event_started.emit(event_type, duration)
 
 
 func _apply_event_effect(event_type: int) -> void:
@@ -336,7 +335,7 @@ func _end_event(event_type: int) -> void:
 	_active_events.erase(event_type)
 
 	_rpc_event_ended.rpc(event_type)
-	event_ended.emit(event_type)
+	# Note: RPC handler with call_local emits event_ended for all peers
 
 
 # ── RPC Methods ──────────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ extends Node
 const MAX_VOICE_DISTANCE: float = 15.0
 const VOICE_ATTENUATION_EXPONENT: float = 0.5
 
-var _voice_players: Dictionary = {}  # peer_id -> AudioStreamPlayer3D
+var _voice_players: Dictionary = {}  # peer_id -> AudioStreamPlayer3D[]
 var _local_voice: AudioStreamPlayer3D = null
 var _is_muted: bool = false
 var _push_to_talk: bool = false
@@ -25,7 +25,8 @@ var _is_talking: bool = false
 var _mic_recording: AudioEffectRecord = null
 var _mic_stream: AudioStreamMicrophone = null
 var _mic_active: bool = false
-var _v_key_prev: bool = false  # Track V key state for edge detection
+var _talk_frame_counter: int = 0  # Throttle broadcasts while talking
+const TALK_BROADCAST_INTERVAL: int = 6  # ~100ms at 60fps
 
 signal voice_activity_changed(peer_id: int, is_active: bool)
 signal local_talking_changed(is_talking: bool)
@@ -141,41 +142,42 @@ func send_voice_audio(_peer_id: int, _audio_data: PackedByteArray) -> void:
 
 
 func broadcast_voice_audio() -> void:
-	## Capture current recorded audio and broadcast it to all remote peers.
+	## Capture a short segment of recorded audio and broadcast it to all remote peers.
+	## Called periodically (~100ms) while the user is talking.
+	## Each call captures the accumulated PCM since recording started, then restarts
+	## recording so the next call captures only new audio.
 	if _is_muted or not NetworkManager.is_multiplayer_active():
 		return
 
-	var wav_stream := _get_pcm_data()
-	if wav_stream == null or wav_stream.data.is_empty():
-		return
+	# Stop recording to get accumulated data, then restart for next segment
+	if _mic_recording:
+		_mic_recording.set_recording_active(false)
+		var wav_stream: AudioStreamWAV = _mic_recording.get_recording()
+		_mic_recording.set_recording_active(true)
 
-	var pcm: PackedByteArray = wav_stream.data
-
-	# Send in chunks to stay within RPC size limits
-	const CHUNK_SIZE: int = 8000
-	var offset: int = 0
-	while offset < pcm.size():
-		var chunk: PackedByteArray = pcm.slice(offset, offset + CHUNK_SIZE)
-		_receive_voice_audio.rpc(chunk)
-		offset += CHUNK_SIZE
+		if wav_stream and wav_stream.data.size() > 0:
+			_receive_voice_audio.rpc(wav_stream.data)
 
 
 func _update_voice_activity() -> void:
-	# Check push-to-talk input
+	# Check push-to-talk input (V key by default, remappable via InputMap)
 	var talk_just_pressed = Input.is_action_just_pressed("push_to_talk") if InputMap.has_action("push_to_talk") else false
 	var talk_held = Input.is_action_pressed("push_to_talk") if InputMap.has_action("push_to_talk") else false
-	var voice_key = Input.is_key_pressed(KEY_V)
-	var voice_just_pressed = voice_key and not _v_key_prev
-	_v_key_prev = voice_key
 
-	if (talk_just_pressed or voice_just_pressed) and not _is_muted:
+	if talk_just_pressed and not _is_muted:
 		_start_microphone()
 
-	if not _is_muted and (talk_held or voice_key):
+	if not _is_muted and talk_held:
 		if not _is_talking:
 			_is_talking = true
+			_talk_frame_counter = 0
 			local_talking_changed.emit(true)
 			broadcast_voice_audio()
+		else:
+			_talk_frame_counter += 1
+			if _talk_frame_counter >= TALK_BROADCAST_INTERVAL:
+				_talk_frame_counter = 0
+				broadcast_voice_audio()
 	elif _is_talking:
 		_is_talking = false
 		_stop_microphone()
@@ -210,7 +212,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _on_server_disconnected() -> void:
-	for pid: int in _voice_players.keys():
+	for pid in _voice_players.keys():
 		_remove_voice_player(pid)
 
 
@@ -218,33 +220,38 @@ func _create_voice_player(peer_id: int) -> void:
 	if _voice_players.has(peer_id):
 		return
 
-	var voice_player = AudioStreamPlayer3D.new()
-	voice_player.name = "Voice_%d" % peer_id
-	voice_player.bus = "Voice"
+	# Create 3 players per peer for overlapping voice segments
+	const PLAYERS_PER_PEER: int = 3
+	var player_list: Array = []
+	for i in PLAYERS_PER_PEER:
+		var vp = AudioStreamPlayer3D.new()
+		vp.name = "Voice_%d_%d" % [peer_id, i]
+		vp.bus = "Voice"
 
-	# Try to attach to the network player node for spatial audio
-	var main = get_tree().get_first_node_in_group("main")
-	var attached := false
-	if main and main.has_method("get_network_players"):
-		var players: Dictionary = main.get_network_players()
-		if players.has(peer_id):
-			var net_player: Node = players[peer_id]
-			if is_instance_valid(net_player):
-				net_player.add_child(voice_player)
-				attached = true
+		# Try to attach to the network player node for spatial audio
+		var main = get_tree().get_first_node_in_group("main")
+		var attached := false
+		if main and main.has_method("get_network_players"):
+			var net_players: Dictionary = main.get_network_players()
+			if net_players.has(peer_id):
+				var net_player: Node = net_players[peer_id]
+				if is_instance_valid(net_player):
+					net_player.add_child(vp)
+					attached = true
 
-	if not attached:
-		# Fallback: attach to the root so it still works without spatial audio
-		var root := get_tree().root
-		root.add_child(voice_player)
-		Log.debug("VoiceChat", "Could not attach voice for peer %d to player node — attached to root" % peer_id)
+		if not attached:
+			var root := get_tree().root
+			root.add_child(vp)
+		player_list.append(vp)
 
-	_voice_players[peer_id] = voice_player
+	_voice_players[peer_id] = player_list
 
 
 func _remove_voice_player(peer_id: int) -> void:
 	if _voice_players.has(peer_id):
-		_voice_players[peer_id].queue_free()
+		for vp in _voice_players[peer_id]:
+			if is_instance_valid(vp):
+				vp.queue_free()
 		_voice_players.erase(peer_id)
 		voice_activity_changed.emit(peer_id, false)
 
@@ -266,7 +273,23 @@ func _receive_voice_audio(audio_data: PackedByteArray) -> void:
 	if not _voice_players.has(sender_id):
 		return
 
-	var voice_player: AudioStreamPlayer3D = _voice_players[sender_id]
+	var players: Array = _voice_players[sender_id]
+	if players.is_empty():
+		return
+
+	# Find an available player (one that's not currently playing)
+	var voice_player: AudioStreamPlayer3D = null
+	for p in players:
+		if not p.playing:
+			voice_player = p
+			break
+	if not voice_player:
+		# All players busy — find the quietest one (nearest to finished)
+		voice_player = players[0]
+		for p in players:
+			if p.get_playback_position() < voice_player.get_playback_position():
+				voice_player = p
+
 	if not is_instance_valid(voice_player):
 		return
 
@@ -293,17 +316,8 @@ func _receive_voice_audio(audio_data: PackedByteArray) -> void:
 	wav.data = audio_data
 	wav.stereo = false
 
-	# Stop previous playback if still going
-	if voice_player.playing:
-		voice_player.stop()
 	voice_player.stream = wav
 	voice_player.play()
-
-	# Clean up wav stream after play finishes
-	voice_player.finished.connect(func():
-		voice_player.stream = null
-		wav.data = PackedByteArray()
-	, CONNECT_ONE_SHOT)
 
 
 # ── Push-to-Talk Action Registration ─────────────────────────────────────────

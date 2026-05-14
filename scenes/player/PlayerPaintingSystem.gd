@@ -175,7 +175,8 @@ func try_steal_target() -> bool:
 	var to = from + forward * 15.0  # 15 units forward
 
 	var query = PhysicsRayQueryParameters3D.create(from, to)
-	query.collision_mask = 1572866  # Layer 1 + 20 + 21 (Static + PlayerBody + ImageItem)
+	query.collision_mask = 1572865  # Layer 1 (bit 0) + Layer 20 (bit 19) + Layer 21 (bit 20)
+	query.exclude = [_player.get_rid()]
 	var result = space_state.intersect_ray(query)
 
 	if not result:

@@ -9,6 +9,7 @@ extends Node
 
 signal narration_started
 signal narration_stopped
+signal text_display_requested(text: String)
 
 var _is_narrating: bool = false
 var _voice_id: String = ""
@@ -44,11 +45,23 @@ func narrate(text: String) -> void:
 	stop()
 	var settings = _get_settings()
 	if not settings.get("tts_enabled", true) or text.is_empty():
+		if not text.is_empty():
+			text_display_requested.emit(text)
 		return
+
+	var voices = DisplayServer.tts_get_voices()
+	if voices == null or voices.is_empty():
+		push_warning("[TTSManager] No TTS voices available — showing text on screen instead")
+		text_display_requested.emit(text)
+		return
+	
+	if _voice_id == "":
+		_find_voice()
 	
 	DisplayServer.tts_speak(text, _voice_id)
 	_is_narrating = true
 	narration_started.emit()
+	text_display_requested.emit(text)
 
 
 func stop() -> void:

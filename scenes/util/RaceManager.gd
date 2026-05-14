@@ -283,6 +283,9 @@ func _finish_vote() -> void:
 		if tally[idx] == max_votes:
 			winners.append(idx)
 	winners.shuffle()
+	if winners.is_empty():
+		Log.error("RaceManager", "No candidates to pick — aborting vote")
+		return
 	var winning_idx: int = winners[0]
 	var winning_article: String = _vote_candidates[winning_idx]
 	Log.debug("RaceManager", "Vote ended, winning target: %s" % winning_article)
@@ -321,7 +324,7 @@ func get_vote_time_remaining() -> float:
 func set_vote_timer_paused(paused: bool) -> void:
 	if NetworkManager.is_server():
 		_vote_timer_paused = paused
-	else:
+	elif NetworkManager.is_multiplayer_active():
 		_rpc_set_vote_timer_paused.rpc_id(1, paused)
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -380,7 +383,8 @@ func set_seeded_shuffle_enabled(enabled: bool) -> void:
 	# Always generate a new seed when the setting changes (on or off)
 	# This ensures all clients have the same seed for reproducible shuffling
 	_vote_seed = randi()
-	_sync_vote_settings.rpc(_difficulty, _category_override, _seeded_shuffle_enabled, _vote_seed)
+	if NetworkManager.is_multiplayer_active():
+		_sync_vote_settings.rpc(_difficulty, _category_override, _seeded_shuffle_enabled, _vote_seed)
 
 func get_seeded_shuffle_enabled() -> bool:
 	return _seeded_shuffle_enabled
@@ -540,6 +544,11 @@ func notify_article_reached(peer_id: int, article_title: String, visited_path: A
 			for item in visited_path:
 				path.append(str(item))
 			Log.debug("RaceManager", "Using client-provided path (server tracking unavailable)")
+		elif _local_visited_pages.size() > 0:
+			## Fallback to local path (single-player where broadcast doesn't run)
+			for item in _local_visited_pages:
+				path.append(str(item))
+			Log.debug("RaceManager", "Using local visited path (single-player fallback)")
 		else:
 			## Empty path — player claims to have won without visiting any rooms
 			## This can happen if a player falls into the void and claims a win
@@ -551,8 +560,12 @@ func notify_article_reached(peer_id: int, article_title: String, visited_path: A
 			winner_path_copy.append(str(item))
 		_winner_path = winner_path_copy
 
-		## Server: forward to validation (runs on server only)
-		_request_win_validation.rpc_id(1, peer_id, article_title, visited_path)
+		## Server: validate directly (not via RPC, which would fail with "call_remote" mode)
+		_request_win_validation(peer_id, article_title, visited_path)
+	else:
+		## Client reached the target — notify the server to validate via RPC
+		Log.debug("RaceManager", "Client notified target reached: '%s'" % article_title)
+		_request_win_validation.rpc_id(1, peer_id, article_title, _local_visited_pages.duplicate())
 
 func _handle_win(peer_id: int) -> void:
 	if _state != State.ACTIVE:
@@ -698,7 +711,7 @@ func _sync_race_state_to_peer(target_article: String, start_article: String, sta
 
 	Log.debug("RaceManager", "Late join - synced to race for '%s' (already %.1fs in)" % [target_article, _elapsed_time])
 
-@rpc("authority", "call_local", "reliable")
+@rpc("authority", "call_remote", "reliable")
 func _sync_vote_state_to_peer(candidates: Array, timer: float) -> void:
 	"""Sync active vote state to late-joining peer"""
 	_vote_candidates = candidates
@@ -745,6 +758,11 @@ func _request_win_validation(peer_id: int, article_title: String, visited_path: 
 		for item in visited_path:
 			path.append(str(item))
 		Log.warn("RaceManager", "Using client-provided path for peer %d (server tracking unavailable)" % peer_id)
+	elif _local_visited_pages.size() > 0:
+		## Fallback to local path (single-player where broadcast doesn't run)
+		for item in _local_visited_pages:
+			path.append(str(item))
+		Log.debug("RaceManager", "Using local visited path for peer %d (single-player fallback)" % peer_id)
 	else:
 		## No path — reject immediately
 		Log.warn("RaceManager", "Win rejected for peer %d - no path data available" % peer_id)
@@ -831,7 +849,8 @@ func set_global_speed_modifier(modifier: float) -> void:
 	"""Set global speed modifier for all players (1.0 = normal, 1.5 = 50% faster, 0.6 = 40% slower)"""
 	_global_speed_modifier = modifier
 	# Broadcast to all clients so they apply the same modifier
-	_rpc_set_speed_modifier.rpc(modifier)
+	if NetworkManager.is_multiplayer_active():
+		_rpc_set_speed_modifier.rpc(modifier)
 	Log.info("RaceManager", "Global speed modifier set to: %.2fx" % modifier)
 
 func get_global_speed_modifier() -> float:
@@ -845,7 +864,8 @@ func _rpc_set_speed_modifier(modifier: float) -> void:
 
 func set_gravity_modifier(modifier: float) -> void:
 	"""Set gravity modifier for all players (1.0 = normal, 0.3 = moon gravity)"""
-	_rpc_set_gravity_modifier.rpc(modifier)
+	if NetworkManager.is_multiplayer_active():
+		_rpc_set_gravity_modifier.rpc(modifier)
 	Log.info("RaceManager", "Gravity modifier set to: %.2f (MOON GRAVITY!)" % modifier)
 
 @rpc("authority", "call_local", "reliable")
@@ -857,7 +877,8 @@ func _rpc_set_gravity_modifier(modifier: float) -> void:
 
 func set_double_jump_enabled(enabled: bool) -> void:
 	"""Enable double jump for all players"""
-	_rpc_set_double_jump.rpc(enabled)
+	if NetworkManager.is_multiplayer_active():
+		_rpc_set_double_jump.rpc(enabled)
 	Log.info("RaceManager", "Double jump: %s" % ["ENABLED" if enabled else "DISABLED"])
 
 @rpc("authority", "call_local", "reliable")
@@ -868,7 +889,8 @@ func _rpc_set_double_jump(enabled: bool) -> void:
 
 func set_triple_jump_enabled(enabled: bool) -> void:
 	"""Enable triple jump for all players"""
-	_rpc_set_triple_jump.rpc(enabled)
+	if NetworkManager.is_multiplayer_active():
+		_rpc_set_triple_jump.rpc(enabled)
 	Log.info("RaceManager", "Triple jump: %s" % ["ENABLED" if enabled else "DISABLED"])
 
 @rpc("authority", "call_local", "reliable")
@@ -880,7 +902,8 @@ func _rpc_set_triple_jump(enabled: bool) -> void:
 func set_timer_scale(scale: float) -> void:
 	"""Set race timer scale (1.0 = normal, 0.5 = half speed, 2.0 = double speed)"""
 	_timer_scale = scale
-	_rpc_set_timer_scale.rpc(scale)
+	if NetworkManager.is_multiplayer_active():
+		_rpc_set_timer_scale.rpc(scale)
 	Log.info("RaceManager", "Timer scale set to: %.2fx" % scale)
 
 func get_timer_scale() -> float:
@@ -893,7 +916,8 @@ func _rpc_set_timer_scale(scale: float) -> void:
 func set_dash_enabled(enabled: bool) -> void:
 	"""Enable or disable dashing (for events)"""
 	_dash_enabled = enabled
-	_rpc_set_dash_enabled.rpc(enabled)
+	if NetworkManager.is_multiplayer_active():
+		_rpc_set_dash_enabled.rpc(enabled)
 	Log.info("RaceManager", "Dash %s" % ("disabled" if not enabled else "enabled"))
 
 func is_dash_enabled() -> bool:

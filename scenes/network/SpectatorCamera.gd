@@ -256,7 +256,7 @@ func get_spectator_info() -> Dictionary:
 
 func follow_next_player() -> void:
 	"""Cycle to next player in follow mode"""
-	var players = get_tree().get_nodes_in_group("players")
+	var players = get_tree().get_nodes_in_group("Player")
 	if players.is_empty():
 		return
 	
@@ -271,7 +271,7 @@ func follow_next_player() -> void:
 
 func follow_previous_player() -> void:
 	"""Cycle to previous player in follow mode"""
-	var players = get_tree().get_nodes_in_group("players")
+	var players = get_tree().get_nodes_in_group("Player")
 	if players.is_empty():
 		return
 	

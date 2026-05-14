@@ -1,9 +1,9 @@
 extends Node
 class_name PlayerPointingSystem
-## Pointing system — laser beam, endpoint dot, and modern radial reaction wheel.
+## Pointing system — laser beam, endpoint dot, and radial reaction wheel.
 ## 
-## This system allows players to point at objects in the 3D world and fire
-## quick reactions (emojis/symbols) via a premium radial selection menu.
+## Hold Q / RMB to point, move mouse to select a reaction, release to fire.
+## Keys 1-8 fire reactions instantly. Scroll wheel cycles selection.
 
 signal reaction_fired(reaction_index: int, point_target: Vector3)
 
@@ -37,8 +37,6 @@ const WHEEL_RADIUS_OUTER  : float = 94.0
 const WHEEL_RADIUS_CENTER : float = 44.0
 const WHEEL_FADE_SPEED    : float = 16.0
 const WHEEL_ROTATION_OFFSET : float = -PI / 2.0 # Start at top
-const STEER_THRESHOLD     : float = 12.0 # px moved before selection starts
-const STEER_MAX_LEN       : float = 120.0 # clamp mouse growth
 
 # Theme Colors (Fallbacks if ThemeManager is missing)
 const PANEL_BG_COLOR      : Color = Color(0, 0, 0, 0.8)
@@ -52,8 +50,11 @@ var _player           : CharacterBody3D = null
 
 # 3D world nodes
 var _beam_mesh        : MeshInstance3D  = null
+var _beam_mat         : StandardMaterial3D = null
+var _beam_cyl         : CylinderMesh    = null
 var _highlight_light  : OmniLight3D     = null
 var _endpoint_dot     : MeshInstance3D  = null
+var _endpoint_mat     : StandardMaterial3D = null
 
 # Public — read by network sync
 var is_pointing       : bool    = false
@@ -62,11 +63,11 @@ var point_target      : Vector3 = Vector3.ZERO
 var _reaction_index   : int     = -1
 
 # Radial HUD (local player only)
-var _bar_root         : Control = null   # CanvasLayer child
-var _bar_panel        : Control = null   # Drawing surface
-var _bar_alpha        : float   = 0.0    # 0→1 animated
-var _bar_selection    : int     = -1     # highlighted index (-1 = none)
-var _mouse_accum      : Vector2 = Vector2.ZERO # Tracks relative motion
+var _bar_root         : Control = null
+var _bar_panel        : Control = null
+var _bar_alpha        : float   = 0.0
+var _bar_selection    : int     = -1
+var _dark_mode_lambda : Callable = Callable()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # INIT
@@ -75,18 +76,24 @@ var _mouse_accum      : Vector2 = Vector2.ZERO # Tracks relative motion
 func init(player: CharacterBody3D) -> void:
 	_player = player
 
-	# ── Beam ──────────────────────────────────────────────────────────────────
+	# ── Beam (cached mesh, only position updated per frame) ───────────────────
+	_beam_cyl = CylinderMesh.new()
+	_beam_cyl.top_radius = 0.003
+	_beam_cyl.bottom_radius = 0.003
+
+	_beam_mat = StandardMaterial3D.new()
+	_beam_mat.albedo_color               = BEAM_COLOR
+	_beam_mat.emission_enabled           = true
+	_beam_mat.emission                   = Color(1.0, 1.0, 0.7)
+	_beam_mat.emission_energy_multiplier = 1.0
+	_beam_mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_beam_mat.no_depth_test              = false
+
 	_beam_mesh = MeshInstance3D.new()
-	_beam_mesh.visible    = false
+	_beam_mesh.visible     = false
+	_beam_mesh.mesh        = _beam_cyl
+	_beam_mesh.material_override = _beam_mat
 	_beam_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mat : StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color               = BEAM_COLOR
-	mat.emission_enabled           = true
-	mat.emission                   = Color(1.0, 1.0, 0.7)
-	mat.emission_energy_multiplier = 1.0
-	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.no_depth_test              = false
-	_beam_mesh.material_override   = mat
 	player.add_child(_beam_mesh)
 
 	# ── Highlight light ───────────────────────────────────────────────────────
@@ -99,20 +106,18 @@ func init(player: CharacterBody3D) -> void:
 	player.add_child(_highlight_light)
 
 	# ── Endpoint dot ──────────────────────────────────────────────────────────
+	_endpoint_mat = StandardMaterial3D.new()
+	_endpoint_mat.albedo_color               = Color(1.0, 1.0, 0.7)
+	_endpoint_mat.emission_enabled           = true
+	_endpoint_mat.emission                   = Color(1.0, 1.0, 0.7)
+	_endpoint_mat.emission_energy_multiplier = 1.5
+	_endpoint_mat.no_depth_test              = false
+
 	_endpoint_dot = MeshInstance3D.new()
-	_endpoint_dot.visible    = false
+	_endpoint_dot.visible     = false
+	_endpoint_dot.mesh        = _make_dot_mesh()
+	_endpoint_dot.material_override = _endpoint_mat
 	_endpoint_dot.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var dot_mesh : SphereMesh = SphereMesh.new()
-	dot_mesh.radius = 0.02
-	dot_mesh.height = 0.04
-	_endpoint_dot.mesh = dot_mesh
-	var dot_mat : StandardMaterial3D = StandardMaterial3D.new()
-	dot_mat.albedo_color               = Color(1.0, 1.0, 0.7)
-	dot_mat.emission_enabled           = true
-	dot_mat.emission                   = Color(1.0, 1.0, 0.7)
-	dot_mat.emission_energy_multiplier = 1.5
-	dot_mat.no_depth_test              = false
-	_endpoint_dot.material_override    = dot_mat
 	player.add_child(_endpoint_dot)
 
 	# ── Radial HUD (local only) ──────────────────────────────────────────────
@@ -120,9 +125,20 @@ func init(player: CharacterBody3D) -> void:
 		_build_hud()
 
 
+func _exit_tree() -> void:
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
+
+
+func _make_dot_mesh() -> SphereMesh:
+	var m := SphereMesh.new()
+	m.radius = 0.05
+	m.height = 0.1
+	return m
+
 func _build_hud() -> void:
 	var cl := CanvasLayer.new()
-	cl.layer = 12 # Above most other UI
+	cl.layer = 12
 	_player.add_child(cl)
 
 	_bar_root = Control.new()
@@ -138,7 +154,8 @@ func _build_hud() -> void:
 	_bar_root.add_child(_bar_panel)
 	
 	if ThemeManager:
-		ThemeManager.reading_font_changed.connect(func(_f): _bar_panel.queue_redraw())
+		_dark_mode_lambda = func(_d): _bar_panel.queue_redraw()
+		ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -232,18 +249,27 @@ func _draw_hud() -> void:
 func _input(event: InputEvent) -> void:
 	if not is_pointing or not _player or not _player.is_local:
 		return
+	if "_enabled" in _player and not _player._enabled:
+		return
 	
-	if event is InputEventMouseMotion:
-		_mouse_accum += event.relative
-		_mouse_accum = _mouse_accum.limit_length(STEER_MAX_LEN)
+	# Mouse-screen-position-based selection — direct and intuitive
+	if event is InputEventMouseMotion and _bar_root and _bar_root.visible:
+		var mouse_pos := _bar_root.get_local_mouse_position()
+		var center   := _bar_root.size * 0.5
+		var offset   := mouse_pos - center
+		var dist     := offset.length()
 		
-		# Steering selection
-		if _mouse_accum.length() > STEER_THRESHOLD:
+		if dist >= WHEEL_RADIUS_INNER and dist <= WHEEL_RADIUS_OUTER:
 			var n : int = REACTION_DISPLAY.size()
 			var arc_step : float = TAU / n
-			var angle : float = _mouse_accum.angle()
+			var angle := offset.angle()
 			var norm_angle := fposmod(angle - WHEEL_ROTATION_OFFSET, TAU)
 			_bar_selection = int(norm_angle / arc_step) % n
+		elif dist < WHEEL_RADIUS_INNER:
+			# Inside center hub — keep current selection visible
+			pass
+		else:
+			_bar_selection = -1
 		
 		if _bar_panel:
 			_bar_panel.queue_redraw()
@@ -273,7 +299,6 @@ func process_pointing() -> void:
 		
 		if not is_pointing:
 			_bar_selection = -1
-			_mouse_accum   = Vector2.ZERO
 
 	# ── Visual Animations ─────────────────────────────────────────────────────
 	var dt : float = 1.0 / float(Engine.physics_ticks_per_second)
@@ -350,11 +375,7 @@ func _update_beam(from: Vector3, to: Vector3) -> void:
 		return
 	_beam_mesh.visible = true
 
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.002
-	cyl.bottom_radius = 0.002
-	cyl.height = length
-	_beam_mesh.mesh = cyl
+	_beam_cyl.height = length
 
 	_beam_mesh.global_position = (from + to) / 2.0
 	_beam_mesh.look_at(to, Vector3.UP)

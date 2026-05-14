@@ -26,6 +26,7 @@ var _player_count_lbl: Label       = null
 
 var _format_idx:     int = 0   # TournamentManager.Format
 var _points_idx:     int = 1   # TournamentManager.PointsMode (default PODIUM)
+var _dark_mode_lambda: Callable = Callable()
 
 const FORMAT_LABELS := ["Fixed Rounds", "First to N Wins"]
 const POINTS_LABELS := ["Win Only (1pt)", "Podium (3/2/1)", "Speed Bonus"]
@@ -36,7 +37,13 @@ func _ready() -> void:
 	visible = false
 	_build_ui()
 	_apply_theme()
-	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	_dark_mode_lambda = func(_d): _apply_theme()
+	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
+
+
+func _exit_tree() -> void:
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
 
 
 func _build_ui() -> void:

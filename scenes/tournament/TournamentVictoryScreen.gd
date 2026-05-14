@@ -15,7 +15,8 @@ var _subtitle_lbl: Label          = null
 var _podium_list:  VBoxContainer  = null
 var _dismiss_btn:  Button         = null
 var _timer_lbl:    Label          = null
-var _dismiss_timer_node: Timer    = null
+var _dismiss_timer_node: Timer = null
+var _dark_mode_lambda: Callable = Callable()
 
 var _burst_scale: float = 0.0
 var _burst_alpha: float = 0.0
@@ -28,8 +29,16 @@ func _ready() -> void:
 	visible = false
 	_build_ui()
 	_apply_theme()
-	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	_dark_mode_lambda = func(_d): _apply_theme()
+	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
 	TournamentManager.tournament_ended.connect(_on_tournament_ended)
+
+
+func _exit_tree() -> void:
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
+	if TournamentManager.tournament_ended.is_connected(_on_tournament_ended):
+		TournamentManager.tournament_ended.disconnect(_on_tournament_ended)
 
 
 func _build_ui() -> void:

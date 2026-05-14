@@ -55,6 +55,7 @@ var _exhibits: Dictionary:
 
 # Track exhibits currently being loaded for riders (to prevent duplicate fetches)
 var _rider_loading_exhibits: Dictionary = {}
+var _pending_win_room: String = ""
 
 
 func has_exhibit(title: String) -> bool:
@@ -127,7 +128,6 @@ func load_exhibit_for_rider(from_room: String, to_room: String) -> void:
 	if is_inside_tree():
 		await get_tree().create_timer(2.0).timeout
 		if _rider_loading_exhibits.has(to_room) and not has_exhibit(to_room):
-			# Exhibit failed to load - player might be in void
 			_revert_to_safe_position(to_room)
 
 func _revert_to_safe_position(failed_room: String) -> void:
@@ -139,7 +139,7 @@ func _revert_to_safe_position(failed_room: String) -> void:
 	for player in players:
 		if player.has_node("CollisionShape2") and player.has_node("Feet"):
 			# Player has collision - teleport to safe position
-			player.global_position = Vector3(0, 1, 23)  # Start line position
+			player.global_position = Vector3(0, 4, 0)  # Lobby center
 			player.velocity = Vector3.ZERO
 			if "current_room" in player:
 				player.current_room = "Lobby"
@@ -147,13 +147,8 @@ func _revert_to_safe_position(failed_room: String) -> void:
 	# Reset to lobby
 	reset_to_lobby()
 	
-	# Cancel the race - target is unreachable
-	if RaceManager.is_race_active():
-		RaceManager.cancel_race()
-	
-	# Show error message to player
+	# Show warning but don't cancel the race — player is at a safe position
 	Log.warn("Museum", "Reverted players to lobby after failed load of '%s'" % failed_room)
-	_show_exhibit_load_error(failed_room)
 
 func _show_exhibit_load_error(failed_room: String) -> void:
 	"""Display error message when exhibit fails to load."""
@@ -370,7 +365,7 @@ func _on_race_started(_target: String, start_article: String) -> void:
 			# Ensure the start hall is open
 			hall.set_passable(true)
 
-func _on_race_ended() -> void:
+func _on_race_ended(_winner_peer_id: int = 0, _winner_name: String = "") -> void:
 	## When a race ends, restore all lobby halls to unlocked.
 	var lobby: Node = get_node_or_null("Lobby")
 	if not lobby or not "exits" in lobby:
@@ -478,11 +473,13 @@ func _set_current_room_title(title: String) -> void:
 			var exhibit_data = _exhibits[title]
 			if exhibit_data and exhibit_data.get("exhibit"):
 				# Exhibit loaded successfully - valid win
+				_pending_win_room = ""
 				RaceManager.notify_article_reached(NetworkManager.get_unique_id(), title)
 			else:
 				Log.warn("Museum", "Blocked false win - exhibit '%s' has no content" % title)
 		else:
-			Log.warn("Museum", "Blocked false win - exhibit '%s' not loaded" % title)
+			# Defer win check — exhibit is still loading
+			_pending_win_room = title
 
 	var mood: int = _get_exhibit_mood(_current_room_title)
 	_tween_fog_color(ExhibitStyle.gen_fog(_current_room_title), mood)
@@ -597,6 +594,12 @@ func _load_exhibit_from_exit(exit: Hall) -> void:
 func _on_fetch_complete(titles: Array, context: Dictionary) -> void:
 	clear_rider_loading(context.get("title", ""))
 	_exhibit_loader.on_fetch_complete(titles, context)
+	# Check if this was a pending win room
+	var loaded_title: String = context.get("title", "")
+	if _pending_win_room != "" and loaded_title == _pending_win_room and RaceManager.is_race_active():
+		if loaded_title == RaceManager.get_target_article() and has_exhibit(loaded_title):
+			_pending_win_room = ""
+			RaceManager.notify_article_reached(NetworkManager.get_unique_id(), loaded_title)
 
 
 func _on_wikidata_complete(entity: String, ctx: Dictionary) -> void:

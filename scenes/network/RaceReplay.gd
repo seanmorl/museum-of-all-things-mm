@@ -125,7 +125,7 @@ func _record_frame() -> void:
 		return
 	
 	# Record all players
-	var players = get_tree().get_nodes_in_group("players")
+	var players = get_tree().get_nodes_in_group("Player")
 	for player in players:
 		if not player is CharacterBody3D:
 			continue
@@ -182,7 +182,7 @@ func start_recording(race_id: String, start_article: String, target_article: Str
 	_current_replay.start_time = Time.get_ticks_msec() / 1000.0
 	
 	# Record player info
-	var players = get_tree().get_nodes_in_group("players")
+	var players = get_tree().get_nodes_in_group("Player")
 	for player in players:
 		if player.has_method("get_peer_id"):
 			var peer_id = player.get_peer_id()

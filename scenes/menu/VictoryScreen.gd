@@ -33,6 +33,7 @@ const AUTO_DISMISS: float = 12.0
 
 func _ready() -> void:
 	_serif_font = ThemeManager.get_reading_font()
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	visible = false
 	_build_ui()
 	_apply_theme()

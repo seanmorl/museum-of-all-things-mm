@@ -45,6 +45,8 @@ const CHIME_SOUND: String = "res://assets/sound/UI/UI Crystal 1.ogg"
 
 var _main         : Node         = null
 var _chime        : AudioStream  = null
+var _beam_cyl     : CylinderMesh = null
+var _beam_mat     : StandardMaterial3D = null
 
 ## peer_id → Time.get_unix_time_from_system() of last reaction
 var _cooldowns    : Dictionary   = {}
@@ -56,6 +58,7 @@ var _cooldowns    : Dictionary   = {}
 func init(main: Node) -> void:
 	_main = main
 	_load_chime_sound()
+	_init_beam_cache()
 
 
 func _load_chime_sound() -> void:
@@ -67,6 +70,17 @@ func _load_chime_sound() -> void:
 		_chime = res
 	else:
 		Log.error("PointingController", "Resource is not an AudioStream: %s" % CHIME_SOUND)
+
+
+func _init_beam_cache() -> void:
+	_beam_cyl = CylinderMesh.new()
+	_beam_cyl.top_radius = BEAM_WIDTH
+	_beam_cyl.bottom_radius = BEAM_WIDTH
+
+	_beam_mat = StandardMaterial3D.new()
+	_beam_mat.albedo_color      = BEAM_COLOR
+	_beam_mat.flags_transparent = true
+	_beam_mat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
 
 
 # =============================================================================
@@ -128,6 +142,9 @@ func spawn_reaction(reaction_index: int, world_pos: Vector3, sender_id: int = 0)
 	rise_tw.tween_property(label, "modulate:a",      0.0,        LIFETIME * 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN).set_delay(LIFETIME * 0.45)
 	rise_tw.chain().tween_callback(label.queue_free)
 
+	# --- Sparkle burst ---
+	_spawn_sparkle_burst(world_pos, col)
+
 	# --- Chime ---
 	_play_chime(pitch)
 
@@ -141,18 +158,9 @@ func spawn_beam(from: Vector3, to: Vector3) -> void:
 		return
 
 	var mesh_inst := MeshInstance3D.new()
-	var cyl       := CylinderMesh.new()
-	cyl.top_radius    = BEAM_WIDTH
-	cyl.bottom_radius = BEAM_WIDTH
-	cyl.height        = length
-
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color      = BEAM_COLOR
-	mat.flags_transparent = true
-	mat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
-	cyl.surface_set_material(0, mat)
-
-	mesh_inst.mesh = cyl
+	_beam_cyl.height = length
+	mesh_inst.mesh = _beam_cyl
+	mesh_inst.material_override = _beam_mat
 	_main.add_child(mesh_inst)
 	mesh_inst.global_position = mid
 
@@ -185,6 +193,42 @@ func clear_cooldown(sender_id: int) -> void:
 # =============================================================================
 # Internal helpers
 # =============================================================================
+
+func _spawn_sparkle_burst(pos: Vector3, color: Color) -> void:
+	## Spawn a small burst of 4-6 spark particles that spread outward and fade.
+	var spark_count := randi() % 3 + 4
+	for i in spark_count:
+		var spark := MeshInstance3D.new()
+		spark.mesh = _make_spark_mesh()
+		var smat := StandardMaterial3D.new()
+		smat.albedo_color = Color(color, 1.0)
+		smat.emission_enabled = true
+		smat.emission = color
+		smat.emission_energy_multiplier = 2.0
+		smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		spark.material_override = smat
+		_main.add_child(spark)
+
+		var spread := Vector3(
+			randf_range(-0.8, 0.8),
+			randf_range(0.2, 1.2),
+			randf_range(-0.8, 0.8)
+		).normalized() * randf_range(0.4, 1.0)
+		spark.global_position = pos + spread * 0.3
+		spark.scale = Vector3(0.2, 0.2, 0.2)
+
+		var tw := spark.create_tween().set_parallel(true)
+		tw.tween_property(spark, "global_position", pos + spread * 1.5, 0.5)
+		tw.tween_property(spark, "scale", Vector3.ZERO, 0.5)
+		tw.tween_property(smat, "albedo_color:a", 0.0, 0.4)
+		tw.chain().tween_callback(spark.queue_free)
+
+
+func _make_spark_mesh() -> BoxMesh:
+	var m := BoxMesh.new()
+	m.size = Vector3(0.04, 0.04, 0.04)
+	return m
+
 
 func _play_chime(pitch: float) -> void:
 	if not _chime:

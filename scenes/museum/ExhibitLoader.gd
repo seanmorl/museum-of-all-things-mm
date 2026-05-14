@@ -28,6 +28,14 @@ var _max_exhibits_loaded: int = 999  # Effectively unlimited - exhibits persist 
 var _min_room_dimension: int = 2
 var _max_room_dimension: int = 5
 
+func _show_loading_indicator(text: String) -> void:
+	if LoadingScreen:
+		LoadingScreen.show_compact(text)
+
+func _hide_loading_indicator() -> void:
+	if LoadingScreen:
+		LoadingScreen.hide_loading()
+
 # Scenes
 var TiledExhibitGenerator: PackedScene = preload("res://scenes/TiledExhibitGenerator.tscn")
 var WallItem: PackedScene = preload("res://scenes/items/WallItem.tscn")
@@ -108,6 +116,8 @@ func load_exhibit_from_entry(entry: Hall) -> void:
 		if is_instance_valid(exhibit):
 			return
 
+	_show_loading_indicator(prev_article)
+
 	# Fetch exhibit data
 	ExhibitFetcher.fetch([prev_article], {
 		"title": prev_article,
@@ -138,6 +148,8 @@ func load_exhibit_from_exit(exit: Hall) -> void:
 		return
 	_loading_exhibits[next_article] = true
 
+	_show_loading_indicator(next_article)
+
 	ExhibitFetcher.fetch([next_article], {
 		"title": next_article,
 		"exit": exit
@@ -161,6 +173,8 @@ func load_exhibit_for_rider_without_hall(to_room: String, from_room: String) -> 
 	
 	_loading_exhibits[to_room] = true
 
+	_show_loading_indicator(to_room)
+
 	ExhibitFetcher.fetch([to_room], {
 		"title": to_room,
 		"rider_load": true,
@@ -177,6 +191,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	# Handle secret room content
 	if context.get("secret_room", false):
 		_on_secret_room_fetch_complete(context)
+		_hide_loading_indicator()
 		return
 
 	var backlink: bool = context.has("backlink") and context.backlink
@@ -188,6 +203,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	if not result:
 		Log.error("ExhibitLoader", "Failed to fetch data for '%s'" % context.title)
 		_loading_exhibits.erase(context.get("title", ""))
+		_hide_loading_indicator()
 		_show_error_to_player("Failed to load room: " + context.title)
 		# Revert player to previous room if this was a rider load
 		if rider_load and _museum and _museum.has_method("_teleport_player_to_lobby"):
@@ -197,6 +213,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	# For rider_load, we don't require a hall - we'll use defaults
 	if not result or (not rider_load and not is_instance_valid(hall)):
 		_loading_exhibits.erase(context.get("title", ""))
+		_hide_loading_indicator()
 		return
 
 	var prev_title: String
@@ -215,11 +232,6 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	var items: Array = data.items
 	var extra_text: Array = data.extra_text
 	var mood: int = data.get("mood", ExhibitMood.Mood.DEFAULT)
-
-	#inject target into doors array
-	Log.debug("ExhibitLoader", "Full list of doors: %s" % [data.doors])
-	if data.doors.has(destination) and data.doors.size() > 2:
-		data.doors[2] = destination
 
 	Log.info("ExhibitLoader", "Room '%s' has %d doors" % [context.title, doors.size()])
 
@@ -282,6 +294,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 
 	# Clear loading flag after exhibit exists (handles both new and duplicate fetch cases)
 	_loading_exhibits.erase(context.title)
+	_hide_loading_indicator()
 
 	var image_titles: Array = []
 	var item_queue: Array = []

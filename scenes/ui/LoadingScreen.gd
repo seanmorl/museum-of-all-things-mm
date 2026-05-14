@@ -39,9 +39,11 @@ var _sub_label:    Label       = null
 var _progress_bg:  ColorRect   = null
 var _progress_bar: ColorRect   = null
 var _serif_font:   Font        = null
+var _card_mc:      MarginContainer = null
 
 ## Progress (0.0 – 1.0, negative = hidden)
 var _progress: float = -1.0
+var _compact_mode: bool = false
 
 ## Stored lambdas for proper signal cleanup
 var _dark_mode_lambda: Callable = Callable()
@@ -75,15 +77,22 @@ func _process(delta: float) -> void:
 			_do_show()
 		return
 
-	if _visible_state and is_instance_valid(_spinner):
+	if _visible_state:
 		_spin_angle += delta * 2.4   # radians/sec
-		_spinner.queue_redraw()
+		if is_instance_valid(_spinner):
+			_spinner.queue_redraw()
+		var comp := _root.get_node_or_null("CompactCard") as PanelContainer
+		if comp:
+			var cs := comp.get_node_or_null("CompactSpinner") as Control
+			if cs:
+				cs.queue_redraw()
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
 func show_loading(message: String = "Loading…", sub: String = "") -> void:
 	## Show the loading screen with an optional message and sub-message.
+	_use_compact_layout(false)
 	if _visible_state:
 		set_message(message, sub)
 		return
@@ -93,12 +102,25 @@ func show_loading(message: String = "Loading…", sub: String = "") -> void:
 	_show_timer   = SHOW_DELAY
 
 
+func show_compact(message: String) -> void:
+	## Compact bottom-left loading indicator with spinner and article name.
+	_use_compact_layout(true)
+	var clbl := _get_compact_label()
+	if clbl:
+		clbl.text = message
+	if _visible_state:
+		return
+	_pending_show = true
+	_show_timer = 0.0  # No delay — show immediately
+
+
 func hide_loading() -> void:
 	## Fade the loading screen out.
 	_pending_show = false
 	if not _visible_state:
 		return
 	_visible_state = false
+	_compact_mode = false
 	var tw := create_tween()
 	tw.tween_property(_root, "modulate:a", 0.0, FADE_DURATION) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -128,6 +150,37 @@ func set_progress(value: float) -> void:
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
+func _use_compact_layout(compact: bool) -> void:
+	_compact_mode = compact
+	if not is_instance_valid(_backdrop) or not is_instance_valid(_card):
+		return
+	_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE if compact else Control.MOUSE_FILTER_STOP
+	var comp_card := _root.get_node_or_null("CompactCard") as PanelContainer
+	if compact:
+		_backdrop.color = Color.TRANSPARENT
+		_card.visible = false
+		if comp_card:
+			comp_card.visible = true
+	else:
+		var dark: bool = ThemeManager.is_dark_mode
+		_backdrop.color = Color(0.05, 0.05, 0.08, 0.72) if dark else Color(0.90, 0.90, 0.93, 0.80)
+		_card.visible = true
+		if comp_card:
+			comp_card.visible = false
+		if _card_style:
+			_card_style.set_corner_radius_all(12)
+			_card_style.set_border_width_all(1)
+			_card_style.content_margin_left = 22
+			_card_style.content_margin_right = 22
+			_card_style.content_margin_top = 10
+			_card_style.content_margin_bottom = 10
+		if is_instance_valid(_msg_label):
+			_msg_label.add_theme_font_size_override("font_size", 18)
+			_msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if is_instance_valid(_spinner):
+			_spinner.visible = true
+
+
 func _do_show() -> void:
 	visible              = true
 	_visible_state       = true
@@ -137,6 +190,14 @@ func _do_show() -> void:
 	tw.tween_property(_root, "modulate:a", 1.0, FADE_DURATION) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
+
+func _get_compact_label() -> Label:
+	var comp := _root.get_node_or_null("CompactCard") as PanelContainer
+	if comp:
+		var hbox := comp.get_child(0) as HBoxContainer
+		if hbox and hbox.get_child_count() > 1:
+			return hbox.get_child(1) as Label
+	return null
 
 func _set_message_text(msg: String, sub: String) -> void:
 	if is_instance_valid(_msg_label):
@@ -194,6 +255,7 @@ func _build_ui() -> void:
 	mc.add_theme_constant_override("margin_top",    28)
 	mc.add_theme_constant_override("margin_bottom", 28)
 	mc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_card_mc = mc
 	card_panel.add_child(mc)
 	mc.add_child(vbox)
 
@@ -220,6 +282,45 @@ func _build_ui() -> void:
 	_sub_label.visible = false
 	vbox.add_child(_sub_label)
 
+	# ── Compact card (bottom-left, shown in compact mode) ─────────────────────
+	var compact_panel := PanelContainer.new()
+	compact_panel.name = "CompactCard"
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0, 0, 0, 0.55)
+	cs.set_corner_radius_all(6)
+	cs.content_margin_left = 8
+	cs.content_margin_right = 8
+	cs.content_margin_top = 4
+	cs.content_margin_bottom = 4
+	compact_panel.add_theme_stylebox_override("panel", cs)
+	compact_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	compact_panel.offset_left   = 10
+	compact_panel.offset_top    = -30
+	compact_panel.offset_right  = 220
+	compact_panel.offset_bottom = -10
+	compact_panel.visible = false
+	_root.add_child(compact_panel)
+
+	var comp_hbox := HBoxContainer.new()
+	comp_hbox.add_theme_constant_override("separation", 6)
+	compact_panel.add_child(comp_hbox)
+
+	# Tiny spinner in compact mode
+	var comp_spinner := _SpinnerNode.new()
+	comp_spinner.name = "CompactSpinner"
+	comp_spinner.custom_minimum_size = Vector2(14, 14)
+	comp_spinner.size = Vector2(14, 14)
+	comp_spinner.loading_screen = self
+	comp_hbox.add_child(comp_spinner)
+
+	# Label in compact mode
+	var comp_label := Label.new()
+	comp_label.name = "CompactLabel"
+	comp_label.add_theme_font_size_override("font_size", 11)
+	comp_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
+	comp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	comp_hbox.add_child(comp_label)
+
 	# Progress bar track
 	_progress_bg = ColorRect.new()
 	_progress_bg.custom_minimum_size = Vector2(0, 3)
@@ -239,22 +340,31 @@ func _apply_theme() -> void:
 		return
 	var dark: bool = ThemeManager.is_dark_mode
 
-	# Backdrop — semi-transparent tint
-	_backdrop.color = Color(0.05, 0.05, 0.08, 0.72) if dark \
-		else Color(0.90, 0.90, 0.93, 0.80)
+	# Backdrop — transparent in compact mode
+	if not _compact_mode:
+		_backdrop.color = Color(0.05, 0.05, 0.08, 0.72) if dark \
+			else Color(0.90, 0.90, 0.93, 0.80)
 
 	# Card
 	if _card_style:
 		_card_style.bg_color     = ThemeManager.bg_color
 		_card_style.border_color = ThemeManager.border_color
 		_card_style.set_border_width_all(1)
-		_card_style.set_corner_radius_all(12)
-		_card_style.shadow_color  = Color(0, 0, 0, 0.30 if dark else 0.12)
-		_card_style.shadow_size   = 20
-		_card_style.shadow_offset = Vector2(0, 6)
+		if _compact_mode:
+			_card_style.set_corner_radius_all(6)
+			_card_style.shadow_size = 0
+		else:
+			_card_style.set_corner_radius_all(12)
+			_card_style.shadow_color  = Color(0, 0, 0, 0.30 if dark else 0.12)
+			_card_style.shadow_size   = 20
+			_card_style.shadow_offset = Vector2(0, 6)
 
 	# Labels
-	for lbl: Label in [_msg_label, _sub_label]:
+	var all_labels: Array = [_msg_label, _sub_label]
+	var clbl := _get_compact_label()
+	if clbl:
+		all_labels.append(clbl)
+	for lbl: Label in all_labels:
 		if not is_instance_valid(lbl):
 			continue
 		if _serif_font:
@@ -262,11 +372,16 @@ func _apply_theme() -> void:
 		lbl.add_theme_color_override("font_color", ThemeManager.text_color)
 
 	if is_instance_valid(_msg_label):
-		_msg_label.add_theme_font_size_override("font_size", 18)
+		if not _compact_mode:
+			_msg_label.add_theme_font_size_override("font_size", 18)
+		else:
+			_msg_label.add_theme_font_size_override("font_size", 12)
+			_msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 
 	if is_instance_valid(_sub_label):
 		_sub_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
-		_sub_label.add_theme_font_size_override("font_size", 13)
+		if not _compact_mode:
+			_sub_label.add_theme_font_size_override("font_size", 13)
 
 	# Progress bar colours
 	var accent := Color(0.35, 0.55, 1.00) if dark else Color(0.15, 0.35, 0.85)

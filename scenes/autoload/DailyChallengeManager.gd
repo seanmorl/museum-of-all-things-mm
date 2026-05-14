@@ -272,11 +272,10 @@ func _save_record(rec: Dictionary) -> void:
 # ── Date helpers ──────────────────────────────────────────────────────────────
 
 func _get_today_key() -> String:
-	var t := Time.get_datetime_dict_from_system()
+	var t := Time.get_datetime_dict_from_system(true)
 	return "%04d-%02d-%02d" % [t.year, t.month, t.day]
 
 func _get_yesterday_key() -> String:
-	## Simple: subtract 86400 seconds from UTC unix time and format.
 	var unix: int = Time.get_unix_time_from_system() as int - 86400
 	var t := Time.get_datetime_dict_from_unix_time(unix)
 	return "%04d-%02d-%02d" % [t.year, t.month, t.day]

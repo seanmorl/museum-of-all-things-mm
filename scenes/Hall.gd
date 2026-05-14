@@ -99,6 +99,9 @@ func set_passable(v: bool) -> void:
 	else:
 		if entry_door and entry_door.has_method("unlock"): entry_door.unlock()
 		if exit_door and exit_door.has_method("unlock"): exit_door.unlock()
+		# Also open doors so players can walk through after unlocking
+		if entry_door and entry_door.has_method("set_open"): entry_door.set_open(true)
+		if exit_door and exit_door.has_method("set_open"): exit_door.set_open(true)
 
 var player_in_hall: bool:
 	get:

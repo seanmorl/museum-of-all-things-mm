@@ -528,7 +528,9 @@ func _on_candidate_pressed(index: int) -> void:
 	RaceManager.cast_vote(index)
 	for i in _candidate_buttons.size():
 		_candidate_buttons[i].disabled = (i != index)
-	_status_label.text = "Voted for: " + RaceManager.get_vote_candidates()[index]
+	var candidates = RaceManager.get_vote_candidates()
+	if index >= 0 and index < candidates.size():
+		_status_label.text = "Voted for: " + candidates[index]
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 

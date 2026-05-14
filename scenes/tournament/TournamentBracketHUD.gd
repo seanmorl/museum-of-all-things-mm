@@ -10,6 +10,7 @@ var _title_label:  Label          = null
 var _scroll:       ScrollContainer = null
 var _bracket_hbox: HBoxContainer  = null
 var _hint_label:   Label          = null
+var _dark_mode_lambda: Callable = Callable()
 
 const COL_WIDTH: int = 140
 const ROW_HEIGHT: int = 28
@@ -20,11 +21,17 @@ func _ready() -> void:
 	visible = false
 	_build_ui()
 	_apply_theme()
-	ThemeManager.dark_mode_changed.connect(func(_d): _apply_theme())
+	_dark_mode_lambda = func(_d): _apply_theme()
+	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
 	TournamentManager.tournament_started.connect(_on_tournament_started)
 	TournamentManager.round_history_updated.connect(_on_history_updated)
 	TournamentManager.tournament_ended.connect(_on_tournament_ended)
 	TournamentManager.tournament_cancelled.connect(_on_cancelled)
+
+
+func _exit_tree() -> void:
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
 
 
 func _build_ui() -> void:
@@ -92,6 +99,7 @@ func _divider() -> ColorRect:
 	var d := ColorRect.new()
 	d.custom_minimum_size = Vector2(0, 1)
 	d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	d.color = ThemeManager.border_color
 	return d
 
 
@@ -119,7 +127,7 @@ func _apply_theme() -> void:
 	_style_label(_hint_label, 11, ThemeManager.subtext_color)
 
 
-func _on_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if not visible:
 		return
 	if event is InputEventKey and event.pressed and event.keycode == KEY_TAB:

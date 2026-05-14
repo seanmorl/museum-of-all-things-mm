@@ -44,6 +44,7 @@ var _quit_lambda: Callable = Callable()
 @onready var _map_overlay: Control = %ExhibitMapOverlay
 var _minimap_controller: Control = null
 var _race_status_hud: Control = null
+var _victory_screen: Control = null
 
 # Hint system cooldown
 var _last_hint_time: float = 0.0
@@ -258,7 +259,13 @@ func _initialize_room_service() -> void:
 	_race_status_hud = load("res://scenes/ui/RaceStatusHUD.gd").new()
 	_race_status_hud.name = "RaceStatusHUD"
 	add_child(_race_status_hud)
-	
+
+	_victory_screen = load("res://scenes/menu/VictoryScreen.gd").new()
+	_victory_screen.name = "VictoryScreen"
+	add_child(_victory_screen)
+	if not _victory_screen.continue_pressed.is_connected(_on_victory_continue):
+		_victory_screen.continue_pressed.connect(_on_victory_continue)
+
 	GraphicsManager.change_post_processing.connect(_change_post_processing)
 	GraphicsManager.init()
 	
@@ -289,6 +296,11 @@ func _initialize_room_service() -> void:
 	GameplayEvents.eat_anim_cancelled.connect(_broadcast_eat_anim_cancel)
 	GameplayEvents.local_reaction.connect(_on_local_reaction)
 	GameplayEvents.error_message_requested.connect(_show_error_message)
+	
+	if TTSManager and TTSManager.text_display_requested.is_connected(_show_text_display):
+		TTSManager.text_display_requested.disconnect(_show_text_display)
+	if TTSManager:
+		TTSManager.text_display_requested.connect(_show_text_display)
 	
 	# Race signals
 	add_to_group("main")
@@ -914,7 +926,7 @@ func _on_start_race_pressed() -> void:
 		_debug_log("Main: Fetching random articles for race vote...")
 		RaceManager.clear_vote_candidates()
 		RaceManager.set_vote_start_article("")
-		_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1  # +1 start
+		_race_fetches_pending = Constants.CANDIDATE_COUNT + 1  # +1 start
 		_show_vote_loading()
 		_fetch_race_candidates()
 		_fetch_race_start_article()
@@ -937,7 +949,7 @@ func _request_race_start() -> void:
 	_debug_log("Main: Race start requested by peer, fetching random articles for vote...")
 	RaceManager.clear_vote_candidates()
 	RaceManager.set_vote_start_article("")
-	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
+	_race_fetches_pending = Constants.CANDIDATE_COUNT + 1
 	_show_vote_loading()
 	_fetch_race_candidates()
 	_fetch_race_start_article()
@@ -983,7 +995,7 @@ func _on_random_article_complete(title: Variant, context: Variant) -> void:
 		RaceManager.set_vote_start_article(title)
 		_race_fetches_pending -= 1
 		_debug_log("Main: Got start article '%s'" % title)
-		if _race_fetches_pending <= 0 and RaceManager.get_vote_candidates().size() >= RaceManager.CANDIDATE_COUNT:
+		if _race_fetches_pending <= 0 and RaceManager.get_vote_candidates().size() >= Constants.CANDIDATE_COUNT:
 			_launch_vote()
 
 func _fetch_one_candidate() -> void:
@@ -1006,13 +1018,13 @@ func _fetch_race_candidates() -> void:
 	var cat := RaceManager.get_category_override()
 	# Check for both empty string AND space to avoid malformed Toolforge URLs
 	if cat != null and cat.strip_edges() != "" and cat != " ":
-		for i in RaceManager.CANDIDATE_COUNT:
+		for i in Constants.CANDIDATE_COUNT:
 			ExhibitFetcher.fetch_random_from_category(cat, {"race": true, "race_role": "candidate"})
 	elif RaceManager.get_difficulty() == "random_category":
-		for i in RaceManager.CANDIDATE_COUNT:
+		for i in Constants.CANDIDATE_COUNT:
 			ExhibitFetcher.fetch_random_category_article({"race": true, "race_role": "candidate"})
 	else:
-		for i in RaceManager.CANDIDATE_COUNT:
+		for i in Constants.CANDIDATE_COUNT:
 			ExhibitFetcher.fetch_random_target({"race": true, "race_role": "candidate"}, RaceManager.get_difficulty())
 
 func _on_vote_cancelled() -> void:
@@ -1060,7 +1072,7 @@ func reroll_vote() -> void:
 	RaceManager.set_vote_timer_paused(true)
 	RaceManager.clear_vote_candidates()
 	RaceManager.set_vote_start_article("")
-	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
+	_race_fetches_pending = Constants.CANDIDATE_COUNT + 1
 	_fetch_race_candidates()
 	_fetch_race_start_article()
 
@@ -1070,8 +1082,6 @@ func _launch_vote() -> void:
 	_debug_log("Main: Launching vote with candidates %s, start '%s'" % [str(candidates), start_article])
 	RaceManager.set_vote_timer_paused(false)
 	RaceManager.begin_vote(candidates.duplicate(), start_article)
-	RaceManager.clear_vote_candidates()
-	RaceManager.set_vote_start_article("")
 	# Tell VoteHUD reroll button it can re-enable
 	var vote_hud := get_node_or_null("TabMenu/VoteHUD")
 	if vote_hud and vote_hud.has_method("on_reroll_ready"):
@@ -1502,9 +1512,6 @@ func _notify_game_started() -> void:
 	# If a race is already active, apply the start article and fire race_started
 	# (RaceManager._sync_race_state_to_peer handles target/start/time separately)
 	if RaceManager.is_race_active():
-		var start_article: String = RaceManager.get_start_article()
-		if start_article != "":
-			UIEvents.emit_set_custom_door(start_article)
 		GameplayEvents.emit_race_started(RaceManager.get_target_article())
 
 @rpc("authority", "call_remote", "reliable")
@@ -1739,41 +1746,26 @@ func _sync_race_start_article(start_article: String) -> void:
 	else:
 		Log.debug("Main", "Wikipedia data received for '%s'" % start_article)
 
-	# Server: generate and broadcast room; Client: wait for server
-	if NetworkManager.is_server():
-		Log.info("Main", "Server generating room for '%s'" % start_article)
-		var target_article: String = RaceManager.get_target_article()
-		Log.info("Main", "Race target set to '%s'" % target_article)
-		_museum.load_exhibit_for_rider("Lobby", start_article)
-	else:
-		Log.debug("Main", "Client waiting for room data from server...")
+	# Load the exhibit (server generates, client waits for server data)
+	_museum.load_exhibit_for_rider("Lobby", start_article)
 
-	# Load the exhibit (will use cached RoomData if available)
-	if _museum.has_method("load_exhibit_for_rider"):
-		Log.debug("Main", "Loading exhibit '%s' before opening door..." % start_article)
-		_museum.load_exhibit_for_rider("Lobby", start_article)
-
-	# Wait for exhibit to generate (up to 0.5 seconds)
+	# Wait briefly for exhibit to start generating, then open door and teleport
 	Log.debug("Main", "Waiting for exhibit to generate (max 0.5s)...")
-	for i in range(10):  # 10 x 0.05s = 0.5 seconds
+	for i in range(10):
 		await get_tree().create_timer(0.05).timeout
 		if _museum.has_exhibit(start_article):
 			Log.debug("Main", "Exhibit generated after %.2fs" % ((i + 1) * 0.05))
 			break
 
-	# Set custom door FIRST (before reset_to_lobby)
+	# Set custom door to the start article (a random article, not the race target)
 	UIEvents.emit_set_custom_door(start_article)
 	Log.debug("Main", "Custom door set to '%s'" % start_article)
-	
-	# THEN reset to lobby (this will show the custom door)
+
 	_museum.reset_to_lobby()
 	Log.debug("Main", "Door opened for '%s' - exhibit ready to walk into!" % start_article)
 
 	# Teleport all players to the start line
 	teleport_all_players_to_start_line(start_article)
-
-	# Start the game (player can now walk through door)
-	_start_game()
 
 func _teleport_all_players_to_article(article: String) -> void:
 	## Teleport all connected players to the specified article
@@ -2280,6 +2272,15 @@ func _on_daily_challenge_closed() -> void:
 	if _player:
 		_player.start()
 
+func _on_victory_continue() -> void:
+	## Only the host/server can trigger the return to lobby.
+	if not NetworkManager.is_server():
+		return
+	if _museum:
+		_museum.reset_to_lobby()
+		_start_game()
+		_teleport_all_players_to_article("Lobby")
+
 func _on_race_won_for_daily_challenge(winner_name: String, final_time: float) -> void:
 	## Fires when any race_won signal is received. If a daily challenge
 	## is active, complete it and pop the results screen.
@@ -2290,6 +2291,12 @@ func _show_system_message(message: String) -> void:
 	"""Display a system message to the player via chat system."""
 	if _chat_system and _chat_system.has_method("_show_system_message"):
 		_chat_system._show_system_message(message)
+
+
+func _show_text_display(text: String) -> void:
+	"""Display plaque text on screen when TTS reads it."""
+	if _prompt_hud and _prompt_hud.has_method("show_text"):
+		_prompt_hud.show_text(text)
 
 
 func _show_error_message(message: String) -> void:

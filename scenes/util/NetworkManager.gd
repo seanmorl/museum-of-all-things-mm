@@ -715,7 +715,7 @@ func _calculate_state_hash() -> String:
 	}
 	return str(state.hash())
 
-@rpc("any_peer", "call_local", "reliable")
+@rpc("any_peer", "call_remote", "reliable")
 func _request_state_hash() -> void:
 	"""Request state hash from a client"""
 	var client_hash = _calculate_state_hash()

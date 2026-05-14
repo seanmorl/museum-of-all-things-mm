@@ -158,7 +158,7 @@ func _ready() -> void:
 				_painting_system.eat_anim_started.connect(func(): _fp_arms.set_eating(true))
 				_painting_system.eat_anim_cancelled.connect(func(): _fp_arms.set_eating(false))
 			if _pointing_system:
-				_pointing_system.reaction_fired.connect(func(): _fp_arms.set_state("point"))
+				_pointing_system.reaction_fired.connect(func(_idx: int, _tgt: Vector3): _fp_arms.set_state("point"))
 
 
 # =============================================================================

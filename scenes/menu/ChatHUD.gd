@@ -132,27 +132,8 @@ func _ready() -> void:
 	_load_typing_sound()
 	add_child(_typing_player)
 
-
-func _load_typing_sound() -> void:
-	"""Load typing sound with proper error handling and fallback"""
-	if not ResourceLoader.exists(TYPING_SOUND_PATH):
-		Log.error("ChatHUD", "Typing sound file not found: %s" % TYPING_SOUND_PATH)
-		return
-	
-	# Use ResourceLoader.load() instead of load() for runtime loading
-	var resource: Resource = ResourceLoader.load(TYPING_SOUND_PATH, "AudioStream", ResourceLoader.CACHE_MODE_REUSE)
-	
-	if resource == null:
-		Log.error("ChatHUD", "Failed to load typing sound: %s" % TYPING_SOUND_PATH)
-		return
-	
-	if resource is AudioStream:
-		_typing_player.stream = resource
-		Log.debug("ChatHUD", "Typing sound loaded successfully")
-	else:
-		Log.error("ChatHUD", "Loaded resource is not an AudioStream: %s" % TYPING_SOUND_PATH)
-
-
+	# Signal connections and settings init — must NOT be inside _load_typing_sound
+	# (that function has early returns that would skip these)
 	MultiplayerEvents.chat_message_received.connect(_on_chat_message_received)
 	MultiplayerEvents.player_joined.connect(_on_player_joined)
 	MultiplayerEvents.player_left.connect(_on_player_left)
@@ -165,6 +146,25 @@ func _load_typing_sound() -> void:
 	_apply_saved_chat_key()
 	_dark_mode_lambda = func(_d): _refresh_theme()
 	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
+
+
+func _load_typing_sound() -> void:
+	"""Load typing sound with proper error handling and fallback"""
+	if not ResourceLoader.exists(TYPING_SOUND_PATH):
+		Log.error("ChatHUD", "Typing sound file not found: %s" % TYPING_SOUND_PATH)
+		return
+	
+	var resource: Resource = ResourceLoader.load(TYPING_SOUND_PATH, "AudioStream", ResourceLoader.CACHE_MODE_REUSE)
+	
+	if resource == null:
+		Log.error("ChatHUD", "Failed to load typing sound: %s" % TYPING_SOUND_PATH)
+		return
+	
+	if resource is AudioStream:
+		_typing_player.stream = resource
+		Log.debug("ChatHUD", "Typing sound loaded successfully")
+	else:
+		Log.error("ChatHUD", "Loaded resource is not an AudioStream: %s" % TYPING_SOUND_PATH)
 
 
 func _on_reading_font_changed(new_font: Font) -> void:

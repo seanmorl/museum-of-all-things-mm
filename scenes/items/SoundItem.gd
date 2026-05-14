@@ -18,6 +18,7 @@ var _interact_queued: bool = false
 var _exhibit_title: String = ""
 
 var _player: AudioStreamPlayer3D = null
+var _audio_tween: Tween = null
 
 var is_playing: bool:
 	get:
@@ -180,7 +181,14 @@ func interact() -> void:
 
 	_play_audio()
 
+func _on_audio_finished() -> void:
+	_is_playing = false
+
 func _play_audio() -> void:
+	# Kill any previous tween to prevent stale finished callbacks from stopping new playback
+	if _audio_tween and _audio_tween.is_valid():
+		_audio_tween.kill()
+		_audio_tween = null
 	# Sync to other players via Main's audio RPC system
 	if _exhibit_title != "" and title != "":
 		var main = _get_main_node()
@@ -191,31 +199,41 @@ func _play_audio() -> void:
 			else:
 				main._request_audio_play_rpc.rpc_id(1, audio_key, _exhibit_title, title)
 	# Play/stop locally
-	var tween = create_tween()
+	_audio_tween = create_tween()
 	if is_playing:
 		_is_playing = false
-		tween.tween_property(_player, "volume_db", -80.0, 1.5).set_trans(Tween.TRANS_SINE)
-		tween.finished.connect(_player.stop)
+		_audio_tween.tween_property(_player, "volume_db", -80.0, 1.5).set_trans(Tween.TRANS_SINE)
+		_audio_tween.finished.connect(_player.stop)
 	else:
 		_is_playing = true
+		if not _player.finished.is_connected(_on_audio_finished):
+			_player.finished.connect(_on_audio_finished)
 		_player.volume_db = -80.0
 		_player.play()
-		tween.tween_property(_player, "volume_db", 0.0, 1.0).set_trans(Tween.TRANS_SINE)
+		_audio_tween.tween_property(_player, "volume_db", 0.0, 1.0).set_trans(Tween.TRANS_SINE)
 
 func sync_play() -> void:
 	if is_stolen or _loading:
 		return
+	if _audio_tween and _audio_tween.is_valid():
+		_audio_tween.kill()
+		_audio_tween = null
 	_is_playing = true
+	if not _player.finished.is_connected(_on_audio_finished):
+		_player.finished.connect(_on_audio_finished)
 	_player.volume_db = -80.0
 	_player.play()
-	var tween = create_tween()
-	tween.tween_property(_player, "volume_db", 0.0, 1.0).set_trans(Tween.TRANS_SINE)
+	_audio_tween = create_tween()
+	_audio_tween.tween_property(_player, "volume_db", 0.0, 1.0).set_trans(Tween.TRANS_SINE)
 
 func sync_stop() -> void:
 	_is_playing = false
-	var tween = create_tween()
-	tween.tween_property(_player, "volume_db", -80.0, 1.5).set_trans(Tween.TRANS_SINE)
-	tween.finished.connect(_player.stop)
+	if _audio_tween and _audio_tween.is_valid():
+		_audio_tween.kill()
+		_audio_tween = null
+	_audio_tween = create_tween()
+	_audio_tween.tween_property(_player, "volume_db", -80.0, 1.5).set_trans(Tween.TRANS_SINE)
+	_audio_tween.finished.connect(_player.stop)
 
 
 func _load_audio_stream(body: PackedByteArray, file_url: String) -> AudioStream:

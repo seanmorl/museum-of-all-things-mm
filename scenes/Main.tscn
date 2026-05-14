@@ -70,6 +70,9 @@ visible = false
 [node name="MultiplayerMenu" parent="MenuLayer" instance=ExtResource("10_mpmenu")]
 visible = false
 
+[node name="VictoryScreen" parent="MenuLayer" instance=ExtResource("13_victory")]
+visible = false
+
 [node name="FpsLabel" type="Label" parent="."]
 unique_name_in_owner = true
 visible = false

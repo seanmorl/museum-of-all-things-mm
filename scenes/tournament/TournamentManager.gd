@@ -344,7 +344,7 @@ func _on_race_ended(winner_peer_id: int, winner_name: String) -> void:
 
 
 func _on_race_cancelled() -> void:
-	## Handle race cancellation - reset round state for retry or continue
+	## Handle race cancellation - reset round state and auto-start next round
 	if not _active or not _round_in_progress:
 		return
 	if not NetworkManager.is_server():
@@ -354,7 +354,11 @@ func _on_race_cancelled() -> void:
 	_round_finish_order.clear()
 	_between_rounds = false
 
-	Log.info("TournamentManager", "Race cancelled - round state reset")
+	Log.info("TournamentManager", "Race cancelled - auto-starting next round")
+	if is_inside_tree():
+		await get_tree().create_timer(2.0).timeout
+	if _active and not _round_in_progress and not _between_rounds:
+		_start_next_round()
 
 
 func _award_round_points(winner_time: float) -> void:
@@ -390,7 +394,7 @@ func _award_round_points(winner_time: float) -> void:
 		# Record finish time. Only the winner has a meaningful time available
 		# (RaceManager tracks first-place finish only). All other finishers
 		# get -1.0 since we don't have per-player timestamps.
-		var finish_time: float = RaceManager.get_final_time() if i == 0 else -1.0
+		var finish_time: float = winner_time if i == 0 else -1.0
 		s.finish_times.append(finish_time)
 		if finish_time > 0 and (s.best_time <= 0 or finish_time < s.best_time):
 			s.best_time = finish_time

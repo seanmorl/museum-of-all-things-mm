@@ -193,9 +193,6 @@ func _refresh(_id: Variant = null) -> void:
 
 # ── Slide animation ───────────────────────────────────────────────────────────
 
-var _panel_orig_y: float = 0.0
-var _panel_y_saved: bool = false
-
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED:
 		if visible:
@@ -203,15 +200,11 @@ func _notification(what: int) -> void:
 
 func _slide_in() -> void:
 	if not _panel: return
-	# Save original Y once so repeated opens don't accumulate
-	if not _panel_y_saved:
-		_panel_orig_y = _panel.position.y
-		_panel_y_saved = true
 	_panel.modulate.a  = 0.0
-	_panel.position.y  = _panel_orig_y - 10.0
+	_panel.offset_top  = 26
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_panel, "modulate:a", 1.0, 0.25) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_panel, "position:y", _panel_orig_y, 0.28) \
+	tw.tween_property(_panel, "offset_top", 16, 0.28) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 

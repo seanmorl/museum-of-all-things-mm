@@ -166,7 +166,7 @@ func pin_item(exhibit_title: String, item_type: String, item_data: Dictionary) -
 	if item_type == "image":
 		pinned["url"] = item_data.get("url", "")
 	elif item_type == "text":
-		pinned["excerpt"] = item_data.get("excerpt", "").substr(0, 300)
+		pinned["excerpt"] = item_data.get("excerpt", "").left(300)
 	_entries[idx].pinned_items.append(pinned)
 	if _entries[idx].pinned_items.size() > 20:
 		_entries[idx].pinned_items = _entries[idx].pinned_items.slice(-20)
@@ -455,7 +455,7 @@ func _migrate_from_settings() -> void:
 	if not data is Dictionary or not data.has("entries"):
 		return
 	_entries.clear()
-	for e: Variant in data.entries:
+	for e: Variant in data.get("entries", []):
 		if not e is Dictionary:
 			continue
 		_normalise_entry(e)
