@@ -1,14 +1,12 @@
 class_name NoRunningEvent
-extends RefCounted
+extends EventBase
 ## No Running - Dash/sprint disabled for 45-90 seconds
 
 static func apply() -> void:
-	# Set global flag to disable dashing
 	RaceManager.set_dash_enabled(false)
 	Log.info("NoRunningEvent", "Applied: Dash disabled")
 
 static func end() -> void:
-	# Re-enable dashing
 	RaceManager.set_dash_enabled(true)
 	Log.info("NoRunningEvent", "Dash re-enabled")
 

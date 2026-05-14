@@ -385,6 +385,16 @@ func set_contrast(value: float) -> void:
 ## ── Accessibility: reduce motion ─────────────────────────────────────────────
 func set_reduce_motion(enabled: bool) -> void:
 	reduce_motion = enabled
+	var acc: Dictionary = {}
+	var settings: Variant = SettingsManager.get_settings("accessibility")
+	if settings is Dictionary:
+		acc = settings
+	acc["reduce_motion"] = enabled
+	SettingsManager.save_settings("accessibility", acc)
+	if enabled:
+		Engine.time_scale = 0.5
+	else:
+		Engine.time_scale = 1.0
 
 ## ── VoxelGI Settings ─────────────────────────────────────────────────────────
 func set_voxelgi_enabled(enabled: bool) -> void:
@@ -590,6 +600,10 @@ func _apply_settings(s: Dictionary, default: Dictionary = {}) -> void:
 	set_volumetric_fog_density(s.get("volumetric_fog_density", default.get("volumetric_fog_density", 0.003)))
 	set_volumetric_fog_anisotropy(s.get("volumetric_fog_anisotropy", default.get("volumetric_fog_anisotropy", 0.6)))
 
+	# Particle Effects
+	particles_enabled = s.get("particles_enabled", default.get("particles_enabled", true))
+	particles_intensity = s.get("particles_intensity", default.get("particles_intensity", 1.0))
+
 	var mode: int = s.get("scale_mode", default.get("scale_mode", 0))
 	set_scale_mode(mode)
 	if mode > 0:
@@ -674,6 +688,9 @@ func _create_settings_obj() -> Dictionary:
 		"volumetric_fog_enabled": volumetric_fog_enabled,
 		"volumetric_fog_density": volumetric_fog_density,
 		"volumetric_fog_anisotropy": volumetric_fog_anisotropy,
+		# Particle Effects
+		"particles_enabled": particles_enabled,
+		"particles_intensity": particles_intensity,
 	}
 
 func restore_default_settings() -> void:
@@ -754,3 +771,31 @@ func _toggle_managed_light(light: Light3D, enable: bool) -> void:
 		light.visible = enable
 		light.light_energy = light_energy
 	)
+
+
+func set_color_blind_mode(mode: int) -> void:
+	var acc: Dictionary = {}
+	var settings: Variant = SettingsManager.get_settings("accessibility")
+	if settings is Dictionary:
+		acc = settings
+	acc["color_blind_mode"] = mode
+	SettingsManager.save_settings("accessibility", acc)
+	_apply_color_blind_mode(mode)
+
+
+func _apply_color_blind_mode(mode: int) -> void:
+	pass
+
+
+func set_particles_disabled(enabled: bool) -> void:
+	var acc: Dictionary = {}
+	var settings: Variant = SettingsManager.get_settings("accessibility")
+	if settings is Dictionary:
+		acc = settings
+	acc["disable_particles"] = enabled
+	SettingsManager.save_settings("accessibility", acc)
+	_apply_particles_disabled(enabled)
+
+
+func _apply_particles_disabled(enabled: bool) -> void:
+	get_tree().call_group("particles", "visible", not enabled)

@@ -6,6 +6,7 @@ class_name JournalOverlay
 ## Fully dark-mode aware via ThemeManager.
 
 signal closed
+signal opened
 
 # ── Colour tokens ─────────────────────────────────────────────────────────────
 # Resolved at runtime from ThemeManager so dark mode works correctly.
@@ -405,6 +406,7 @@ func open() -> void:
 		_clear_detail()
 	_search_field.grab_focus()
 	_animate_in()
+	opened.emit()
 
 
 func close() -> void:

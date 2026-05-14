@@ -47,20 +47,20 @@ var _race_status_hud: Control = null
 
 # Hint system cooldown
 var _last_hint_time: float = 0.0
-const HINT_COOLDOWN_SECONDS: float = 3.0
 var _hint_backlinks: Array[String] = []
 var _hints_revealed: int = 0
 
-# â”€â”€ Tournament nodes (created in _ready) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-var _tournament_setup_menu:    Control = null
-var _tournament_hud:           Control = null
-var _tournament_bracket_hud:   Control = null
-var _tournament_victory_screen: Control = null
+# Tournament nodes (managed by TournamentManager)
+var _tournament_setup_menu:    Control = null  # Kept for legacy reference
+var _tournament_hud:           Control = null  # Kept for legacy reference
+var _tournament_bracket_hud:   Control = null  # Kept for legacy reference
+var _tournament_victory_screen: Control = null  # Kept for legacy reference
 @onready var _trivia_overlay: TriviaOverlay = %TriviaOverlay
 @onready var _guestbook_overlay: GuestbookOverlay = %GuestbookOverlay
 @onready var _prompt_hud: Control = %PromptHUD
 @onready var _menu_layer: CanvasLayer = %MenuLayer
 @onready var _fps_label: Label = %FpsLabel
+var _low_fps_count: int = 0
 @onready var _museum: Node3D = %Museum
 @onready var _game_launch_sting: AudioStreamPlayer = %GameLaunchSting
 @onready var _crt_post_processing: CanvasLayer = %CRTPostProcessing
@@ -76,10 +76,8 @@ var _is_ui_dedicated_host: bool = false
 var _race_controller_peer_id: int = 1
 
 ## Daily Challenge
-var _daily_challenge_manager: Node = null
-var _daily_challenge_hud: Node = null
+var _daily_challenge_manager: DailyChallengeManager = null
 var _daily_challenge_card: Node = null
-var _daily_challenge_leaderboard: Node = null
 var _daily_challenge_board: Node = null
 var _daily_challenge_card_layer: CanvasLayer = null
 ## Spectator
@@ -114,9 +112,9 @@ func _parse_command_line() -> void:
 					MultiplayerMenu.default_server_address = args[i + 1]
 
 func _ready() -> void:
-	# Initialize core services FIRST (before any other initialization)
-	# Note: Services and EventBus are autoloads, accessed globally
-	Services.initialize()
+	# Archived Services are deprecated (use autoloads directly)
+	# Services.initialize() is intentionally NOT called here
+	# Archive services are only kept for backward compat if any external code uses them
 	
 	# Restore UI scale from settings before anything else renders
 	var ui_saved = SettingsManager.get_settings("ui")
@@ -133,25 +131,7 @@ func _ready() -> void:
 		ThemeManager.reading_font_changed.connect(_reading_font_lambda)
 
 func _initialize_room_service() -> void:
-	"""Initialize RoomService with museum references (called after @onready vars are set)."""
-	if Services.room_service and _museum:
-		var exhibit_loader = _museum.get_node_or_null("ExhibitLoader")
-		if exhibit_loader:
-			Services.room_service.initialize(_museum, exhibit_loader)
-			print("Main: RoomService initialized with museum and exhibit loader")
-
-	# Initialize exhibit service
-	if Services.exhibit_service and _museum:
-		var exhibit_loader = _museum.get_node_or_null("ExhibitLoader")
-		if exhibit_loader:
-			Services.exhibit_service.initialize(_museum, exhibit_loader)
-			print("Main: ExhibitService initialized")
-
-	# Also initialize network service
-	if Services.network_service:
-		Services.network_service.initialize()
-		print("Main: NetworkService initialized")
-
+	"""Initialize subsystems after @onready vars are set."""
 	# Initialize subsystems first
 	_menu_controller = MainMenuController.new()
 	_menu_controller.init(self, _menu_layer)
@@ -181,9 +161,10 @@ func _initialize_room_service() -> void:
 					if _daily_challenge_card and _daily_challenge_card.has_method("animate_out"):
 						_daily_challenge_card.animate_out())
 	# Quit goes through UIEvents â€” animate card out alongside menu transition
-	UIEvents.quit_requested.connect(func():
+	_quit_lambda = func():
 		if _daily_challenge_card and _daily_challenge_card.has_method("animate_out"):
-			_daily_challenge_card.animate_out())
+			_daily_challenge_card.animate_out()
+	UIEvents.quit_requested.connect(_quit_lambda)
 	
 	# Connect Settings resume signal to show MainMenu.
 	# Guard with is_connected â€” the scene inspector may already wire this.
@@ -218,8 +199,8 @@ func _initialize_room_service() -> void:
 	add_child(_chat_hud)
 	_chat_hud.init(_chat_system)
 
-	# â”€â”€ Tournament mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-	_spawn_tournament_nodes()
+	# ── Tournament mode ─────────────────────────────────────────────────────────────
+	TournamentManager.initialize_ui(self)
 
 	_trivia_manager = TriviaManager.new()
 	_trivia_manager.name = "TriviaManager"
@@ -237,26 +218,7 @@ func _initialize_room_service() -> void:
 	_daily_challenge_manager = load("res://scenes/autoload/DailyChallengeManager.gd").new()
 	_daily_challenge_manager.name = "DailyChallengeManager"
 	add_child(_daily_challenge_manager)
-
-	_daily_challenge_hud = load("res://scenes/ui/DailyChallengeHUD.gd").new()
-	_daily_challenge_hud.name = "DailyChallengeHUD"
-	_daily_challenge_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	# Own CanvasLayer so visibility is independent of _menu_layer
-	var hud_layer := CanvasLayer.new()
-	hud_layer.name = "DailyChallengeHUDLayer"
-	hud_layer.layer = 20  # above game HUDs, below debug overlay
-	add_child(hud_layer)
-	hud_layer.add_child(_daily_challenge_hud)
-	# Leaderboard must be created first so we can pass it into the HUD
-	_daily_challenge_leaderboard = load("res://scenes/ui/DailyChallengeLeaderboard.gd").new()
-	_daily_challenge_leaderboard.name = "DailyChallengeLeaderboard"
-	add_child(_daily_challenge_leaderboard)
-	_daily_challenge_hud.init(_daily_challenge_manager, _daily_challenge_leaderboard)
-	_daily_challenge_hud.challenge_started.connect(_on_daily_challenge_started)
-	_daily_challenge_hud.challenge_closed.connect(_on_daily_challenge_closed)
-	# Submit score when challenge completes
-	if _daily_challenge_manager.has_signal("challenge_completed"):
-		_daily_challenge_manager.challenge_completed.connect(_on_challenge_completed_for_leaderboard)
+	_daily_challenge_manager.initialize_ui(self)
 
 	# Lobby card — member-var CanvasLayer so it stays alive after _ready() returns
 	# Spectator
@@ -267,31 +229,8 @@ func _initialize_room_service() -> void:
 
 	_parse_command_line()
 
-	# Register trivia keybind (K) at runtime
-	if not InputMap.has_action("toggle_trivia"):
-		InputMap.add_action("toggle_trivia")
-		var ev_t := InputEventKey.new()
-		ev_t.physical_keycode = KEY_K
-		InputMap.action_add_event("toggle_trivia", ev_t)
-
-	# Register daily challenge keybind (G)
-	if not InputMap.has_action("open_daily_challenge"):
-		InputMap.add_action("open_daily_challenge")
-		var ev_d := InputEventKey.new()
-		ev_d.physical_keycode = KEY_G
-		InputMap.action_add_event("open_daily_challenge", ev_d)
-
-	# Register host menu keybind (F1 and H)
-	if not InputMap.has_action("toggle_host_menu"):
-		InputMap.add_action("toggle_host_menu")
-		var ev_f1 := InputEventKey.new()
-		ev_f1.physical_keycode = KEY_F1
-		InputMap.action_add_event("toggle_host_menu", ev_f1)
-		
-		# Also bind H for convenience
-		var ev_h := InputEventKey.new()
-		ev_h.physical_keycode = KEY_H
-		InputMap.action_add_event("toggle_host_menu", ev_h)
+# Register all runtime input keybinds via InputManager
+	InputManager.register_all()
 
 	# Initialize host menu (multiplayer only)
 	_host_menu = load("res://scenes/menu/HostMenu.gd").new()
@@ -299,40 +238,6 @@ func _initialize_room_service() -> void:
 	add_child(_host_menu)
 	_host_menu.init(self)
 
-	# Register spectator keybind (F) â€” multiplayer only
-	if not InputMap.has_action("toggle_spectator"):
-		InputMap.add_action("toggle_spectator")
-		var ev_s := InputEventKey.new()
-		ev_s.physical_keycode = KEY_F
-		InputMap.action_add_event("toggle_spectator", ev_s)
-	
-	# Register UI scale keyboard shortcuts (Ctrl+= zoom in, Ctrl+- zoom out, Ctrl+0 reset)
-	for action_name in ["ui_scale_in", "ui_scale_out", "ui_scale_reset"]:
-		if not InputMap.has_action(action_name):
-			InputMap.add_action(action_name)
-	var _ev_in := InputEventKey.new()
-	_ev_in.physical_keycode = KEY_EQUAL; _ev_in.ctrl_pressed = true
-	InputMap.action_add_event("ui_scale_in", _ev_in)
-	var _ev_in2 := InputEventKey.new()
-	_ev_in2.physical_keycode = KEY_KP_ADD; _ev_in2.ctrl_pressed = true
-	InputMap.action_add_event("ui_scale_in", _ev_in2)
-	var _ev_out := InputEventKey.new()
-	_ev_out.physical_keycode = KEY_MINUS; _ev_out.ctrl_pressed = true
-	InputMap.action_add_event("ui_scale_out", _ev_out)
-	var _ev_out2 := InputEventKey.new()
-	_ev_out2.physical_keycode = KEY_KP_SUBTRACT; _ev_out2.ctrl_pressed = true
-	InputMap.action_add_event("ui_scale_out", _ev_out2)
-	var _ev_reset := InputEventKey.new()
-	_ev_reset.physical_keycode = KEY_0; _ev_reset.ctrl_pressed = true
-	InputMap.action_add_event("ui_scale_reset", _ev_reset)
-
-	# Register screenshot keybind (F12)
-	if not InputMap.has_action("take_screenshot"):
-		InputMap.add_action("take_screenshot")
-		var ev_ss := InputEventKey.new()
-		ev_ss.physical_keycode = KEY_F12
-		InputMap.action_add_event("take_screenshot", ev_ss)
-	
 	if _multiplayer_controller.is_server_mode():
 		_start_dedicated_server()
 		return
@@ -342,10 +247,11 @@ func _initialize_room_service() -> void:
 	
 	_recreate_player()
 	
-	# Minimap — MinimapController cycles OFF → Compass → Graph
+	# Minimap — simple toggle OFF → MINIMAP → OFF
 	_minimap_controller = load("res://scenes/ui/MinimapController.gd").new()
 	_minimap_controller.name = "MinimapController"
 	add_child(_minimap_controller)
+	_minimap_controller.init(_player)
 	
 	# Race Status HUD — bottom-left, R key toggles during a race
 	# (Tab is already used for the player-list hold overlay)
@@ -372,6 +278,17 @@ func _initialize_room_service() -> void:
 	MultiplayerEvents.skin_reset.connect(_on_skin_reset)
 	UIEvents.open_terminal_menu.connect(_use_terminal)
 	UIEvents.quit_requested.connect(_on_quit_requested)
+
+	# Player system events (decoupled from Main refs)
+	GameplayEvents.mount_requested.connect(_request_mount)
+	GameplayEvents.dismount_requested.connect(_request_dismount)
+	GameplayEvents.steal_painting_requested.connect(_request_steal_painting)
+	GameplayEvents.place_painting_requested.connect(_request_place_painting)
+	GameplayEvents.eat_painting_requested.connect(_request_eat_painting)
+	GameplayEvents.eat_anim_started.connect(_broadcast_eat_anim_start)
+	GameplayEvents.eat_anim_cancelled.connect(_broadcast_eat_anim_cancel)
+	GameplayEvents.local_reaction.connect(_on_local_reaction)
+	GameplayEvents.error_message_requested.connect(_show_error_message)
 	
 	# Race signals
 	add_to_group("main")
@@ -388,6 +305,23 @@ func _initialize_room_service() -> void:
 	# Journal
 	if _journal_overlay:
 		_journal_overlay.closed.connect(_on_journal_closed)
+		_journal_overlay.opened.connect(_on_journal_opened)
+		OverlayStateManager.register_dynamic_overlay(_journal_overlay)
+
+	# Trivia overlay
+	if _trivia_overlay:
+		_trivia_overlay.trivia_opened.connect(_on_trivia_opened)
+		OverlayStateManager.register_dynamic_overlay(_trivia_overlay)
+
+	# Daily challenge HUD (if available)
+	if _daily_challenge_manager:
+		var hud := _daily_challenge_manager.get_hud()
+		if hud:
+			OverlayStateManager.register_dynamic_overlay(hud)
+
+	# Guestbook overlay
+	if _guestbook_overlay:
+		OverlayStateManager.register_dynamic_overlay(_guestbook_overlay)
 	
 	# Load saved skin
 	_load_saved_skin()
@@ -482,8 +416,9 @@ func _start_game() -> void:
 	_player.start()
 	_menu_controller.close_menus()
 	# Hide daily challenge HUD and card when entering museum normally (not via challenge)
-	if _daily_challenge_hud and _daily_challenge_hud.has_method("hide_all"):
-		_daily_challenge_hud.hide_all()
+	var hud := _daily_challenge_manager.get_hud()
+	if hud and hud.has_method("hide_all"):
+		hud.hide_all()
 	if _daily_challenge_card and _daily_challenge_card.has_method("_hide_card"):
 		_daily_challenge_card._hide_card()
 	if _daily_challenge_card_layer:
@@ -495,9 +430,12 @@ func _start_game() -> void:
 		# Spawn the physical noticeboard in the lobby
 		_spawn_daily_challenge_board()
 	# Re-init lobby card for solo play only â€” never show in multiplayer
+	var dcm := _daily_challenge_manager
+	var daily_challenge_hud := dcm.get_hud()
+	var lb := dcm.get_leaderboard()
 	if _daily_challenge_card and _daily_challenge_card.has_method("init"):
 		if not _multiplayer_controller.is_multiplayer_game():
-			_daily_challenge_card.init(_daily_challenge_manager, _daily_challenge_hud, _player, _daily_challenge_leaderboard, _start_game, _menu_layer)
+			_daily_challenge_card.init(dcm, daily_challenge_hud, _player, lb, _start_game, _menu_layer)
 		else:
 			_daily_challenge_card.set_multiplayer_mode(true)
 
@@ -576,21 +514,41 @@ func _start_ui_dedicated_host() -> void:
 	
 	# Signals are already connected in _ready() â€” no reconnection needed
 	
-	var error: Error = NetworkManager.host_game(_multiplayer_controller.get_server_port(), true)
-	if error != OK:
-		Log.error("Main", "Dedicated host failed: %s" % str(error))
-		_is_ui_dedicated_host = false
-		return
-	
-	game_started = true
-	_museum.init(null)
-	
-	# Update main menu to show hosting status + stop button
 	var main_menu_node := _menu_layer.get_node_or_null("MainMenu")
+
+	# Show immediate feedback before server starts
+	var loading_lbl: Label = null
 	if main_menu_node:
 		var quit_node = main_menu_node.get_node_or_null("%Quit")
 		if quit_node:
 			var container := quit_node.get_parent()
+			loading_lbl = Label.new()
+			loading_lbl.name = "HostStatusLabel"
+			loading_lbl.text = "Starting server..."
+			loading_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			loading_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+			loading_lbl.add_theme_font_size_override("font_size", 14)
+			container.add_child(loading_lbl)
+
+	var error: Error = NetworkManager.host_game(_multiplayer_controller.get_server_port(), true)
+	if error != OK:
+		Log.error("Main", "Dedicated host failed: %s" % str(error))
+		_is_ui_dedicated_host = false
+		if loading_lbl:
+			loading_lbl.queue_free()
+		return
+
+	game_started = true
+	_museum.init(null)
+
+	if main_menu_node:
+		var quit_node = main_menu_node.get_node_or_null("%Quit")
+		if quit_node:
+			var container := quit_node.get_parent()
+			
+			# Remove loading indicator now that server has started
+			if loading_lbl:
+				loading_lbl.queue_free()
 			
 			# Show server address for host to share
 			var server_addr := NetworkManager.get_server_address()
@@ -740,11 +698,12 @@ func _input(event: InputEvent) -> void:
 						UIEvents.emit_open_trivia(_player.current_room)
 
 			if event.is_action_pressed("open_daily_challenge"):
-				if _daily_challenge_hud:
-					if _daily_challenge_hud.is_open():
-						_daily_challenge_hud.close()
+				var hud := _daily_challenge_manager.get_hud()
+				if hud:
+					if _daily_challenge_manager.hud_is_open():
+						_daily_challenge_manager.hud_close()
 					else:
-						_daily_challenge_hud.open()
+						_daily_challenge_manager.hud_open()
 						Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 						_player.pause()
 
@@ -756,18 +715,14 @@ func _input(event: InputEvent) -> void:
 						_spectator_controller.enter_spectator_mode(_player)
 
 			if event.is_action_pressed("toggle_host_menu"):
-				# Don't open host menu if journal or other overlays are open
-				var overlay_open: bool = (_journal_overlay and _journal_overlay.is_open()) or \
-					(_guestbook_overlay and _guestbook_overlay.is_open()) or \
-					(_trivia_overlay and _trivia_overlay.is_open())
-				if _host_menu and NetworkManager.is_server() and not overlay_open:
+				if _host_menu and NetworkManager.is_server() and not OverlayStateManager.is_any_blocking():
 					_host_menu.toggle()
 
 			# Host hint keybind (I key) - only works during active race
 			if event.is_action_pressed("host_hint"):
 				if NetworkManager.is_server() and RaceManager.is_race_active():
 					var now := Time.get_unix_time_from_system()
-					if now - _last_hint_time >= HINT_COOLDOWN_SECONDS:
+					if now - _last_hint_time >= Constants.HINT_COOLDOWN_SECONDS:
 						_reveal_host_hint()
 						_last_hint_time = now
 					get_viewport().set_input_as_handled()
@@ -791,11 +746,9 @@ func _input(event: InputEvent) -> void:
 
 		if event.is_action_pressed("click") and not _menu_layer.visible:
 			if Input.get_mouse_mode() == Input.MOUSE_MODE_VISIBLE:
-				# Check if any UI overlay is open (including VoteHUD)
 				var vote_hud := get_node_or_null("TabMenu/VoteHUD")
 				var vote_open: bool = vote_hud != null and vote_hud.visible
-				var overlay_open: bool = (_journal_overlay and _journal_overlay.is_open()) or (_guestbook_overlay and _guestbook_overlay.is_open()) or (_trivia_overlay and _trivia_overlay.is_open()) or vote_open or console_open
-				if not overlay_open:
+				if not OverlayStateManager.is_any_blocking() and not vote_open and not console_open:
 					Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 		
 		# Tab key for player list overlay
@@ -810,7 +763,14 @@ func _process(delta: float) -> void:
 		_fps_update_timer -= delta
 		if _fps_update_timer <= 0.0:
 			_fps_update_timer = 0.5
-			_fps_label.text = str(Engine.get_frames_per_second())
+			var fps: int = Engine.get_frames_per_second()
+			_fps_label.text = str(fps)
+			if fps < 45:
+				_low_fps_count += 1
+				if _low_fps_count >= 10:
+					Log.warn("Main", "Low FPS detected: %d fps for %d consecutive samples" % [fps, _low_fps_count])
+			else:
+				_low_fps_count = 0
 
 	# Guard: _multiplayer_controller might not be initialized yet
 	if not _multiplayer_controller:
@@ -952,8 +912,8 @@ func _on_start_race_pressed() -> void:
 	
 	if not NetworkManager.is_multiplayer_active() or NetworkManager.is_server():
 		_debug_log("Main: Fetching random articles for race vote...")
-		_race_candidates.clear()
-		_race_start_article = ""
+		RaceManager.clear_vote_candidates()
+		RaceManager.set_vote_start_article("")
 		_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1  # +1 start
 		_show_vote_loading()
 		_fetch_race_candidates()
@@ -975,16 +935,14 @@ func _request_race_start() -> void:
 	_menu_controller.close_menus()
 	
 	_debug_log("Main: Race start requested by peer, fetching random articles for vote...")
-	_race_candidates.clear()
-	_race_start_article = ""
+	RaceManager.clear_vote_candidates()
+	RaceManager.set_vote_start_article("")
 	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
 	_show_vote_loading()
 	_fetch_race_candidates()
 	_fetch_race_start_article()
 
-## Collects random articles for the vote pool. Winner = race target.
-var _race_candidates: Array = []
-var _race_start_article: String = ""  ## random article â€” where the lobby door opens
+## Fetch state for race voting
 var _race_fetches_pending: int = 0
 var _race_retry_count: int = 0
 const MAX_RACE_RETRIES: int = 10
@@ -995,12 +953,12 @@ func _on_random_article_complete(title: Variant, context: Variant) -> void:
 	if title == null or title == " ":
 		_race_retry_count += 1
 		if _race_retry_count > MAX_RACE_RETRIES:
-			Log.error("Main", "Too many fetch failures â€” giving up and launching with what we have")
+			Log.error("Main", "Too many fetch failures — giving up and launching with what we have")
 			_race_retry_count = 0
-			if _race_candidates.size() > 0:
+			if RaceManager.get_vote_candidates().size() > 0:
 				_launch_vote()
 			return
-		Log.error("Main", "Failed to fetch random article for race â€” retrying (%d/%d)" % [_race_retry_count, MAX_RACE_RETRIES])
+		Log.error("Main", "Failed to fetch random article for race — retrying (%d/%d)" % [_race_retry_count, MAX_RACE_RETRIES])
 		var role: String = context.get("race_role", "candidate")
 		if role == "start":
 			_fetch_race_start_article()
@@ -1011,21 +969,21 @@ func _on_random_article_complete(title: Variant, context: Variant) -> void:
 	_race_retry_count = 0
 	var role: String = context.get("race_role", "candidate")
 	if role == "candidate":
-		# Deduplicate
-		if title in _race_candidates:
-			_debug_log("Main: Duplicate candidate '%s' â€” retrying" % title)
+		# Deduplicate against RaceManager
+		if title in RaceManager.get_vote_candidates():
+			_debug_log("Main: Duplicate candidate '%s' — retrying" % title)
 			_fetch_one_candidate()
 			return
-		_race_candidates.append(title)
+		RaceManager.add_candidate(title)
 		_race_fetches_pending -= 1
 		_debug_log("Main: Got candidate '%s' (%d remaining)" % [title, _race_fetches_pending])
-		if _race_fetches_pending <= 0 and _race_start_article != " ":
+		if _race_fetches_pending <= 0 and RaceManager.get_vote_start_article() != " ":
 			_launch_vote()
 	elif role == "start":
-		_race_start_article = title
+		RaceManager.set_vote_start_article(title)
 		_race_fetches_pending -= 1
 		_debug_log("Main: Got start article '%s'" % title)
-		if _race_fetches_pending <= 0 and _race_candidates.size() >= RaceManager.CANDIDATE_COUNT:
+		if _race_fetches_pending <= 0 and RaceManager.get_vote_candidates().size() >= RaceManager.CANDIDATE_COUNT:
 			_launch_vote()
 
 func _fetch_one_candidate() -> void:
@@ -1058,66 +1016,14 @@ func _fetch_race_candidates() -> void:
 			ExhibitFetcher.fetch_random_target({"race": true, "race_role": "candidate"}, RaceManager.get_difficulty())
 
 func _on_vote_cancelled() -> void:
-	## Host cancelled the vote â€” clear pending fetch state and return all players to pause menu.
-	_race_candidates.clear()
-	_race_start_article = ""
+	## Host cancelled the vote — clear pending fetch state and return all players to pause menu.
+	RaceManager.clear_vote_candidates()
+	RaceManager.set_vote_start_article("")
 	_race_fetches_pending = 0
 	_pause_game()
 
 func _spawn_tournament_nodes() -> void:
-	## Creates and wires all tournament UI nodes. Called once from _ready.
-	## Nodes live on a dedicated CanvasLayer (layer 95) â€” above the game HUDs
-	## but below LoadingScreen (100) and RaceCountdown (110).
-	var t_layer := CanvasLayer.new()
-	t_layer.name   = "TournamentLayer"
-	t_layer.layer  = 95
-	add_child(t_layer)
-
-	# Tournament HUD â€" live standings panel, always visible during a tournament
-	var t_hud_script := load("res://scenes/tournament/TournamentHUD.gd")
-	if t_hud_script:
-		_tournament_hud = Control.new()
-		_tournament_hud.set_script(t_hud_script)
-		_tournament_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		_tournament_hud.name = "TournamentHUD"
-		t_layer.add_child(_tournament_hud)
-
-	# Tournament Bracket HUD â€" visual bracket showing per-round results (Tab to toggle)
-	var t_bracket_script := load("res://scenes/tournament/TournamentBracketHUD.gd")
-	if t_bracket_script:
-		_tournament_bracket_hud = Control.new()
-		_tournament_bracket_hud.set_script(t_bracket_script)
-		_tournament_bracket_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		_tournament_bracket_hud.name = "TournamentBracketHUD"
-		t_layer.add_child(_tournament_bracket_hud)
-		# Wire bracket reference into standings HUD for Tab toggle
-		if _tournament_hud and _tournament_hud.has_method("set_bracket_hud"):
-			_tournament_hud.set_bracket_hud(_tournament_bracket_hud)
-
-	# Tournament Victory Screen â€” champion announcement
-	var t_vic_script := load("res://scenes/tournament/TournamentVictoryScreen.gd")
-	if t_vic_script:
-		_tournament_victory_screen = Control.new()
-		_tournament_victory_screen.set_script(t_vic_script)
-		_tournament_victory_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		_tournament_victory_screen.name = "TournamentVictoryScreen"
-		t_layer.add_child(_tournament_victory_screen)
-
-	# Tournament Setup Menu â€” host-only config panel, shown from MultiplayerMenu
-	var t_setup_script := load("res://scenes/tournament/TournamentSetupMenu.gd")
-	if t_setup_script:
-		_tournament_setup_menu = Control.new()
-		_tournament_setup_menu.set_script(t_setup_script)
-		_tournament_setup_menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		_tournament_setup_menu.name = "TournamentSetupMenu"
-		_tournament_setup_menu.visible = false
-		t_layer.add_child(_tournament_setup_menu)
-		# Wire setup menu signals
-		if _tournament_setup_menu.has_signal("tournament_started"):
-			_tournament_setup_menu.tournament_started.connect(func():
-				# Kick off the first round immediately after setup closes
-				pass  # TournamentManager.host_start_tournament already calls _start_next_round
-			)
+	pass  # Tournament UI now initialized via TournamentManager.initialize_ui()
 
 	# Wire TournamentManager â†’ MultiplayerMenu so the lobby can show setup
 	var mp_menu := _menu_layer.get_node_or_null("MultiplayerMenu")
@@ -1137,8 +1043,9 @@ func _on_open_tournament_setup() -> void:
 	## Called when the host presses "Tournament Mode" in the MultiplayerMenu lobby.
 	if not NetworkManager.is_server():
 		return
-	if _tournament_setup_menu:
-		_tournament_setup_menu.open()
+	var setup: Variant = TournamentManager.get_tournament_setup_menu()
+	if setup:
+		setup.open()
 
 
 func _show_vote_loading() -> void:
@@ -1151,18 +1058,20 @@ func reroll_vote() -> void:
 	if not NetworkManager.is_server():
 		return
 	RaceManager.set_vote_timer_paused(true)
-	_race_candidates.clear()
-	_race_start_article = ""
+	RaceManager.clear_vote_candidates()
+	RaceManager.set_vote_start_article("")
 	_race_fetches_pending = RaceManager.CANDIDATE_COUNT + 1
 	_fetch_race_candidates()
 	_fetch_race_start_article()
 
 func _launch_vote() -> void:
-	_debug_log("Main: Launching vote with candidates %s, start '%s'" % [str(_race_candidates), _race_start_article])
+	var candidates: Array = RaceManager.get_vote_candidates()
+	var start_article: String = RaceManager.get_vote_start_article()
+	_debug_log("Main: Launching vote with candidates %s, start '%s'" % [str(candidates), start_article])
 	RaceManager.set_vote_timer_paused(false)
-	RaceManager.begin_vote(_race_candidates.duplicate(), _race_start_article)
-	_race_candidates.clear()
-	_race_start_article = ""
+	RaceManager.begin_vote(candidates.duplicate(), start_article)
+	RaceManager.clear_vote_candidates()
+	RaceManager.set_vote_start_article("")
 	# Tell VoteHUD reroll button it can re-enable
 	var vote_hud := get_node_or_null("TabMenu/VoteHUD")
 	if vote_hud and vote_hud.has_method("on_reroll_ready"):
@@ -1352,7 +1261,7 @@ func _on_network_peer_connected(peer_id: int) -> void:
 	if NetworkManager.peer:
 		var enet_peer := NetworkManager.peer.get_peer(peer_id)
 		if enet_peer:
-			enet_peer.set_timeout(32, 20000, 60000)
+			enet_peer.set_timeout(5000, 20000, 60000)
 	
 	Log.debug("Main", "_on_network_peer_connected - peer_id=%d, game_started=%s, is_multiplayer_game=%s" % [
 		peer_id, str(game_started), str(_multiplayer_controller != null and _multiplayer_controller.is_multiplayer_game())
@@ -1389,6 +1298,12 @@ func _on_network_peer_connected(peer_id: int) -> void:
 		var mount_state: Dictionary = _mount_controller.get_mount_state()
 		if not mount_state.is_empty():
 			_sync_mount_state_to_peer.rpc_id(peer_id, mount_state)
+
+		# Sync active events to late joiner
+		if EventManager:
+			var event_state: Array = EventManager.get_active_events_state()
+			if not event_state.is_empty():
+				EventManager._sync_events_to_peer.rpc_id(peer_id, event_state)
 
 		# Sync current exhibit to late joiner so they see other players
 		if _museum and _museum.has_method("get_current_exhibit"):
@@ -1499,6 +1414,11 @@ func check_audio_stolen(exhibit_title: String, audio_title: String) -> bool:
 func _request_eat_painting(exhibit_title: String, image_title: String) -> void:
 	_painting_controller.request_eat(exhibit_title, image_title, _player)
 
+func _on_journal_opened() -> void:
+	_player.pause()
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+
 func _on_journal_closed() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	_player.start()
@@ -1510,6 +1430,11 @@ func _on_open_trivia(exhibit_title: String) -> void:
 		_player.pause()
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 		_trivia_overlay.open(exhibit_title)
+
+func _on_trivia_opened() -> void:
+	_player.pause()
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
 
 func _on_trivia_closed() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
@@ -1587,7 +1512,7 @@ func _sync_exhibit_to_peer(exhibit_title: String) -> void:
 	_debug_log("Main: Syncing exhibit to late joiner: " + exhibit_title)
 	_museum.sync_to_exhibit(exhibit_title)
 
-@rpc("any_peer", "call_remote", "unreliable_ordered")
+@rpc("any_peer", "call_remote", "reliable")
 func _sync_player_position(peer_id: int, pos: Vector3, rot_y: float, pivot_rot_x: float, pivot_pos_y: float = 1.35, is_mounted: bool = false, mounted_peer_id: int = -1, current_room: String = "Lobby", pointing: bool = false, pt_target: Vector3 = Vector3.ZERO) -> void:
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id != peer_id:
@@ -1689,12 +1614,16 @@ func _execute_place_audio_sync(peer_id: int, exhibit_title: String, audio_title:
 func _request_audio_play_rpc(audio_key: String, exhibit_title: String, audio_title: String) -> void:
 	if not NetworkManager.is_server():
 		return
+	if multiplayer.get_remote_sender_id() != audio_key.to_int():
+		return
 	_painting_controller.handle_audio_play_request(exhibit_title, audio_title)
 	_broadcast_audio_play_sync.rpc(audio_key, exhibit_title, audio_title)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_audio_stop_rpc(audio_key: String, exhibit_title: String, audio_title: String) -> void:
 	if not NetworkManager.is_server():
+		return
+	if multiplayer.get_remote_sender_id() != audio_key.to_int():
 		return
 	_painting_controller.handle_audio_stop_request(exhibit_title, audio_title)
 	_broadcast_audio_stop_sync.rpc(audio_key, exhibit_title, audio_title)
@@ -1810,35 +1739,13 @@ func _sync_race_start_article(start_article: String) -> void:
 	else:
 		Log.debug("Main", "Wikipedia data received for '%s'" % start_article)
 
-	# SERVER: Generate room and broadcast to all clients
-	if NetworkManager.is_server() and Services.room_service:
+	# Server: generate and broadcast room; Client: wait for server
+	if NetworkManager.is_server():
 		Log.info("Main", "Server generating room for '%s'" % start_article)
-
-		# Get target FIRST - set it in HintManager before room generates
 		var target_article: String = RaceManager.get_target_article()
 		Log.info("Main", "Race target set to '%s'" % target_article)
-		
-		# Set target in HintManager immediately so door replacement can work
-		# Hint system disabled
-		# var hint_manager = get_node_or_null("/root/HintManager")
-		# if hint_manager:
-		# 	hint_manager.set_current_target(target_article)
-		
-		# # Fetch and cache backlinks (non-blocking)
-		# _fetch_and_cache_backlinks(target_article)
-		
-		var room_data = Services.room_service.generate_room(start_article)
-
-		# Get Wikipedia data (or empty dict if failed)
-		var wiki_data: Variant = ExhibitFetcher.get_result(start_article)
-		if wiki_data == null:
-			Log.warn("Main", "No Wikipedia data for '%s', generating room with empty data" % start_article)
-			wiki_data = {}
-
-		Services.room_service.populate_room_data(room_data, wiki_data, [])
-		Services.room_service.broadcast_room(room_data)
+		_museum.load_exhibit_for_rider("Lobby", start_article)
 	else:
-		# CLIENT: Wait for room data from server
 		Log.debug("Main", "Client waiting for room data from server...")
 
 	# Load the exhibit (will use cached RoomData if available)
@@ -2364,9 +2271,8 @@ func _on_daily_challenge_started() -> void:
 			_sync_race_start_article.rpc(start_article)
 	GameplayEvents.emit_race_started(target_article)
 	_daily_challenge_manager.begin_timer()
-	# Show persistent in-game timer strip
-	if _daily_challenge_hud and _daily_challenge_hud.has_method("show_strip"):
-		_daily_challenge_hud.show_strip()
+	if _daily_challenge_manager.get_hud() and _daily_challenge_manager.get_hud().has_method("show_strip"):
+		_daily_challenge_manager.get_hud().show_strip()
 
 func _on_daily_challenge_closed() -> void:
 	_menu_controller.close_menus()
@@ -2395,11 +2301,12 @@ func _show_error_message(message: String) -> void:
 		call_deferred("_show_daily_challenge_results")
 
 func _show_daily_challenge_results() -> void:
-	if _daily_challenge_hud and _daily_challenge_hud.has_method("show_results"):
+	var hud := _daily_challenge_manager.get_hud()
+	if hud and hud.has_method("show_results"):
 		if _player: _player.pause()
 		var time_sec: float = _daily_challenge_manager.get_elapsed()
 		var is_best: bool = _daily_challenge_manager.get_best_time() == time_sec
-		_daily_challenge_hud.show_results(time_sec, is_best)
+		hud.show_results(time_sec, is_best)
 
 # =============================================================================
 # SPECTATOR FUNCTIONS
@@ -2410,12 +2317,13 @@ func _on_spectator_exited() -> void:
 	_start_game()
 
 func _on_challenge_completed_for_leaderboard(time_seconds: float, _is_best: bool) -> void:
-	if not _daily_challenge_leaderboard:
+	var lb := _daily_challenge_manager.get_leaderboard()
+	if not lb:
 		return
 	var player_name: String = NetworkManager.get_player_name(NetworkManager.get_unique_id())
 	if player_name == "" or player_name == "Player":
 		player_name = "Anonymous"
-	_daily_challenge_leaderboard.submit_score(
+	lb.submit_score(
 		_daily_challenge_manager.get_today_key(),
 		player_name,
 		time_seconds
@@ -2434,14 +2342,14 @@ func _spawn_daily_challenge_board() -> void:
 	_daily_challenge_board.board_rotation_y = -30.0
 	_museum.add_child(_daily_challenge_board)
 	if _daily_challenge_board.has_method("init"):
-		_daily_challenge_board.init(_daily_challenge_manager, _daily_challenge_leaderboard)
+		_daily_challenge_board.init(_daily_challenge_manager, _daily_challenge_manager.get_leaderboard())
 
 # === Host Menu Support Methods ===
 
 func set_custom_start(article: String) -> void:
 	"""Set custom race start article"""
 	if article != "":
-		_race_start_article = article
+		RaceManager.set_vote_start_article(article)
 		if _museum and _museum.has_method("sync_custom_door"):
 			_museum.sync_custom_door(article)
 
@@ -2598,16 +2506,65 @@ func _exit_tree() -> void:
 	if _reading_font_lambda.is_valid():
 		ThemeManager.reading_font_changed.disconnect(_reading_font_lambda)
 	
-	# Clean up UI events (lambda may have been connected in _initialize_room_service)
-	# Note: _quit_lambda may not be stored if connect was inline, so we use is_valid check
+	# Clean up UI events
 	if _quit_lambda.is_valid():
 		UIEvents.quit_requested.disconnect(_quit_lambda)
 	
-	UIEvents.open_trivia.disconnect(_on_open_trivia)
+	if UIEvents.open_trivia.is_connected(_on_open_trivia):
+		UIEvents.open_trivia.disconnect(_on_open_trivia)
+	
+	if UIEvents.open_terminal_menu.is_connected(_use_terminal):
+		UIEvents.open_terminal_menu.disconnect(_use_terminal)
 	
 	# Clean up trivia overlay
 	if _trivia_overlay and _trivia_overlay.trivia_closed.is_connected(_on_trivia_closed):
 		_trivia_overlay.trivia_closed.disconnect(_on_trivia_closed)
+	
+	# Multiplayer events
+	if MultiplayerEvents.skin_selected.is_connected(_on_skin_selected):
+		MultiplayerEvents.skin_selected.disconnect(_on_skin_selected)
+	if MultiplayerEvents.skin_reset.is_connected(_on_skin_reset):
+		MultiplayerEvents.skin_reset.disconnect(_on_skin_reset)
+	
+	# Gameplay events
+	if GameplayEvents.mount_requested.is_connected(_request_mount):
+		GameplayEvents.mount_requested.disconnect(_request_mount)
+	if GameplayEvents.dismount_requested.is_connected(_request_dismount):
+		GameplayEvents.dismount_requested.disconnect(_request_dismount)
+	if GameplayEvents.error_message_requested.is_connected(_show_error_message):
+		GameplayEvents.error_message_requested.disconnect(_show_error_message)
+	
+	# RaceManager
+	if RaceManager.race_started.is_connected(_on_race_started):
+		RaceManager.race_started.disconnect(_on_race_started)
+	if RaceManager.race_countdown.is_connected(_on_race_countdown):
+		RaceManager.race_countdown.disconnect(_on_race_countdown)
+	if RaceManager.race_won.is_connected(_on_race_won):
+		RaceManager.race_won.disconnect(_on_race_won)
+	if RaceManager.vote_cancelled.is_connected(_on_vote_cancelled):
+		RaceManager.vote_cancelled.disconnect(_on_vote_cancelled)
+	if RaceManager.target_determined.is_connected(_on_target_determined):
+		RaceManager.target_determined.disconnect(_on_target_determined)
+	
+	# ExhibitFetcher
+	if ExhibitFetcher.random_complete.is_connected(_on_random_article_complete):
+		ExhibitFetcher.random_complete.disconnect(_on_random_article_complete)
+	if ExhibitFetcher.category_random_complete.is_connected(_on_random_article_complete):
+		ExhibitFetcher.category_random_complete.disconnect(_on_random_article_complete)
+	
+	# NetworkManager
+	if NetworkManager.peer_connected.is_connected(_on_network_peer_connected):
+		NetworkManager.peer_connected.disconnect(_on_network_peer_connected)
+	if NetworkManager.peer_disconnected.is_connected(_on_network_peer_disconnected):
+		NetworkManager.peer_disconnected.disconnect(_on_network_peer_disconnected)
+	if NetworkManager.server_disconnected.is_connected(_on_network_server_disconnected):
+		NetworkManager.server_disconnected.disconnect(_on_network_server_disconnected)
+	if NetworkManager.player_info_updated.is_connected(_on_network_player_info_updated):
+		NetworkManager.player_info_updated.disconnect(_on_network_player_info_updated)
+	
+	# SettingsEvents
+	if SettingsEvents.accessibility_changed.is_connected(_on_accessibility_changed):
+		SettingsEvents.accessibility_changed.disconnect(_on_accessibility_changed)
 	
 	# Clean up multiplayer controller
 	if _multiplayer_controller:

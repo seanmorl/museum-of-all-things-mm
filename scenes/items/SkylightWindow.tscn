@@ -15,8 +15,10 @@ roughness = 0.05
 mesh = SubResource("BoxMesh_glass")
 surface_material_override/0 = SubResource("StandardMaterial3D_glass")
 
-[node name="SkylightLight" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, 0, 0)
-light_energy = 2.0
+[node name="SkylightLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+light_energy = 0.8
 light_color = Color(1.0, 0.95, 0.9)
-shadow_enabled = true
+light_indirect_energy = 0.5
+omni_range = 6.0
+shadow_enabled = false

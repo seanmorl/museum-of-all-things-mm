@@ -1,17 +1,13 @@
 class_name TripleJumpEvent
-extends RefCounted
-## Triple Jump - Players can jump THREE times before landing!
+extends EventBase
+## Triple Jump - Players can jump three times while airborne for 30-60 seconds
 
 static func apply() -> void:
-	# Tell all players to enable triple jump
-	if RaceManager.has_method("set_triple_jump_enabled"):
-		RaceManager.set_triple_jump_enabled(true)
-	Log.info("TripleJumpEvent", "Applied: Triple jump enabled! WHEEE!")
+	RaceManager.set_triple_jump_enabled(true)
+	Log.info("TripleJumpEvent", "Applied: Triple jump enabled")
 
 static func end() -> void:
-	# Disable triple jump
-	if RaceManager.has_method("set_triple_jump_enabled"):
-		RaceManager.set_triple_jump_enabled(false)
+	RaceManager.set_triple_jump_enabled(false)
 	Log.info("TripleJumpEvent", "Triple jump disabled")
 
 static func get_duration() -> float:
@@ -21,4 +17,4 @@ static func get_display_name() -> String:
 	return "Triple Jump"
 
 static func get_description() -> String:
-	return "You can now jump THREE times before landing!"
+	return "Jump three times while in the air!"

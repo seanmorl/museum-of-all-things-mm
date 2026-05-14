@@ -73,20 +73,20 @@ const MOOD_AMBIENT_COLOR: Dictionary = {
 }
 
 const MOOD_AMBIENT_ENERGY: Dictionary = {
-	Mood.DEFAULT: 0.55,
-	Mood.HISTORY: 0.45,
-	Mood.SCIENCE: 0.5,
-	Mood.NATURE: 0.4,
-	Mood.ASTRO: 0.35,
-	Mood.MEDIA: 0.48,
-	Mood.ART: 0.5,
-	Mood.GEOGRAPHY: 0.55,
-	Mood.PHILOSOPHY: 0.4,
-	Mood.SPORTS: 0.65,
-	Mood.FOOD: 0.5,
-	Mood.POLITICS: 0.5,
-	Mood.ECONOMY: 0.55,
-	Mood.MYSTERY: 0.3,
+	Mood.DEFAULT: 0.15,
+	Mood.HISTORY: 0.12,
+	Mood.SCIENCE: 0.13,
+	Mood.NATURE: 0.1,
+	Mood.ASTRO: 0.08,
+	Mood.MEDIA: 0.13,
+	Mood.ART: 0.15,
+	Mood.GEOGRAPHY: 0.15,
+	Mood.PHILOSOPHY: 0.1,
+	Mood.SPORTS: 0.18,
+	Mood.FOOD: 0.13,
+	Mood.POLITICS: 0.13,
+	Mood.ECONOMY: 0.15,
+	Mood.MYSTERY: 0.06,
 }
 
 # Subtle wall color tints per mood (multiplied against wall material)
@@ -152,11 +152,9 @@ static func get_ambient_energy(mood: int) -> float:
 static func get_adjusted_ambient_energy(mood: int, is_dark_mode: bool) -> float:
 	var base = get_ambient_energy(mood)
 	if is_dark_mode:
-		# Dim in dark mode but keep it visible (40% of normal, with reasonable floor)
-		return clamp(base * 0.4, 0.08, 0.25)
+		return clamp(base * 0.7, 0.15, 0.5)
 	else:
-		# Very bright in light mode (400% of normal for clear visibility)
-		return clamp(base * 4.0, 0.5, 2.0)
+		return clamp(base * 1.8, 0.6, 1.5)
 
 
 static func prefers_pool(mood: int) -> bool:

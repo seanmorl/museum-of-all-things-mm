@@ -101,7 +101,7 @@ func _ready() -> void:
 
 func _on_visibility_changed() -> void:
 	if not visible:
-		hide_loading_overlay()
+		return
 	if visible and is_inside_tree():
 		_closing = false
 		hide_loading_overlay()

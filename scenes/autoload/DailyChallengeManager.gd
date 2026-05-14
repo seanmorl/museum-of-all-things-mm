@@ -9,6 +9,81 @@ signal challenge_failed(error: String)
 signal challenge_started
 signal challenge_completed(time_seconds: float, is_best: bool)
 
+## UI nodes managed by this manager (extracted from Main.gd)
+var _hud: CanvasLayer = null
+var _leaderboard: Node = null
+
+
+func initialize_ui(main: Node) -> void:
+	var hud: DailyChallengeHUD = load("res://scenes/ui/DailyChallengeHUD.gd").new()
+	hud.name = "DailyChallengeHUD"
+	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var hud_layer := CanvasLayer.new()
+	hud_layer.name = "DailyChallengeHUDLayer"
+	hud_layer.layer = 20
+	main.add_child(hud_layer)
+	hud_layer.add_child(hud)
+	_hud = hud_layer
+
+	_leaderboard = load("res://scenes/ui/DailyChallengeLeaderboard.gd").new()
+	_leaderboard.name = "DailyChallengeLeaderboard"
+	main.add_child(_leaderboard)
+
+	hud.init(self, _leaderboard)
+
+
+func get_hud() -> CanvasLayer:
+	return _hud
+
+
+func get_leaderboard() -> Node:
+	return _leaderboard
+
+
+func hide_all() -> void:
+	if _hud and _hud.has_method("hide_all"):
+		_hud.hide_all()
+
+
+func hud_is_open() -> bool:
+	if _hud and _hud.has_method("is_open"):
+		return _hud.is_open()
+	return false
+
+
+func hud_open() -> void:
+	if _hud and _hud.has_method("open"):
+		_hud.open()
+
+
+func hud_close() -> void:
+	if _hud and _hud.has_method("close"):
+		_hud.close()
+
+
+func show_strip() -> void:
+	if _hud and _hud.has_method("show_strip"):
+		_hud.show_strip()
+
+
+func show_results(time_sec: float, is_best: bool) -> void:
+	if _hud and _hud.has_method("show_results"):
+		_hud.show_results(time_sec, is_best)
+
+
+func submit_score(name: String, elapsed: float) -> void:
+	if _leaderboard and _leaderboard.has_method("submit_score"):
+		_leaderboard.submit_score(name, elapsed)
+
+
+func init_board(board: Node, manager: Node, leaderboard: Node) -> void:
+	if board and board.has_method("init"):
+		board.init(manager, leaderboard)
+
+
+func is_board_ready() -> bool:
+	return _leaderboard != null
+
 ## Wikipedia endpoint for deterministic "article of the day" via featured content
 const FEATURED_API: String = "https://en.wikipedia.org/api/rest_v1/feed/featured/%d/%02d/%02d"
 ## Fallback: use a seeded random from a curated pool when featured API fails

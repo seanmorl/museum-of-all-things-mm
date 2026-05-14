@@ -18,7 +18,7 @@ var StaticData: Resource = preload("res://assets/resources/lobby_data.tres")
 @export var ambient_light_lobby: float = 0.8
 @export var ambient_light: float = 0.5
 @export var ambient_light_override: float = -1.0  # Deprecated: kept for scene compatibility
-@export var ambient_light_multiplier: float = 1.0  # User brightness multiplier (1.0 = mood default)
+@export var ambient_light_multiplier: float = 0.7  # User brightness multiplier (1.0 = mood default)
 @export var max_teleport_distance: float = 10.0
 @export var max_exhibits_loaded: int = 2
 @export var min_room_dimension: int = 2
@@ -40,6 +40,7 @@ var _global_item_queue_map: Dictionary = {}
 var _fog_tween: Tween = null
 var _queue_timer: Timer = null
 var _disco_hue: float = 0.0
+var _dark_mode_lambda: Callable = Callable()
 
 # =============================================================================
 # SUBSYSTEMS
@@ -232,7 +233,8 @@ func _ready() -> void:
 	UIEvents.reset_custom_door.connect(_reset_custom_door)
 	UIEvents.set_custom_door.connect(_set_custom_door)
 	SettingsEvents.language_changed.connect(_on_change_language)
-	ThemeManager.dark_mode_changed.connect(func(_d): _update_lighting())
+	_dark_mode_lambda = func(_d): _update_lighting()
+	ThemeManager.dark_mode_changed.connect(_dark_mode_lambda)
 
 	# Race blocking: lock non-start lobby halls during races
 	RaceManager.race_started.connect(_on_race_started)
@@ -247,18 +249,30 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	_queue_timer.timeout.disconnect(_process_item_queue)
-	ExhibitFetcher.wikitext_complete.disconnect(_on_fetch_complete)
-	ExhibitFetcher.wikidata_complete.disconnect(_on_wikidata_complete)
-	ExhibitFetcher.commons_images_complete.disconnect(_on_commons_images_complete)
-	UIEvents.reset_custom_door.disconnect(_reset_custom_door)
-	UIEvents.set_custom_door.disconnect(_set_custom_door)
-	SettingsEvents.language_changed.disconnect(_on_change_language)
-	RaceManager.race_started.disconnect(_on_race_started)
-	RaceManager.race_ended.disconnect(_on_race_ended)
-	RaceManager.race_cancelled.disconnect(_on_race_ended)
-	ThemeManager.disco_mode_changed.disconnect(_on_disco_mode_changed)
-	# Note: ThemeManager.dark_mode_changed uses lambda, auto-cleanup via object destruction
+	if _queue_timer and _queue_timer.timeout.is_connected(_process_item_queue):
+		_queue_timer.timeout.disconnect(_process_item_queue)
+	if ExhibitFetcher.wikitext_complete.is_connected(_on_fetch_complete):
+		ExhibitFetcher.wikitext_complete.disconnect(_on_fetch_complete)
+	if ExhibitFetcher.wikidata_complete.is_connected(_on_wikidata_complete):
+		ExhibitFetcher.wikidata_complete.disconnect(_on_wikidata_complete)
+	if ExhibitFetcher.commons_images_complete.is_connected(_on_commons_images_complete):
+		ExhibitFetcher.commons_images_complete.disconnect(_on_commons_images_complete)
+	if UIEvents.reset_custom_door.is_connected(_reset_custom_door):
+		UIEvents.reset_custom_door.disconnect(_reset_custom_door)
+	if UIEvents.set_custom_door.is_connected(_set_custom_door):
+		UIEvents.set_custom_door.disconnect(_set_custom_door)
+	if SettingsEvents.language_changed.is_connected(_on_change_language):
+		SettingsEvents.language_changed.disconnect(_on_change_language)
+	if RaceManager.race_started.is_connected(_on_race_started):
+		RaceManager.race_started.disconnect(_on_race_started)
+	if RaceManager.race_ended.is_connected(_on_race_ended):
+		RaceManager.race_ended.disconnect(_on_race_ended)
+	if RaceManager.race_cancelled.is_connected(_on_race_ended):
+		RaceManager.race_cancelled.disconnect(_on_race_ended)
+	if ThemeManager.disco_mode_changed.is_connected(_on_disco_mode_changed):
+		ThemeManager.disco_mode_changed.disconnect(_on_disco_mode_changed)
+	if _dark_mode_lambda.is_valid():
+		ThemeManager.dark_mode_changed.disconnect(_dark_mode_lambda)
 
 
 func init(player: Node) -> void:
@@ -501,7 +515,7 @@ func _tween_fog_color(fog_color: Color, mood: int = ExhibitMood.Mood.DEFAULT) ->
 	_fog_tween.tween_property(environment, "ambient_light_energy", target_ambient_energy, 1.0)
 
 	# Boost tonemap exposure in light mode for overall brighter appearance
-	var target_exposure: float = 1.5 if not is_dark else 1.0
+	var target_exposure: float = 1.0 if not is_dark else 0.8
 	_fog_tween.tween_property(environment, "tonemap_exposure", target_exposure, 1.0)
 
 	# Per-room glow intensity — varies with mood so each exhibit feels distinct.
@@ -513,10 +527,22 @@ func _get_glow_for_mood(mood: int) -> float:
 	## Maps exhibit mood to a target glow intensity.
 	## Art / creative exhibits glow more; science / tech exhibits glow less.
 	match mood:
-		ExhibitMood.Mood.DEFAULT: return 1.0
+		ExhibitMood.Mood.DEFAULT: return 0.6
+		ExhibitMood.Mood.HISTORY: return 0.7
+		ExhibitMood.Mood.SCIENCE: return 0.5
+		ExhibitMood.Mood.NATURE: return 0.7
+		ExhibitMood.Mood.ASTRO: return 0.5
+		ExhibitMood.Mood.MEDIA: return 0.8
+		ExhibitMood.Mood.ART: return 0.9
+		ExhibitMood.Mood.GEOGRAPHY: return 0.6
+		ExhibitMood.Mood.PHILOSOPHY: return 0.5
+		ExhibitMood.Mood.SPORTS: return 0.8
+		ExhibitMood.Mood.FOOD: return 0.7
+		ExhibitMood.Mood.POLITICS: return 0.6
+		ExhibitMood.Mood.ECONOMY: return 0.7
+		ExhibitMood.Mood.MYSTERY: return 0.4
 		_:
-			# Fall back gracefully if extra moods are added later.
-			return 1.0
+			return 0.6
 
 
 func _update_lighting() -> void:
@@ -648,8 +674,10 @@ func _process(delta: float) -> void:
 		var hue_speed: float = 0.08 if GraphicsManager.reduce_motion else 0.5
 		_disco_hue = fmod(_disco_hue + delta * hue_speed, 1.0)
 		var disco_color = Color.from_hsv(_disco_hue, 0.8, 0.8)
-		get_node("WorldEnvironment").environment.ambient_light_color = disco_color
-		get_node("WorldEnvironment").environment.ambient_light_energy = 0.6
+		var world_env := $WorldEnvironment
+		if world_env:
+			world_env.environment.ambient_light_color = disco_color
+			world_env.environment.ambient_light_energy = 0.6
 
 	var queue: Array = _global_item_queue_map.get(_current_room_title, [])
 	if queue.is_empty():

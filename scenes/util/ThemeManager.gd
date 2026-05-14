@@ -4,10 +4,14 @@ extends Node
 signal dark_mode_changed(enabled: bool)
 signal reading_font_changed(font: Font)
 signal disco_mode_changed(enabled: bool)
+signal text_scale_changed(scale: float)
+signal high_contrast_changed(enabled: bool)
 
 var is_dark_mode: bool = false
 var disco_mode: bool = false
 var current_font_index: int = 0
+var _text_scale: float = 1.0
+var _high_contrast: bool = false
 
 var bg_color:      Color = Color(1.0,   1.0,   1.0,  0.95)
 var border_color:  Color = Color(0.635, 0.663, 0.694, 1.0)
@@ -171,3 +175,31 @@ func _save_preference(key: String, value: Variant) -> void:
 	cfg.load("user://ui_settings.cfg")
 	cfg.set_value("ui", key, value)
 	cfg.save("user://ui_settings.cfg")
+
+
+func set_text_scale(scale: float) -> void:
+	_text_scale = clamp(scale, 0.5, 2.0)
+	text_scale_changed.emit(_text_scale)
+	_save_preference("text_scale", _text_scale)
+
+
+func get_text_scale() -> float:
+	return _text_scale
+
+
+func set_reading_font_enabled(enabled: bool) -> void:
+	if enabled:
+		set_reading_font(current_font_index)
+	else:
+		set_reading_font(0)
+
+
+func set_high_contrast(enabled: bool) -> void:
+	_high_contrast = enabled
+	high_contrast_changed.emit(enabled)
+	_update_palette()
+	_save_preference("high_contrast", enabled)
+
+
+func is_high_contrast() -> bool:
+	return _high_contrast

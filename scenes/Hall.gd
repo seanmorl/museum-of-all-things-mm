@@ -295,8 +295,10 @@ func _exit_tree() -> void:
 		_detector.direction_changed.disconnect(_on_direction_changed)
 	
 	# Clean up ThemeManager signals
-	ThemeManager.disco_mode_changed.disconnect(_on_disco_mode_changed)
-	ThemeManager.reading_font_changed.disconnect(_on_font_changed)
+	if ThemeManager.disco_mode_changed.is_connected(_on_disco_mode_changed):
+		ThemeManager.disco_mode_changed.disconnect(_on_disco_mode_changed)
+	if ThemeManager.reading_font_changed.is_connected(_on_font_changed):
+		ThemeManager.reading_font_changed.disconnect(_on_font_changed)
 
 
 func _on_fetch_failed(titles: Array, message: String) -> void:

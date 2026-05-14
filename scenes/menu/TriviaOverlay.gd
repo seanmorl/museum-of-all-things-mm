@@ -4,6 +4,7 @@ class_name TriviaOverlay
 
 signal trivia_answered(correct: bool, points: int)
 signal trivia_closed
+signal trivia_opened
 
 var _trivia_manager: TriviaManager = null
 var _current_questions: Array = []
@@ -81,6 +82,7 @@ func open(exhibit_title: String) -> void:
 
 	if _trivia_manager:
 		_trivia_manager.fetch_trivia(exhibit_title)
+	trivia_opened.emit()
 
 func close() -> void:
 	if _closing:

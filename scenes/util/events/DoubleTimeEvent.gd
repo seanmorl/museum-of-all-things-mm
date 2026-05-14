@@ -1,14 +1,12 @@
 class_name DoubleTimeEvent
-extends RefCounted
-## Double Time - Race timer runs at 200% speed for 30-60 seconds
+extends EventBase
+## Double Time - Race timer runs at 200%% speed for 30-60 seconds
 
 static func apply() -> void:
-	# Speed up the race timer
 	RaceManager.set_timer_scale(2.0)
-	Log.info("DoubleTimeEvent", "Applied: Timer at 200% speed")
+	Log.info("DoubleTimeEvent", "Applied: Timer at 200%% speed")
 
 static func end() -> void:
-	# Restore normal timer speed
 	RaceManager.set_timer_scale(1.0)
 	Log.info("DoubleTimeEvent", "Timer restored to normal")
 

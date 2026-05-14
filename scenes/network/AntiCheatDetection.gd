@@ -9,8 +9,8 @@ const MAX_GRAVITY_SPEED: float = 30.0  # Maximum falling speed
 const SPEED_CHECK_WINDOW: float = 0.5  # Check average speed over this window
 
 # Teleport detection
-const MAX_TELEPORT_DISTANCE: float = 10.0  # Max distance between position updates
-const VALID_PATH_THRESHOLD: float = 15.0  # Max deviation from valid path
+const MAX_TELEPORT_DISTANCE: float = Constants.MAX_TELEPORT_DISTANCE
+const VALID_PATH_THRESHOLD: float = Constants.VALID_PATH_THRESHOLD
 
 # Position tracking
 var _player_position_history: Dictionary = {}  # peer_id -> Array of {position, timestamp}

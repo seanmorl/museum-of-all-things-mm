@@ -494,3 +494,39 @@ func reset_to_defaults() -> void:
 		EventType.REVERSED,
 		EventType.RANDOM_TELEPORT,
 	]
+
+
+# ── Late Joiner Sync ─────────────────────────────────────────────────────────
+
+func get_active_events_state() -> Array:
+	"""Returns state of all active events for syncing to late joiners."""
+	var state: Array = []
+	for event_type in _active_events.keys():
+		state.append({
+			"event_type": event_type,
+			"end_time": _active_events[event_type].end_time,
+			"duration": _active_events[event_type].duration
+		})
+	return state
+
+
+func apply_active_events_state(state: Array) -> void:
+	"""Applies active event state received from server (late joiner sync)."""
+	for entry: Dictionary in state:
+		var event_type: int = entry.get("event_type", EventType.NONE)
+		var end_time: int = entry.get("end_time", 0)
+		var duration: float = entry.get("duration", 0.0)
+		
+		_active_events[event_type] = {
+			"end_time": end_time,
+			"duration": duration
+		}
+		# Apply event effect locally
+		_apply_event_effect(event_type)
+		event_started.emit(event_type, duration)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _sync_events_to_peer(state: Array) -> void:
+	"""RPC to sync active events to a newly connected client."""
+	apply_active_events_state(state)

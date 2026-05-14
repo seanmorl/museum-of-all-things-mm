@@ -81,6 +81,100 @@ func _process(delta: float) -> void:
 		_poll_twitch_server()
 
 
+# ── UI Initialization ─────────────────────────────────────────────────────────
+
+var _ui_initialized: bool = false
+var _main_node: Node = null
+
+func initialize_ui(main: Node) -> void:
+	if _ui_initialized:
+		return
+	_ui_initialized = true
+	_main_node = main
+	_create_tournament_ui()
+	_connect_tournament_signals()
+
+
+func _create_tournament_ui() -> void:
+	if not _main_node:
+		return
+	
+	var t_layer := CanvasLayer.new()
+	t_layer.name = "TournamentLayer"
+	t_layer.layer = 95
+	_main_node.add_child(t_layer)
+
+	var t_hud_script := load("res://scenes/tournament/TournamentHUD.gd")
+	if t_hud_script:
+		var hud := Control.new()
+		hud.set_script(t_hud_script)
+		hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		hud.name = "TournamentHUD"
+		t_layer.add_child(hud)
+	
+	var t_bracket_script := load("res://scenes/tournament/TournamentBracketHUD.gd")
+	if t_bracket_script:
+		var bracket := Control.new()
+		bracket.set_script(t_bracket_script)
+		bracket.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		bracket.name = "TournamentBracketHUD"
+		t_layer.add_child(bracket)
+	
+	var t_vic_script := load("res://scenes/tournament/TournamentVictoryScreen.gd")
+	if t_vic_script:
+		var vic := Control.new()
+		vic.set_script(t_vic_script)
+		vic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		vic.name = "TournamentVictoryScreen"
+		t_layer.add_child(vic)
+	
+	var t_setup_script := load("res://scenes/tournament/TournamentSetupMenu.gd")
+	if t_setup_script:
+		var setup := Control.new()
+		setup.set_script(t_setup_script)
+		setup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		setup.name = "TournamentSetupMenu"
+		setup.visible = false
+		t_layer.add_child(setup)
+
+
+func _connect_tournament_signals() -> void:
+	tournament_cancelled.connect(_on_ui_tournament_cancelled)
+
+
+func get_tournament_layer() -> CanvasLayer:
+	if _main_node:
+		return _main_node.get_node_or_null("TournamentLayer")
+	return null
+
+
+func get_tournament_hud() -> Control:
+	var layer := get_tournament_layer()
+	if layer:
+		return layer.get_node_or_null("TournamentHUD")
+	return null
+
+
+func get_tournament_setup_menu() -> Control:
+	var layer := get_tournament_layer()
+	if layer:
+		return layer.get_node_or_null("TournamentSetupMenu")
+	return null
+
+
+func _on_ui_tournament_cancelled() -> void:
+	if not _main_node:
+		return
+	var t_layer := _main_node.get_node_or_null("TournamentLayer")
+	if t_layer:
+		var hud := t_layer.get_node_or_null("TournamentHUD")
+		if hud:
+			hud.visible = false
+		var bracket := t_layer.get_node_or_null("TournamentBracketHUD")
+		if bracket:
+			bracket.visible = false
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 func is_active() -> bool:

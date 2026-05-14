@@ -63,12 +63,15 @@ theme_override_styles/separator = SubResource("StyleBoxEmpty_p1gmo")
 [node name="BackButton" type="Button" parent="ScrollContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=1907148584]
 layout_mode = 2
 size_flags_vertical = 4
+focus_mode = 2
+tooltip_text = "Return to the previous screen"
 text = "Back"
 
 [node name="SettingsTabs" type="TabBar" parent="ScrollContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=2047580119]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+focus_mode = 2
 current_tab = 0
 tab_alignment = 1
 tab_count = 4

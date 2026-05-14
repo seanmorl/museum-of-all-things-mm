@@ -1,17 +1,15 @@
 class_name TimeDilationEvent
-extends RefCounted
-## Time Dilation - Race timer runs at 50% speed for 30-50 seconds
+extends EventBase
+## Time Dilation - Race timer runs at 50%% speed for 30-50 seconds
 
 static var _original_time_scale: float = 1.0
 
 static func apply() -> void:
-	# Slow down the race timer (not game speed, just the timer)
 	_original_time_scale = 1.0
 	RaceManager.set_timer_scale(0.5)
 	Log.info("TimeDilationEvent", "Applied: Timer at 50%% speed (race will run slower)")
 
 static func end() -> void:
-	# Restore normal timer speed
 	RaceManager.set_timer_scale(1.0)
 	Log.info("TimeDilationEvent", "Timer restored to normal speed")
 

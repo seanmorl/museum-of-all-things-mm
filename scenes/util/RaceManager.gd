@@ -73,8 +73,6 @@ var _votes: Dictionary = {}
 var _vote_timer: float = 0.0
 var _vote_timer_paused: bool = false
 var _vote_active: bool = false
-const VOTE_DURATION: float = 20.0
-const CANDIDATE_COUNT: int = 5
 
 var _sudden_death: bool = false
 
@@ -248,7 +246,7 @@ func begin_vote(candidates: Array, start_article: String = "") -> void:
 	_vote_start_article = start_article
 	_votes.clear()
 	_vote_active = true
-	_vote_timer = VOTE_DURATION
+	_vote_timer = Constants.VOTE_DURATION
 	_vote_timer_paused = false  # always clear pause on new/rerolled vote
 	_sync_vote_start.rpc(_vote_candidates)
 
@@ -301,6 +299,22 @@ func _finish_vote() -> void:
 func get_vote_candidates() -> Array:
 	return _vote_candidates
 
+func get_vote_start_article() -> String:
+	return _vote_start_article
+
+func clear_vote_candidates() -> void:
+	_vote_candidates.clear()
+
+func add_candidate(title: String) -> void:
+	if not title in _vote_candidates:
+		_vote_candidates.append(title)
+
+func set_vote_start_article(title: String) -> void:
+	_vote_start_article = title
+
+func is_vote_candidates_ready() -> bool:
+	return _vote_candidates.size() >= Constants.CANDIDATE_COUNT and _vote_start_article != ""
+
 func get_vote_time_remaining() -> float:
 	return _vote_timer
 
@@ -312,6 +326,8 @@ func set_vote_timer_paused(paused: bool) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_set_vote_timer_paused(paused: bool) -> void:
+	if not NetworkManager.is_server():
+		return
 	_vote_timer_paused = paused
 
 ## Host only. Cancels the active vote and notifies all peers.
@@ -377,7 +393,7 @@ func _sync_vote_start(candidates: Array) -> void:
 	_vote_candidates = candidates
 	_votes.clear()
 	_vote_active = true
-	_vote_timer = VOTE_DURATION
+	_vote_timer = Constants.VOTE_DURATION
 	_vote_timer_paused = false  # clear on all peers, not just server
 	vote_started.emit(candidates)
 
@@ -472,6 +488,9 @@ func _start_countdown(target_article: String, start_article: String) -> void:
 		countdown -= 1
 
 	# Now start the actual race
+	if _state != State.IDLE:
+		Log.warn("RaceManager", "Race cancelled during countdown — aborting start")
+		return
 	_state = State.ACTIVE
 	_race_start_time = Time.get_unix_time_from_system()
 
@@ -486,6 +505,9 @@ func _sync_countdown(number: int) -> void:
 	## Clients receive countdown ticks via this RPC.
 	race_countdown.emit(number)
 
+## Called by a player who believes they have reached the target article.
+## Server-side: validates the player's claimed path against tracked room history.
+## Prevents teleport/void exploits where a client claims to have visited rooms they never entered.
 func notify_article_reached(peer_id: int, article_title: String, visited_path: Array = []) -> void:
 	if _state != State.ACTIVE:
 		return
@@ -493,13 +515,15 @@ func notify_article_reached(peer_id: int, article_title: String, visited_path: A
 	if article_title != _target_article:
 		return
 
-	# Server-side: validate path against tracked room history
+	## Anti-Cheat Strategy:
+	## 1. Prefer server-tracked room history (source of truth for movement)
+	## 2. Fallback to client-provided path (if server tracking missed some rooms)
+	## 3. Reject empty path (prevents instant-win from void exploit)
+	## 4. Validate path connectivity (detects teleport to disconnected room)
 	if NetworkManager.is_server():
-		# Atomic guard: prevent double-win if two players finish simultaneously
 		if _state != State.ACTIVE:
 			return
 
-		# Dictionary.get() returns untyped Array — assign via explicit typed local
 		var raw_server_path: Array = _player_room_history.get(peer_id, [])
 		var server_path: Array[String] = []
 		for item in raw_server_path:
@@ -508,34 +532,26 @@ func notify_article_reached(peer_id: int, article_title: String, visited_path: A
 		var path: Array[String] = []
 
 		if server_path.size() > 0:
-			# Best case: server has tracked this peer's rooms (multiplayer anti-cheat path)
+			## Server has tracked this peer's rooms — use as source of truth
 			for item in server_path:
 				path.append(item)
 		elif visited_path.size() > 0:
-			# Client provided a path (multiplayer client win RPC)
+			## Client provided a path (server tracking unavailable, e.g. late join)
 			for item in visited_path:
 				path.append(str(item))
 			Log.debug("RaceManager", "Using client-provided path (server tracking unavailable)")
 		else:
-			# Single player: NetworkManager.is_multiplayer_active() is false so
-			# set_local_player_room is never called and _player_room_history stays empty.
-			# Use _local_visited_pages which is populated via SettingsEvents.set_current_room.
-			for item in _local_visited_pages:
-				path.append(item)
-			Log.debug("RaceManager", "Using local visited pages (single player path)")
-
-		# Require at least one room visited to prevent teleport/void exploits.
-		if path.is_empty():
+			## Empty path — player claims to have won without visiting any rooms
+			## This can happen if a player falls into the void and claims a win
 			Log.debug("RaceManager", "Blocked win — empty path for '%s'" % article_title)
 			return
 
 		var winner_path_copy: Array[String] = []
 		for item in path:
-			winner_path_copy.append(item)
+			winner_path_copy.append(str(item))
 		_winner_path = winner_path_copy
-		_handle_win(peer_id)
-	else:
-		# Client: send path to server for validation
+
+		## Server: forward to validation (runs on server only)
 		_request_win_validation.rpc_id(1, peer_id, article_title, visited_path)
 
 func _handle_win(peer_id: int) -> void:
@@ -691,9 +707,18 @@ func _sync_vote_state_to_peer(candidates: Array, timer: float) -> void:
 	_vote_timer_paused = false
 	vote_started.emit(candidates)
 
+## Server-only RPC: validates a player's win claim.
+## 1. Rejects wrong target / inactive race
+## 2. Chooses the stronger available path (server-tracked vs. client-provided)
+## 3. Rejects empty paths (prevents instant-win exploits)
+## 4. Validates path connectivity via ExhibitGraph (detects impossible jumps)
 @rpc("any_peer", "call_remote", "reliable")
 func _request_win_validation(peer_id: int, article_title: String, visited_path: Array = []) -> void:
 	if not NetworkManager.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != peer_id:
+		Log.warn("RaceManager", "Win rejected - sender %d does not match claimed peer_id %d" % [sender_id, peer_id])
 		return
 
 	if _state != State.ACTIVE:
@@ -703,7 +728,7 @@ func _request_win_validation(peer_id: int, article_title: String, visited_path: 
 		Log.warn("RaceManager", "Win rejected - wrong target '%s' (expected '%s')" % [article_title, _target_article])
 		return
 
-	# Server-side: validate path against tracked room history
+	## Build the authoritative path for validation
 	var server_path: Array[String] = []
 	var raw_server_path: Array = _player_room_history.get(peer_id, [])
 	for item in raw_server_path:
@@ -712,39 +737,44 @@ func _request_win_validation(peer_id: int, article_title: String, visited_path: 
 	var path: Array[String] = []
 
 	if server_path.size() > 0:
-		# Use server-tracked path (anti-cheat)
+		## Use server-tracked path — clients cannot fake this
 		for item in server_path:
-			path.append(item)
+			path.append(str(item))
 	elif visited_path.size() > 0:
-		# Fallback: client provided path (server tracking unavailable)
-		# This can happen if the player joined late or tracking failed
+		## Fallback: client provided path (server tracking unavailable)
 		for item in visited_path:
 			path.append(str(item))
 		Log.warn("RaceManager", "Using client-provided path for peer %d (server tracking unavailable)" % peer_id)
 	else:
-		# No path available - reject the win
+		## No path — reject immediately
 		Log.warn("RaceManager", "Win rejected for peer %d - no path data available" % peer_id)
 		return
 
-	# Require at least one room visited to prevent teleport/void exploits
+	## Empty path = instant-win exploit (e.g. player never left lobby)
 	if path.is_empty():
 		Log.warn("RaceManager", "Win rejected for peer %d - empty path" % peer_id)
 		return
 
-	# Validate path connectivity (anti-cheat: detect impossible jumps)
+	## Anti-Cheat core: validate path connectivity
+	## Detects teleportation by checking each consecutive room pair is actually connected
 	if not _validate_path_continuity(path):
 		Log.warn("RaceManager", "Win rejected for peer %d - invalid path (teleport detected?)" % peer_id)
 		return
 
 	var winner_path_copy: Array[String] = []
 	for item in path:
-		winner_path_copy.append(item)
+		winner_path_copy.append(str(item))
 	_winner_path = winner_path_copy
+
 	_handle_win(peer_id)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _request_race_cancel() -> void:
 	if not NetworkManager.is_server():
+		return
+	# Only the host or the current race controller can cancel
+	if multiplayer.get_remote_sender_id() != 1:
+		Log.warn("RaceManager", "Race cancel rejected - sender %d is not host" % [multiplayer.get_remote_sender_id()])
 		return
 
 	cancel_race()
@@ -900,15 +930,20 @@ func get_race_stats() -> Dictionary:
 
 
 # ── Anti-Cheat: Path Validation ──────────────────────────────────────────────
+## Anti-Cheat Architecture:
+## 1. Server tracks every room each peer enters via track_room_entry() and _player_room_history
+## 2. When a player claims a win, their path is validated against server-tracked history
+## 3. Empty paths are rejected (prevents instant-win from void exploit)
+## 4. _validate_path_continuity() checks each consecutive room pair is actually connected
+## 5. ExhibitGraph is used for connectivity checks when exhibits are found
+## 6. Fallback to client-provided path only when server tracking is unavailable (late join)
+## 7. Both client win RPC and server validation path use identical logic for consistency
 
 func _validate_path_continuity(path: Array[String]) -> bool:
-	"""Validate that a path through exhibits is continuous (no teleportation).
-	
-	Checks that each consecutive pair of rooms in the path are actually connected.
-	This prevents players from teleporting directly to the target.
-	
-	Returns true if path is valid, false if teleportation is detected.
-	"""
+	## Validates a path against exhibit connectivity to detect teleportation.
+	## Returns true if path is valid (all consecutive rooms are connected).
+	## Returns false if a teleport exploit is detected (disconnected room jump).
+	## Single-room paths are always valid — no movement means no teleportation possible.
 	if path.size() < 2:
 		return true  # Single room or empty path is valid (no movement needed)
 
@@ -932,51 +967,48 @@ func _validate_path_continuity(path: Array[String]) -> bool:
 
 
 func _get_museum_node() -> Node:
-	"""Get the Museum node for path validation"""
-	var main = get_tree().current_scene
+	## Retrieves the Museum node via the "main" group.
+	## Uses get_first_node_in_group() instead of current_scene to avoid
+	## circular dependency issues when called from signal callbacks.
+	var main = get_tree().get_first_node_in_group("main")
 	if main and main.has_node("Museum"):
 		return main.get_node("Museum")
 	return null
 
 
 func _are_rooms_connected(museum: Node, from_room: String, to_room: String) -> bool:
-	"""Check if two rooms are directly connected (share a door/hallway)."""
-	# Get exhibit nodes
+	## Checks if two rooms share a door (bidirectional connectivity).
+	## Iterates the "exits" array on each exhibit looking for a matching to_title.
+	## Returns true if exhibits are not found (handles dynamically generated rooms).
+	## Iterate exits to find bidirectional connectivity
 	var from_exhibit = _get_exhibit_by_title(museum, from_room)
 	var to_exhibit = _get_exhibit_by_title(museum, to_room)
-	
+
 	if not from_exhibit or not to_exhibit:
-		# If we can't find the exhibits, allow the transition
-		# (rooms might be dynamically generated)
-		return true
-	
-	# Check if from_exhibit has an exit to to_exhibit
+		return true  ## Dynamic rooms — allow connectivity check to pass
+
 	if "exits" in from_exhibit:
 		var exits: Array = from_exhibit.exits
 		for exit_hall in exits:
-			if exit_hall and "to_title" in exit_hall:
-				if exit_hall.to_title == to_room:
-					return true
-	
-	# Check reverse connection (doors work both ways)
+			if exit_hall and "to_title" in exit_hall and exit_hall.to_title == to_room:
+				return true
+
 	if "exits" in to_exhibit:
 		var exits: Array = to_exhibit.exits
 		for exit_hall in exits:
-			if exit_hall and "to_title" in exit_hall:
-				if exit_hall.to_title == from_room:
-					return true
-	
+			if exit_hall and "to_title" in exit_hall and exit_hall.to_title == from_room:
+				return true
+
 	return false
 
 
 func _get_exhibit_by_title(museum: Node, title: String) -> Node:
-	"""Find an exhibit node by its title"""
+	## Finds an exhibit node by page_title. Returns null if not found.
 	if title == "Lobby":
 		return museum.get_node_or_null("Lobby")
-	
-	# Search through museum children for matching exhibit
+
 	for child in museum.get_children():
 		if "page_title" in child and child.page_title == title:
 			return child
-	
+
 	return null

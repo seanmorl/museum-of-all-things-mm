@@ -1,0 +1,131 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/menu/AccessibilitySettings.gd" id="1_access"]
+
+[node name="AccessibilitySettings" type="VBoxContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+script = ExtResource("1_access")
+
+[node name="TextSection" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="TextSection"]
+layout_mode = 2
+text = "Text & Display"
+
+[node name="TextSizeRow" type="HBoxContainer" parent="TextSection"]
+layout_mode = 2
+
+[node name="TextSizeLabel" type="Label" parent="TextSection/TextSizeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Text Size"
+
+[node name="TextSizeSlider" type="HSlider" parent="TextSection/TextSizeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.75
+max_value = 1.5
+step = 0.05
+value = 1.0
+
+[node name="TextSizeValue" type="Label" parent="TextSection/TextSizeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+text = "100%"
+horizontal_alignment = 1
+
+[node name="ReadingFontCheck" type="CheckBox" parent="TextSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Use reading-friendly font"
+
+[node name="HSeparator" type="HSeparator" parent="."]
+
+[node name="ColorSection" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="ColorSection"]
+layout_mode = 2
+text = "Color & Vision"
+
+[node name="HighContrastCheck" type="CheckBox" parent="ColorSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "High contrast mode"
+
+[node name="ColorBlindRow" type="HBoxContainer" parent="ColorSection"]
+layout_mode = 2
+
+[node name="ColorBlindLabel" type="Label" parent="ColorSection/ColorBlindRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Color blind mode"
+
+[node name="ColorBlindOption" type="OptionButton" parent="ColorSection/ColorBlindRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="HSeparator2" type="HSeparator" parent="."]
+
+[node name="MotionSection" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="MotionSection"]
+layout_mode = 2
+text = "Motion"
+
+[node name="ReduceMotionCheck" type="CheckBox" parent="MotionSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Reduce motion"
+
+[node name="DisableParticlesCheck" type="CheckBox" parent="MotionSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Disable particles"
+
+[node name="HSeparator3" type="HSeparator" parent="."]
+
+[node name="InputSection" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="InputSection"]
+layout_mode = 2
+text = "Input Assistance"
+
+[node name="HoldToClickCheck" type="CheckBox" parent="InputSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Enable hold-to-click"
+
+[node name="DoubleTapCheck" type="CheckBox" parent="InputSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Enable double-tap to jump"
+
+[node name="HSeparator4" type="HSeparator" parent="."]
+
+[node name="RestoreDefaults" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Restore Accessibility Defaults"
+
+[connection signal="value_changed" from="TextSection/TextSizeRow/TextSizeSlider" to="." method="_on_text_size_changed"]
+[connection signal="toggled" from="TextSection/ReadingFontCheck" to="." method="_on_reading_font_toggled"]
+[connection signal="toggled" from="ColorSection/HighContrastCheck" to="." method="_on_high_contrast_toggled"]
+[connection signal="item_selected" from="ColorSection/ColorBlindRow/ColorBlindOption" to="." method="_on_color_blind_selected"]
+[connection signal="toggled" from="MotionSection/ReduceMotionCheck" to="." method="_on_reduce_motion_toggled"]
+[connection signal="toggled" from="MotionSection/DisableParticlesCheck" to="." method="_on_disable_particles_toggled"]
+[connection signal="toggled" from="InputSection/HoldToClickCheck" to="." method="_on_hold_to_click_toggled"]
+[connection signal="toggled" from="InputSection/DoubleTapCheck" to="." method="_on_double_tap_toggled"]
+[connection signal="pressed" from="RestoreDefaults" to="." method="_on_restore_defaults_pressed"]

@@ -73,3 +73,32 @@ const VICTORY_SOUND_VOLUME := -3.0
 # Lighting
 const LIGHT_ENERGY_DARK_MODE := 0.08
 const LIGHT_ENERGY_LIGHT_MODE := 1.2
+
+# Void/fall detection
+const VOID_Y_THRESHOLD: float = -50.0
+const VOID_CHECK_INTERVAL: float = 0.5
+const VOID_SPAWN_Y: float = 5.0
+const VOID_SPAWN_XZ: Vector2 = Vector2(0, 23)
+
+# Anti-cheat
+const TELEPORT_SNAP_THRESHOLD: float = 5.0
+const MAX_TELEPORT_DISTANCE: float = 10.0
+const VALID_PATH_THRESHOLD: float = 15.0
+
+# Race
+const VOTE_DURATION: float = 20.0
+const CANDIDATE_COUNT: int = 5
+const MAX_RACE_RETRIES: int = 10
+
+# Network timing
+const POSITION_SYNC_INTERVAL: float = 0.1
+const _KEEPALIVE_INTERVAL: float = 5.0
+const _STATE_CHECK_INTERVAL: float = 10.0
+const MIGRATION_TIMEOUT: float = 15.0
+const CONNECTION_TIMEOUT: float = 15.0
+
+# UI
+const HINT_COOLDOWN_SECONDS: float = 3.0
+
+# Painting
+const EAT_DURATION: float = 1.0

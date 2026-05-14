@@ -115,18 +115,6 @@ var _ssao_cycle_btn: Button = null
 func _ready() -> void:
 	UIEvents.fullscreen_toggled.connect(_on_fullscreen_toggled)
 
-	# ── Hide the baked "Experimental: SDFGI" tscn node — it's non-functional.
-	# Our _build_sdfgi_section() adds the proper working version instead.
-	for child in find_children("*", "CheckBox", true, false):
-		if child is CheckBox and "Experimental" in child.text:
-			child.visible = false
-			if child.get_parent():
-				child.get_parent().visible = false
-	# Also catch by exact label text in case it's a Label not a CheckBox
-	for child in find_children("*", "Label", true, false):
-		if child is Label and "Experimental" in child.text:
-			child.visible = false
-
 	# ── Overall quality preset row — injected before everything else ──────────
 	_build_overall_quality_row()
 
@@ -136,6 +124,7 @@ func _ready() -> void:
 	_build_tonemapping_section()
 	_build_image_section()
 	_build_resolution_dropdown()
+	_populate_option_buttons()
 	_style_all_option_buttons()
 	_load_settings()
 	_connect_new_signals()
@@ -285,10 +274,8 @@ func _apply_overall_quality(level: int) -> void:
 func _style_option_button(btn: OptionButton) -> void:
 	ThemeManager.style_option_button(btn)
 
-
 func _style_all_option_buttons() -> void:
 	_walk_and_style(self)
-
 
 func _walk_and_style(node: Node) -> void:
 	if node is OptionButton:
@@ -296,17 +283,17 @@ func _walk_and_style(node: Node) -> void:
 	for child in node.get_children():
 		_walk_and_style(child)
 
-
 func _make_row(label_text: String, widget: Control) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	var lbl := Label.new()
 	lbl.text = label_text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", ThemeManager.text_color)
 	row.add_child(lbl)
 	row.add_child(widget)
 	return row
-
 
 func _make_slider_row(label_text: String, min_v: float, max_v: float, step_v: float, init_v: float,
 		val_lbl: Label, val_fmt: String = "%.0f",
@@ -316,10 +303,10 @@ func _make_slider_row(label_text: String, min_v: float, max_v: float, step_v: fl
 	slider.max_value = max_v
 	slider.step = step_v
 	slider.value = init_v
-	slider.custom_minimum_size = Vector2(140, 0)
+	slider.custom_minimum_size = Vector2(140, 24)
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	val_lbl.text = val_fmt % init_v
-	val_lbl.custom_minimum_size = Vector2(40, 0)
+	val_lbl.custom_minimum_size = Vector2(44, 0)
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	slider.value_changed.connect(func(v: float):
 		val_lbl.text = val_fmt % v
@@ -751,13 +738,56 @@ func _build_resolution_dropdown() -> void:
 	_resolution_option.item_selected.connect(func(idx):
 		GraphicsManager.set_resolution(GraphicsManager.RESOLUTION_PRESETS[idx])
 	)
-	fullscreen_parent.add_child(_make_row("Resolution", _resolution_option))
+	var resolution_row := _make_row("Resolution", _resolution_option)
+	fullscreen_parent.add_child(resolution_row)
+	fullscreen_parent.move_child(resolution_row, fullscreen.get_index() + 1)
+
+func _populate_option_buttons() -> void:
+	scale_mode.clear()
+	scale_mode.add_item("Bilinear")
+	scale_mode.add_item("FSR")
+	scale_mode.add_item("Nearest")
+
+	fsr_quality.clear()
+	fsr_quality.add_item("Ultra Quality")
+	fsr_quality.add_item("Quality")
+	fsr_quality.add_item("Balanced")
+	fsr_quality.add_item("Performance")
+	fsr_quality.add_item("Ultra Performance")
+	fsr_quality.add_item("Native")
+
+	post_processing_effect.clear()
+	var pp_labels := ["None", "CRT", "Soft", "VHS", "PS1"]
+	for label in pp_labels:
+		post_processing_effect.add_item(label)
+
+	msaa_option.clear()
+	msaa_option.add_item("Disabled")
+	msaa_option.add_item("2x")
+	msaa_option.add_item("4x")
+	msaa_option.add_item("8x")
+
+	anisotropy_option.clear()
+	anisotropy_option.add_item("2x")
+	anisotropy_option.add_item("4x")
+	anisotropy_option.add_item("8x")
+	anisotropy_option.add_item("16x")
+
+	shadow_quality_option.clear()
+	shadow_quality_option.add_item("Low")
+	shadow_quality_option.add_item("Medium")
+	shadow_quality_option.add_item("High")
+	shadow_quality_option.add_item("Ultra")
 
 func _connect_new_signals() -> void:
-	enable_ssao.toggled.connect(_on_enable_ssao_toggled)
-	enable_glow.toggled.connect(_on_enable_glow_toggled)
-	enable_volumetric_fog.toggled.connect(_on_enable_volumetric_fog_toggled)
-	enable_particles.toggled.connect(_on_enable_particles_toggled)
+	if not enable_ssao.toggled.is_connected(_on_enable_ssao_toggled):
+		enable_ssao.toggled.connect(_on_enable_ssao_toggled)
+	if not enable_glow.toggled.is_connected(_on_enable_glow_toggled):
+		enable_glow.toggled.connect(_on_enable_glow_toggled)
+	if not enable_volumetric_fog.toggled.is_connected(_on_enable_volumetric_fog_toggled):
+		enable_volumetric_fog.toggled.connect(_on_enable_volumetric_fog_toggled)
+	if not enable_particles.toggled.is_connected(_on_enable_particles_toggled):
+		enable_particles.toggled.connect(_on_enable_particles_toggled)
 
 
 # =============================================================================

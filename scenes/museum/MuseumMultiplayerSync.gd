@@ -37,6 +37,13 @@ func handle_transition_request(to_title: String, hall_info: Dictionary) -> void:
 	if _transition_in_progress:
 		return
 
+	# Validate sender — only accept transitions for the requesting peer
+	var sender_id = multiplayer.get_remote_sender_id()
+	var to_peer_id = hall_info.get("peer_id", sender_id)
+	if sender_id != to_peer_id:
+		Log.warn("MuseumSync", "Transition rejected — sender %d does not match peer_id %d" % [sender_id, to_peer_id])
+		return
+
 	var from_title: String = hall_info.get("from_title", _museum._current_room_title)
 
 	# Authorize and broadcast the transition to all clients

@@ -38,10 +38,10 @@ theme_override_constants/separation = 0
 [node name="LeftCol" type="MarginContainer" parent="MainLayout" unique_id=1539093809]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/margin_left = 100
-theme_override_constants/margin_top = 80
+theme_override_constants/margin_left = 80
+theme_override_constants/margin_top = 60
 theme_override_constants/margin_right = 40
-theme_override_constants/margin_bottom = 80
+theme_override_constants/margin_bottom = 60
 
 [node name="BrandingVBox" type="VBoxContainer" parent="MainLayout/LeftCol" unique_id=137404229]
 layout_mode = 2
@@ -61,22 +61,22 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 theme_override_fonts/font = ExtResource("5_serif")
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 16
 text = "The Museum of All Things"
 
 [node name="Spacer" type="Control" parent="MainLayout/LeftCol/BrandingVBox" unique_id=1521059499]
-custom_minimum_size = Vector2(0, 48)
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 
 [node name="ButtonContainer" type="VBoxContainer" parent="MainLayout/LeftCol/BrandingVBox" unique_id=240212156]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 10
 
 [node name="Footer" type="VBoxContainer" parent="MainLayout/LeftCol/BrandingVBox" unique_id=1211904979]
 layout_mode = 2
 size_flags_vertical = 10
-theme_override_constants/separation = 16
+theme_override_constants/separation = 12
 
 [node name="Sep" type="ColorRect" parent="MainLayout/LeftCol/BrandingVBox/Footer" unique_id=1925865853]
 custom_minimum_size = Vector2(160, 1)
@@ -88,20 +88,20 @@ color = Color(1, 1, 1, 0.1)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 0.3)
 theme_override_fonts/font = ExtResource("6_sans")
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 12
 text = "SELECT GAME MODE"
 
 [node name="RightCol" type="MarginContainer" parent="MainLayout" unique_id=694181012]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/margin_left = 40
-theme_override_constants/margin_top = 80
-theme_override_constants/margin_right = 100
-theme_override_constants/margin_bottom = 80
+theme_override_constants/margin_top = 60
+theme_override_constants/margin_right = 80
+theme_override_constants/margin_bottom = 60
 
 [node name="WidgetVBox" type="VBoxContainer" parent="MainLayout/RightCol" unique_id=2069211665]
 layout_mode = 2
-theme_override_constants/separation = 24
+theme_override_constants/separation = 20
 alignment = 2
 
 [node name="FactPanel" type="PanelContainer" parent="MainLayout/RightCol/WidgetVBox" unique_id=1541718473]
@@ -128,11 +128,11 @@ text = "💡"
 
 [node name="FactText" type="Label" parent="MainLayout/RightCol/WidgetVBox/FactPanel/MarginContainer/HBoxContainer" unique_id=1508932715]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(300, 0)
+custom_minimum_size = Vector2(280, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 0.6)
 theme_override_fonts/font = ExtResource("6_sans")
-theme_override_font_sizes/font_size = 14
+theme_override_font_sizes/font_size = 13
 text = "The Museum generates rooms from real Wikipedia articles — no two visits are the same!"
 autowrap_mode = 2
 
@@ -140,12 +140,12 @@ autowrap_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 8
-theme_override_constants/separation = 10
+theme_override_constants/separation = 8
 
 [node name="DCPlaceholder" type="Control" parent="MainLayout/RightCol/WidgetVBox" unique_id=1781815504]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(340, 260)
+custom_minimum_size = Vector2(340, 240)
 layout_mode = 2
 
 [node name="EscHint" type="Label" parent="." unique_id=807843162]
@@ -156,9 +156,9 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -140.0
-offset_top = -60.0
+offset_top = -50.0
 offset_right = -40.0
-offset_bottom = -40.0
+offset_bottom = -30.0
 grow_horizontal = 0
 grow_vertical = 0
 theme_override_colors/font_color = Color(1, 1, 1, 0.4)

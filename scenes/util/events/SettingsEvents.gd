@@ -53,3 +53,13 @@ signal accessibility_changed(key: String, value: Variant)
 
 func emit_accessibility_changed(key: String, value: Variant) -> void:
 	accessibility_changed.emit(key, value)
+
+signal hold_to_click_changed(enabled: bool)
+
+func emit_hold_to_click_changed(enabled: bool) -> void:
+	hold_to_click_changed.emit(enabled)
+
+signal double_tap_changed(enabled: bool)
+
+func emit_double_tap_changed(enabled: bool) -> void:
+	double_tap_changed.emit(enabled)

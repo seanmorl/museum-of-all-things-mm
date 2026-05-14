@@ -1,14 +1,12 @@
 class_name HeavyGravityEvent
-extends RefCounted
-## Heavy Gravity - All players move 40% slower for 25-40 seconds
+extends EventBase
+## Heavy Gravity - All players move 40%% slower for 25-40 seconds
 
 static func apply() -> void:
-	# Set global speed modifier
 	RaceManager.set_global_speed_modifier(0.6)
 	Log.info("HeavyGravityEvent", "Applied: 0.6x speed")
 
 static func end() -> void:
-	# Restore normal speed
 	RaceManager.set_global_speed_modifier(1.0)
 	Log.info("HeavyGravityEvent", "Heavy gravity ended")
 

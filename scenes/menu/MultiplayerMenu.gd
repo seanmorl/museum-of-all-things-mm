@@ -656,7 +656,7 @@ func _on_join_connect_pressed() -> void:
 	
 	if not join_complete:
 		# Timeout
-		NetworkManager.close_connection()
+		NetworkManager.disconnect_from_game()
 		_show_error("Connection timed out. Server may be offline or address is incorrect.")
 		return
 	

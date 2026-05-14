@@ -783,13 +783,15 @@ func _create_skylight() -> Node3D:
 	mesh.set_surface_override_material(0, material)
 	skylight.add_child(mesh)
 	
-	# Directional light casting down
-	var light := DirectionalLight3D.new()
+	# Local fill light
+	var light := OmniLight3D.new()
 	light.name = "SkylightLight"
-	light.light_energy = 3.0
+	light.light_energy = 1.0
 	light.light_color = Color(1.0, 0.98, 0.9)
-	light.shadow_enabled = true
-	light.basis = Basis.looking_at(Vector3.DOWN)
+	light.light_indirect_energy = 0.5
+	light.omni_range = 8.0
+	light.shadow_enabled = false
+	light.position = Vector3(0, 2.0, 0)
 	skylight.add_child(light)
 	
 	return skylight

@@ -1,18 +1,14 @@
 class_name LowGravityEvent
-extends RefCounted
-## Low Gravity - Players float and jump super high!
+extends EventBase
+## Low Gravity - Players float higher and fall slower for 45-90 seconds
 
 static func apply() -> void:
-	# Reduce gravity for all players
-	if RaceManager.has_method("set_gravity_modifier"):
-		RaceManager.set_gravity_modifier(0.3)  # 30% of normal gravity
-	Log.info("LowGravityEvent", "Applied: Low gravity! Players will float!")
+	RaceManager.set_gravity_modifier(0.5)
+	Log.info("LowGravityEvent", "Applied: Gravity at 50%%")
 
 static func end() -> void:
-	# Restore normal gravity
-	if RaceManager.has_method("set_gravity_modifier"):
-		RaceManager.set_gravity_modifier(1.0)
-	Log.info("LowGravityEvent", "Gravity restored to normal")
+	RaceManager.set_gravity_modifier(1.0)
+	Log.info("LowGravityEvent", "Gravity restored")
 
 static func get_duration() -> float:
 	return randf_range(45.0, 90.0)
@@ -21,4 +17,4 @@ static func get_display_name() -> String:
 	return "Low Gravity"
 
 static func get_description() -> String:
-	return "Gravity is reduced! You'll float like on the moon!"
+	return "Lower gravity - float higher and fall slower!"

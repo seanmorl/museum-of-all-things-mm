@@ -1,0 +1,115 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/menu/InterfaceSettings.gd" id="1_interface"]
+
+[node name="InterfaceSettings" type="VBoxContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+script = ExtResource("1_interface")
+
+[node name="UIScaleSection" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="UIScaleSection"]
+layout_mode = 2
+text = "Display"
+
+[node name="ScaleRow" type="HBoxContainer" parent="UIScaleSection"]
+layout_mode = 2
+
+[node name="ScaleLabel" type="Label" parent="UIScaleSection/ScaleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "UI Scale"
+
+[node name="ScaleSlider" type="HSlider" parent="UIScaleSection/ScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.5
+max_value = 2.0
+step = 0.05
+value = 1.0
+
+[node name="ScaleValue" type="Label" parent="UIScaleSection/ScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(50, 0)
+text = "100%"
+horizontal_alignment = 1
+
+[node name="ResetScale" type="Button" parent="UIScaleSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Reset to 100%"
+
+[node name="HSeparator" type="HSeparator" parent="."]
+
+[node name="ChatSection" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="ChatSection"]
+layout_mode = 2
+text = "Chat"
+
+[node name="ShowChat" type="CheckBox" parent="ChatSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Show chat"
+
+[node name="TypingSound" type="CheckBox" parent="ChatSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Typing sound"
+
+[node name="ChatKeyRow" type="HBoxContainer" parent="ChatSection"]
+layout_mode = 2
+
+[node name="ChatKeyLabel" type="Label" parent="ChatSection/ChatKeyRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Chat keybind"
+
+[node name="ChatKeyButton" type="Button" parent="ChatSection/ChatKeyRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Press to rebind"
+
+[node name="KeyHint" type="Label" parent="ChatSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Press the button then press any key to rebind."
+
+[node name="HSeparator2" type="HSeparator" parent="."]
+
+[node name="LanguageSection" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="LanguageSection"]
+layout_mode = 2
+text = "Language"
+
+[node name="LanguageRow" type="HBoxContainer" parent="LanguageSection"]
+layout_mode = 2
+
+[node name="LanguageLabel" type="Label" parent="LanguageSection/LanguageRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Interface Language"
+
+[node name="LanguageOption" type="OptionButton" parent="LanguageSection/LanguageRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[connection signal="value_changed" from="UIScaleSection/ScaleRow/ScaleSlider" to="." method="_on_scale_changed"]
+[connection signal="pressed" from="UIScaleSection/ResetScale" to="." method="_on_reset_scale_pressed"]
+[connection signal="toggled" from="ChatSection/ShowChat" to="." method="_on_show_chat_toggled"]
+[connection signal="toggled" from="ChatSection/TypingSound" to="." method="_on_typing_sound_toggled"]
+[connection signal="pressed" from="ChatSection/ChatKeyRow/ChatKeyButton" to="." method="_on_chat_key_pressed"]
+[connection signal="item_selected" from="LanguageSection/LanguageRow/LanguageOption" to="." method="_on_language_selected"]

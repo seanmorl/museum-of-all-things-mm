@@ -3,7 +3,6 @@ extends CharacterBody3D
 ## Uses subsystems for crouch, mount, and skin functionality.
 
 const INTERPOLATION_SPEED: float = 15.0
-const TELEPORT_SNAP_THRESHOLD: float = 5.0
 const BOB_FREQUENCY: float = 12.0
 const BOB_AMPLITUDE: float = 0.05
 const DEFAULT_PIVOT_Y: float = 1.35
@@ -69,10 +68,6 @@ var _fp_arms: Node = null  # First-person arms for local player
 ## Void detection - teleport player back to safety if they fall too far
 var _void_check_timer: float = 0.0
 var _last_valid_position: Vector3 = Vector3.ZERO  # Track last safe position
-const VOID_Y_THRESHOLD: float = -50.0  # Below this = fallen into void
-const VOID_CHECK_INTERVAL: float = 0.5  # Check every 0.5 seconds
-const VOID_SPAWN_Y: float = 5.0  # Safe spawn height
-const VOID_SPAWN_XZ: Vector2 = Vector2(0, 23)  # Start line XZ position
 
 @onready var camera: Camera3D = $Pivot/Camera3D
 @onready var _pivot: Node3D = $Pivot
@@ -100,10 +95,8 @@ func _ready() -> void:
 	if _name_label:
 		_name_label.font = ThemeManager.get_reading_font()
 
-	ThemeManager.reading_font_changed.connect(func(f):
-		if _name_label: _name_label.font = f
-		if _pronoun_label: _pronoun_label.font = f
-	)
+	if not ThemeManager.reading_font_changed.is_connected(_on_reading_font_changed):
+		ThemeManager.reading_font_changed.connect(_on_reading_font_changed)
 
 	if _body_mesh:
 		_body_mesh_base_y = _body_mesh.position.y
@@ -323,8 +316,8 @@ func _exit_tree() -> void:
 	if SettingsEvents.set_joypad_deadzone.is_connected(_set_joy_deadzone):
 		SettingsEvents.set_joypad_deadzone.disconnect(_set_joy_deadzone)
 
-	# Note: ThemeManager.reading_font_changed uses inline lambda,
-	# Godot auto-cleans up lambdas when the object is freed
+	if ThemeManager.reading_font_changed.is_connected(_on_reading_font_changed):
+		ThemeManager.reading_font_changed.disconnect(_on_reading_font_changed)
 
 	# Subsystems - disconnect before cleanup
 	if _mount_system:
@@ -351,18 +344,25 @@ func _exit_tree() -> void:
 
 	if _footstep_player:
 		if _footstep_player.footstep_played.is_connected(_on_footstep_played):
-			_footstep_player.footstep_played.disconnect(_on_footstep_played)
+				_footstep_player.footstep_played.disconnect(_on_footstep_played)
+
+
+func _on_reading_font_changed(f: Font) -> void:
+	if _name_label:
+		_name_label.font = f
+	if _pronoun_label:
+		_pronoun_label.font = f
 
 
 func _physics_process(delta: float) -> void:
 	# Track last valid position (above void threshold)
-	if is_local and global_position.y > VOID_Y_THRESHOLD:
+	if is_local and global_position.y > Constants.VOID_Y_THRESHOLD:
 		_last_valid_position = global_position
 
 	# Void detection for local player - prevent falling forever
-	if is_local and _void_check_timer >= VOID_CHECK_INTERVAL:
+	if is_local and _void_check_timer >= Constants.VOID_CHECK_INTERVAL:
 		_void_check_timer = 0.0
-		if global_position.y < VOID_Y_THRESHOLD:
+		if global_position.y < Constants.VOID_Y_THRESHOLD:
 			_teleport_to_safety()
 	_void_check_timer += delta
 
@@ -441,13 +441,10 @@ func _physics_process(delta: float) -> void:
 		var delta_vec: Vector2 = Vector2(-Input.get_joy_axis(0, _joy_right_x), -Input.get_joy_axis(0, _joy_right_y))
 		if delta_vec.length() > _joy_deadzone and _enabled:
 			rotate_y(delta_vec.x * _joy_sensitivity)
+			_pivot.rotate_x(delta_vec.y * _joy_sensitivity)
+			_pivot.rotation.x = clamp(_pivot.rotation.x, -PITCH_CLAMP, PITCH_CLAMP)
 
-		# Sync position to network (every frame for smooth movement)
-		if Services.network_service and Services.network_service.is_multiplayer_active():
-			Services.network_service.sync_player_position(global_position, Vector3(0, rotation.y, 0), current_room)
-			if _enabled:
-				_pivot.rotate_x(delta_vec.y * _joy_sensitivity)
-				_pivot.rotation.x = clamp(_pivot.rotation.x, -PITCH_CLAMP, PITCH_CLAMP)
+		# Sync position to network (throttled in Main._position_sync_timer)
 
 		# Camera smoothing (only when enabled)
 		if smooth_movement and _enabled:
@@ -455,7 +452,7 @@ func _physics_process(delta: float) -> void:
 			_pivot.rotation.x = clamp(lerp_angle(_pivot.rotation.x, _pivot.rotation.x - _camera_v.x, delta * 30.0), -PITCH_CLAMP, PITCH_CLAMP)
 			_camera_v = _camera_v.lerp(Vector2.ZERO, delta * 20.0)
 
-		# MapCamera position and configuration is now handled by MinimapController.gd
+		# MapCamera viewport setup for 3D map rendering (kept for compatibility)
 
 		_footstep_player.set_on_floor(is_on_floor())
 
@@ -560,17 +557,12 @@ func _on_dismount_requested() -> void:
 
 
 func request_mount(target: Node) -> void:
-	var main_node: Node = get_tree().current_scene
-	if main_node and main_node.has_method("_request_mount"):
-		main_node._request_mount(target)
+	GameplayEvents.emit_mount_requested(target)
 
 
 func request_dismount() -> void:
-	var main_node: Node = get_tree().current_scene
-	Log.debug("Player", "request_dismount() called, main_node=%s" % [main_node])
-	if main_node and main_node.has_method("_request_dismount"):
-		Log.debug("Player", "Calling main._request_dismount()")
-		main_node._request_dismount()
+	Log.debug("Player", "request_dismount() called")
+	GameplayEvents.emit_dismount_requested()
 
 
 func execute_mount(target: Node, target_peer_id: int = -1) -> void:
@@ -846,7 +838,7 @@ func apply_network_position(pos: Vector3, rot_y: float, pivot_rot_x: float, pivo
 	else:
 		# Detect teleport (large position change) and snap instead of interpolate
 		var delta_distance: float = global_position.distance_to(pos)
-		if delta_distance > TELEPORT_SNAP_THRESHOLD:
+		if delta_distance > Constants.TELEPORT_SNAP_THRESHOLD:
 			should_snap = true
 
 	if should_snap:
@@ -896,33 +888,23 @@ func _update_crouch_body() -> void:
 # =============================================================================
 
 func _on_steal_requested(exhibit_title: String, image_title: String, image_url: String, image_size: Vector2, is_audio: bool = false) -> void:
-	var main_node: Node = get_tree().current_scene
-	if main_node and main_node.has_method("_request_steal_painting"):
-		main_node._request_steal_painting(exhibit_title, image_title, image_url, image_size, is_audio)
+	GameplayEvents.emit_steal_painting_requested(exhibit_title, image_title, image_url, image_size, is_audio)
 
 
 func _on_place_requested(exhibit_title: String, image_title: String, image_url: String, wall_position: Vector3, wall_normal: Vector3, image_size: Vector2, is_audio: bool = false) -> void:
-	var main_node: Node = get_tree().current_scene
-	if main_node and main_node.has_method("_request_place_painting"):
-		main_node._request_place_painting(exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, is_audio)
+	GameplayEvents.emit_place_painting_requested(exhibit_title, image_title, image_url, wall_position, wall_normal, image_size, is_audio)
 
 
 func _on_eat_requested(exhibit_title: String, image_title: String) -> void:
-	var main_node: Node = get_tree().current_scene
-	if main_node and main_node.has_method("_request_eat_painting"):
-		main_node._request_eat_painting(exhibit_title, image_title)
+	GameplayEvents.emit_eat_painting_requested(exhibit_title, image_title)
 
 
 func _on_eat_anim_started() -> void:
-	var main_node: Node = get_tree().current_scene
-	if main_node and main_node.has_method("_broadcast_eat_anim_start"):
-		main_node._broadcast_eat_anim_start()
+	GameplayEvents.emit_eat_anim_started()
 
 
 func _on_eat_anim_cancelled() -> void:
-	var main_node: Node = get_tree().current_scene
-	if main_node and main_node.has_method("_broadcast_eat_anim_cancel"):
-		main_node._broadcast_eat_anim_cancel()
+	GameplayEvents.emit_eat_anim_cancelled()
 
 
 func execute_steal_painting(texture: Texture2D, url: String, title: String, exhibit_title: String, size: Vector2) -> void:
@@ -940,9 +922,7 @@ func execute_drop_painting() -> void:
 # =============================================================================
 
 func _on_reaction_fired(reaction_index: int, target: Vector3) -> void:
-	var main_node: Node = get_tree().current_scene
-	if main_node and main_node.has_method("_on_local_reaction"):
-		main_node._on_local_reaction(reaction_index, target)
+	GameplayEvents.emit_local_reaction(reaction_index, target)
 
 
 func _on_footstep_played() -> void:
@@ -976,14 +956,14 @@ func _teleport_to_safety() -> void:
 		Log.info("Player", "Active race, teleporting to race start line: %s" % [teleport_pos])
 		if "current_room" in self:
 			current_room = "Lobby"
-	elif _last_valid_position.y > VOID_Y_THRESHOLD:
+	elif _last_valid_position.y > Constants.VOID_Y_THRESHOLD:
 		# Use last valid position with small Y offset to prevent immediate re-fall
 		teleport_pos = Vector3(_last_valid_position.x, _last_valid_position.y + 2.0, _last_valid_position.z)
 		message = "You fell through the floor!\n\nTeleported back to where you were."
 		Log.info("Player", "Returning to last valid position: %s" % [teleport_pos])
 	else:
 		# Fallback to start line if no valid position tracked
-		teleport_pos = Vector3(VOID_SPAWN_XZ.x, VOID_SPAWN_Y, VOID_SPAWN_XZ.y)
+		teleport_pos = Vector3(Constants.VOID_SPAWN_XZ.x, Constants.VOID_SPAWN_Y, Constants.VOID_SPAWN_XZ.y)
 		message = "You fell into the void!\n\nTeleported back to start line."
 		Log.info("Player", "No valid position tracked, using start line: %s" % [teleport_pos])
 		if "current_room" in self:
@@ -995,6 +975,4 @@ func _teleport_to_safety() -> void:
 	rotation = Vector3.ZERO
 	
 	# Show message to player
-	var main = get_tree().get_first_node_in_group("main")
-	if main and main.has_method("_show_error_message"):
-		main._show_error_message(message)
+	GameplayEvents.emit_error_message_requested(message)

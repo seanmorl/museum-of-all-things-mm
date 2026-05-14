@@ -3,7 +3,7 @@ extends Node
 ## Creates atmospheric particles programmatically per exhibit mood.
 
 # Active particle instances
-var _active_particles: Array[GPUParticles3D] = []
+var _active_particles: Array = []
 
 # Shared mesh for particles (billboard quads)
 var _particle_mesh: QuadMesh = null
@@ -300,7 +300,7 @@ func apply_mood_particles(parent: Node3D, mood: int, intensity: float = 1.0) -> 
 		_spawn_particles(parent, effect, intensity)
 
 
-func _spawn_particles(parent: Node3D, type_name: String, intensity: float) -> GPUParticles3D:
+func _spawn_particles(parent: Node3D, type_name: String, intensity: float) -> Node3D:
 	var cfg: ParticleConfig = CONFIGS.get(type_name)
 	if cfg == null:
 		push_warning("ParticleEffectsManager: unknown type '%s'" % type_name)
@@ -311,30 +311,31 @@ func _spawn_particles(parent: Node3D, type_name: String, intensity: float) -> GP
 		push_warning("ParticleEffectsManager: no cached material for '%s'" % type_name)
 		return null
 
-	var particles = GPUParticles3D.new()
+	var use_gpu := not Platform.is_compatibility_renderer()
+	var particles: Node3D = GPUParticles3D.new() if use_gpu else CPUParticles3D.new()
 	particles.name = type_name.capitalize().replace(" ", "")
-	particles.draw_pass_1 = _particle_mesh
-	particles.amount = maxi(1, int(cfg.amount * intensity))
-	particles.lifetime = cfg.lifetime
-	particles.one_shot = false
-	particles.explosiveness = 0.0
-	particles.randomness = 0.5
-	particles.process_material = mat
-	particles.local_coords = true
-	# Increased visibility range for larger exhibits
-	particles.visibility_range_end = 150.0
-	particles.visibility_range_fade_mode = GPUParticles3D.VISIBILITY_RANGE_FADE_DISABLED
+	particles.set("draw_pass_1", _particle_mesh)
+	particles.set("amount", maxi(1, int(cfg.amount * intensity)))
+	particles.set("lifetime", cfg.lifetime)
+	particles.set("one_shot", false)
+	particles.set("explosiveness", 0.0)
+	particles.set("randomness", 0.5)
+	particles.set("process_material", mat)
 
-	# Position particles at ceiling height so they fall down visibly
+	if use_gpu:
+		var gpu = particles as GPUParticles3D
+		gpu.local_coords = true
+		gpu.visibility_range_end = 150.0
+		gpu.visibility_range_fade_mode = GPUParticles3D.VISIBILITY_RANGE_FADE_DISABLED
+
 	particles.position = Vector3(0, 4, 0)
 
-	# Configure must be called before emitting
 	particles.restart()
 	particles.emitting = true
 
 	parent.add_child(particles)
 	_active_particles.append(particles)
-	Log.debug("ParticleEffectsManager", "Spawned '%s' with %d particles at %s" % [type_name, particles.amount, particles.global_position])
+	Log.debug("ParticleEffectsManager", "Spawned '%s' with %d particles at %s" % [type_name, particles.get("amount"), particles.global_position])
 	return particles
 
 

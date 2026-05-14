@@ -991,17 +991,17 @@ func _kick_player(peer_id: int) -> void:
 	if NetworkManager.is_server():
 		NetworkManager.kick_peer(peer_id)
 
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _teleport_player_to_lobby() -> void:
 	if _main and _main.has_method("_teleport_player_to_lobby"):
 		_main._teleport_player_to_lobby()
 
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _teleport_all_to_lobby() -> void:
 	if _main and _main.has_method("_teleport_player_to_lobby"):
 		_main._teleport_player_to_lobby()
 
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _force_follow_host() -> void:
 	# Teleport all players to host position
 	pass
@@ -1011,7 +1011,7 @@ func _spawn_powerup_at_player(peer_id: int) -> void:
 	# Spawn powerup at player location
 	pass
 
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _set_player_scale(scale: float) -> void:
 	"""Set all player models to specified scale"""
 	if _main and _main.has_node("Player"):
@@ -1020,7 +1020,7 @@ func _set_player_scale(scale: float) -> void:
 			player.scale = Vector3(scale, scale, scale)
 			_show_host_message("Player scale set to %.1fx" % scale)
 
-@rpc("authority", "call_remote", "reliable")
+@rpc("authority", "call_local", "reliable")
 func _set_gravity(gravity: float) -> void:
 	"""Set gravity for all players"""
 	if _main and _main.has_node("Player"):

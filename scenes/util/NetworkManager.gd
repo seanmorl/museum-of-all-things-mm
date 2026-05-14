@@ -59,7 +59,6 @@ var _connecting: bool = false
 var _connection_watchdog_timer: float = 0.0
 const _CONNECTION_TIMEOUT: float = 15.0  # Seconds before we give up connecting
 
-
 func _process(delta: float) -> void:
 	# Connection watchdog — runs even when multiplayer isn't fully active
 	if _connecting:
@@ -76,18 +75,12 @@ func _process(delta: float) -> void:
 	if not is_multiplayer_active():
 		return
 	
-	# RPC throttling - limit position syncs
-	_position_sync_timer += delta
-	if _position_sync_timer >= _POSITION_SYNC_INTERVAL:
-		_position_sync_timer = 0.0
-		# Position sync logic would go here (called by Player.gd)
-	
 	_keepalive_timer += delta
 	if _keepalive_timer >= _KEEPALIVE_INTERVAL:
 		_keepalive_timer = 0.0
 		if multiplayer.has_multiplayer_peer() and peer:
 			_send_keepalive.rpc()
-
+	
 	# Game state validation (server only)
 	if is_hosting:
 		_state_check_timer += delta
@@ -120,7 +113,7 @@ func _ready() -> void:
 
 func host_game(port: int = DEFAULT_PORT, dedicated: bool = false) -> Error:
 	peer = ENetMultiplayerPeer.new()
-	var error := peer.create_server(port, MAX_PLAYERS)
+	var error := peer.create_server(port, MAX_PLAYERS, 2, 0, 0)
 	if error != OK:
 		peer = null
 		return error
@@ -186,7 +179,7 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
 		Log.debug("Network", "Resolved %s → %s" % [address, resolved_ip])
 
 	peer = ENetMultiplayerPeer.new()
-	var error := peer.create_client(resolved_ip, port)
+	var error := peer.create_client(resolved_ip, port, 2, 0, 0)
 	if error != OK:
 		peer = null
 		Log.warn("Network", "ENet create_client failed: %s" % error_string(error))
@@ -459,7 +452,7 @@ func _on_peer_connected(id: int) -> void:
 	# Without this, playit.gg's ~19s UDP re-auth cycle drops the lobby connection.
 	var enet_peer := peer.get_peer(id) if peer else null
 	if enet_peer:
-		enet_peer.set_timeout(32, 20000, 60000)
+		enet_peer.set_timeout(5000, 20000, 60000)
 
 	# Defer the RPC burst by one frame so ENet fully registers the peer before
 	# we send to them. Sending RPCs before the peer is in ENet's peer table
@@ -525,7 +518,7 @@ func _apply_server_timeout() -> void:
 		return
 	var server_peer := peer.get_peer(1)
 	if server_peer:
-		server_peer.set_timeout(32, 20000, 60000)
+		server_peer.set_timeout(5000, 20000, 60000)
 		Log.debug("Network", "Set timeout on server peer")
 
 func _on_connection_failed() -> void:
@@ -633,6 +626,14 @@ func _request_host_migration() -> void:
 func _transfer_host_state(game_state: Dictionary) -> void:
 	"""New host receives all game state.
 	Uses any_peer because the old host (not authority) sends this to the new host."""
+	if not _migration_pending:
+		Log.warn("Network", "Rejecting host state transfer — no migration in progress")
+		return
+	var sender_id = multiplayer.get_remote_sender_id()
+	var connected_peers = _get_connected_peers()
+	if connected_peers.is_empty() or sender_id != connected_peers[0]:
+		Log.warn("Network", "Rejecting host state transfer from peer %d (expected %d)" % [sender_id, connected_peers[0] if not connected_peers.is_empty() else -1])
+		return
 	Log.info("Network", "Received host state, becoming host...")
 	_deserialize_game_state(game_state)
 
@@ -650,7 +651,7 @@ func _make_peer_host(peer_id: int) -> void:
 
 	# Reinitialize as server
 	peer = ENetMultiplayerPeer.new()
-	var err := peer.create_server(_host_port, MAX_PLAYERS)
+	var err := peer.create_server(_host_port, MAX_PLAYERS, 2, 0, 0)
 	if err != OK:
 		Log.error("Network", "Failed to create server on port %d: error %d" % [_host_port, err])
 		is_hosting = false

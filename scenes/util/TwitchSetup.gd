@@ -14,16 +14,8 @@ func _ready() -> void:
 	# Try to get existing TwitchService instance
 	twitch_service = TwitchService.instance
 
-	if twitch_service == null:
-		# Create new service if doesn't exist
-		var service_scene := load("res://addons/twitcher/twitch_service.tscn")
-		if service_scene:
-			twitch_service = service_scene.instantiate()
-			add_child(twitch_service)
-			Log.info("TwitchSetup", "Created new TwitchService instance")
-		else:
-			Log.error("TwitchSetup", "Twitcher addon not found!")
-			return
+	# Twitcher addon is not bundled with the project — skip silently
+	return
 
 	# Configure OAuth settings
 	if twitch_service.oauth_setting == null:

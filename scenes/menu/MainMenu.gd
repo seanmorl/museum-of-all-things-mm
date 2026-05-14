@@ -184,26 +184,23 @@ func _input(event: InputEvent) -> void:
 # ── Build ─────────────────────────────────────────────────────────────────────
 
 func _build_ui() -> void:
-	# Clear existing
 	for c in _button_container.get_children():
 		c.queue_free()
 	_menu_nodes.clear()
 
-	# Create selection bar (procedural glow added via code)
 	_selection_bar = ColorRect.new()
-	_selection_bar.custom_minimum_size = Vector2(4, 24)
+	_selection_bar.custom_minimum_size = Vector2(3, 28)
 	_selection_bar.color = Color.WHITE
 	add_child(_selection_bar)
 	_selection_bar.hide()
-	
-	# Add procedural glow using nested ColorRects (CSS-like glow)
+
 	for i in range(3):
 		var shadow := ColorRect.new()
-		shadow.custom_minimum_size = _selection_bar.custom_minimum_size + Vector2(i*4, i*4)
-		shadow.color = Color(0.4, 0.6, 1.0, 0.15 / (i + 1))
+		shadow.custom_minimum_size = _selection_bar.custom_minimum_size + Vector2(i*6, i*6)
+		shadow.color = Color(1, 1, 1, 0.08 / (i + 1))
 		shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_selection_bar.add_child(shadow)
-		shadow.position = -Vector2(i*2, i*2)
+		shadow.position = -Vector2(i*3, i*3)
 		shadow.show()
 
 	var items = [
@@ -220,9 +217,9 @@ func _build_ui() -> void:
 	for item in items:
 		var btn_hbox := HBoxContainer.new()
 		btn_hbox.name = item.label
-		btn_hbox.add_theme_constant_override("separation", 16)
+		btn_hbox.add_theme_constant_override("separation", 14)
 		btn_hbox.mouse_filter = Control.MOUSE_FILTER_STOP
-		
+
 		var icon_lbl := Label.new()
 		icon_lbl.text = item.icon
 		if item.label == "Toggle Theme":
@@ -231,8 +228,8 @@ func _build_ui() -> void:
 		elif item.label == "Language":
 			icon_lbl.name = "LanguageIcon"
 
-		icon_lbl.add_theme_font_size_override("font_size", 18)
-		icon_lbl.modulate.a = 0.6
+		icon_lbl.add_theme_font_size_override("font_size", 17)
+		icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn_hbox.add_child(icon_lbl)
 		
 		var lbl := Label.new()
@@ -242,21 +239,21 @@ func _build_ui() -> void:
 		elif label_text == "Language": label_text = _get_current_language_name()
 
 		lbl.text = label_text
-
 		if item.label == "Toggle Theme": lbl.name = "ThemeLabel"
 		elif item.label == "Language": lbl.name = "LanguageLabel"
 		
 		lbl.add_theme_font_override("font", _serif_font)
-		lbl.add_theme_font_size_override("font_size", 20)
+		lbl.add_theme_font_size_override("font_size", 18)
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn_hbox.add_child(lbl)
-		
-		# For Main.gd %Quit access
+
 		if item.label == "Quit":
 			btn_hbox.unique_name_in_owner = true
-		
+
 		btn_hbox.gui_input.connect(_on_item_gui_input.bind(_menu_nodes.size()))
 		btn_hbox.mouse_entered.connect(_on_item_mouse_entered.bind(_menu_nodes.size()))
-		
+		btn_hbox.mouse_exited.connect(_on_item_mouse_exited.bind(_menu_nodes.size()))
+
 		_button_container.add_child(btn_hbox)
 		btn_hbox.owner = self
 		_menu_nodes.append(btn_hbox)
@@ -268,28 +265,22 @@ func _update_selection(instant: bool = false) -> void:
 	for i in range(_menu_nodes.size()):
 		var node = _menu_nodes[i]
 		var is_selected = (i == _selected_index)
-		
-		var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		# Improved readability: 0.6 instead of 0.4 for inactive items
-		tw.tween_property(node, "modulate:a", 1.0 if is_selected else 0.6, 0.2)
-		
-		var target_x = 12 if is_selected else 0
-		if instant:
-			node.position.x = target_x
+		var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT) if not instant else null
+		if tw:
+			tw.tween_property(node, "modulate:a", 1.0 if is_selected else 0.5, 0.2)
 		else:
-			tw.parallel().tween_property(node, "position:x", target_x, 0.2)
-		
+			node.modulate.a = 1.0 if is_selected else 0.5
+
 	if _selected_index < _menu_nodes.size():
 		var target_node = _menu_nodes[_selected_index]
 		_selection_bar.show()
-		
-		# Update bar color based on theme
-		_selection_bar.color = ThemeManager.text_color
-		
+		var accent := Color(0.3, 0.55, 0.95) if ThemeManager.is_dark_mode else Color(0.2, 0.45, 0.85)
+		_selection_bar.color = accent
+
 		var target_pos = target_node.global_position
-		target_pos.x -= 24 # Offset to the left
+		target_pos.x -= 20
 		target_pos.y += (target_node.size.y - _selection_bar.size.y) / 2
-		
+
 		if instant:
 			_selection_bar.global_position = target_pos
 		else:
@@ -308,6 +299,16 @@ func _on_item_mouse_entered(index: int) -> void:
 		_selected_index = index
 		UISoundManager._play(UISoundManager.focus_sound)
 		_update_selection()
+	var node = _menu_nodes[index]
+	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "modulate:a", 1.0, 0.15)
+
+func _on_item_mouse_exited(index: int) -> void:
+	if _selected_index == index:
+		return
+	var node = _menu_nodes[index]
+	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "modulate:a", 0.5, 0.15)
 
 
 func _on_item_selected(index: int) -> void:
@@ -325,69 +326,55 @@ func _on_item_selected(index: int) -> void:
 
 func _apply_theme() -> void:
 	var dark := ThemeManager.is_dark_mode
-	
-	# Background (transparency handled by MainMenuBackground script)
-	var bg_col = ThemeManager.bg_color
-	bg_col.a = 0.6
-	# $Background.color = bg_col <-- Removed because Background is now a Control with a draw script
-	
-	# Logo
+	var accent := Color(0.3, 0.55, 0.95) if dark else Color(0.2, 0.45, 0.85)
+
 	var logo_text_col := "#F0EDE8" if dark else "#1A1814"
-	var accent_col := "#6BA3E8" if dark else "#3B7DD8"
-	_logo_label.text = "[color=%s]M[/color][color=%s]·[/color][color=%s]AT[/color]" % [logo_text_col, accent_col, logo_text_col]
-	
-	# Subtitle
+	var accent_hex := "#4C8CFF" if dark else "#2659D9"
+	_logo_label.text = "[color=%s]M[/color][color=%s]·[/color][color=%s]AT[/color]" % [logo_text_col, accent_hex, logo_text_col]
 	%SubtitleLabel.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	
-	# Menu Items
+
 	for node in _menu_nodes:
-		for child in node.get_children():
-			if child is Label:
-				child.add_theme_color_override("font_color", ThemeManager.text_color)
-				# Reset icon modulation if it's the icon label
-				if child.text.length() <= 2: # Likely an icon
-					child.modulate.a = 0.6
-	
-	# Selection Bar Glow
+		var icon: Label = node.get_child(0) if node.get_child_count() > 0 else null
+		var text_label: Label = node.get_child(1) if node.get_child_count() > 1 else null
+		if text_label:
+			text_label.add_theme_color_override("font_color", ThemeManager.text_color)
+		if icon:
+			icon.add_theme_color_override("font_color", ThemeManager.text_color)
+
 	if _selection_bar:
-		_selection_bar.color = ThemeManager.text_color
+		_selection_bar.color = accent
 		for child in _selection_bar.get_children():
 			if child is ColorRect:
-				child.color = (Color(0.4, 0.6, 1.0) if dark else Color(0.2, 0.4, 0.8))
-				child.color.a = 0.15 / (child.get_index() + 1)
-	
-	# Fact Panel
+				child.color = accent
+				child.color.a = 0.08 / (child.get_index() + 1)
+
 	var fact_style := StyleBoxFlat.new()
-	fact_style.bg_color = ThemeManager.bg_color
-	fact_style.bg_color.a = 0.4 if dark else 0.8
+	fact_style.bg_color = Color(1, 1, 1, 0.06) if dark else Color(1, 1, 1, 0.55)
 	fact_style.border_width_left = 1
 	fact_style.border_width_top = 1
 	fact_style.border_width_right = 1
 	fact_style.border_width_bottom = 1
-	fact_style.border_color = ThemeManager.border_color
-	fact_style.corner_radius_top_left = 12
-	fact_style.corner_radius_top_right = 12
-	fact_style.corner_radius_bottom_right = 12
-	fact_style.corner_radius_bottom_left = 12
+	fact_style.border_color = Color(1, 1, 1, 0.12) if dark else Color(0, 0, 0, 0.08)
+	for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+		fact_style.set("corner_radius_" + c, 14)
+	fact_style.shadow_color = Color(0, 0, 0, 0.25 if dark else 0.08)
+	fact_style.shadow_size = 20
+	fact_style.shadow_offset = Vector2(0, 4)
 	%FactPanel.add_theme_stylebox_override("panel", fact_style)
-	
 	_fact_text.add_theme_color_override("font_color", ThemeManager.text_color)
-	
-	# Update tags
+
 	_populate_tags()
-	
-	# Footer
-	$MainLayout/LeftCol/BrandingVBox/Footer/ModeDesc.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	$MainLayout/LeftCol/BrandingVBox/Footer/Sep.color = ThemeManager.border_color
+
+	var footer = $MainLayout/LeftCol/BrandingVBox/Footer
+	footer.get_node("ModeDesc").add_theme_color_override("font_color", ThemeManager.subtext_color)
+	footer.get_node("Sep").color = Color(1, 1, 1, 0.08) if dark else Color(0, 0, 0, 0.06)
 	$EscHint.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	
-	# Update trending ticker
+
 	if _trending_label:
 		_trending_label.add_theme_color_override("font_color", ThemeManager.subtext_color)
-	# Update trending separator
 	var trending_sep = get_node_or_null("MainLayout/RightCol/WidgetVBox/TrendingSep")
 	if trending_sep:
-		trending_sep.color = ThemeManager.border_color
+		trending_sep.color = Color(1, 1, 1, 0.08) if dark else Color(0, 0, 0, 0.06)
 
 # ── Tags ──────────────────────────────────────────────────────────────────────
 
@@ -400,26 +387,23 @@ func _populate_tags() -> void:
 	for t in tags:
 		var lbl := Label.new()
 		lbl.text = t
-		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.add_theme_font_size_override("font_size", 10)
 		lbl.add_theme_font_override("font", _sans_font)
-		lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
+		lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.55) if dark else Color(0, 0, 0, 0.5))
 		
 		var style := StyleBoxFlat.new()
-		style.bg_color = ThemeManager.bg_color
-		style.bg_color.a = 0.1 if dark else 0.3
+		style.bg_color = Color(1, 1, 1, 0.06) if dark else Color(0, 0, 0, 0.04)
 		style.border_width_left = 1
 		style.border_width_top = 1
 		style.border_width_right = 1
 		style.border_width_bottom = 1
-		style.border_color = ThemeManager.border_color
-		style.corner_radius_top_left = 20
-		style.corner_radius_top_right = 20
-		style.corner_radius_bottom_right = 20
-		style.corner_radius_bottom_left = 20
-		style.content_margin_left = 12
-		style.content_margin_top = 4
-		style.content_margin_right = 12
-		style.content_margin_bottom = 4
+		style.border_color = Color(1, 1, 1, 0.1) if dark else Color(0, 0, 0, 0.06)
+		for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+			style.set("corner_radius_" + c, 16)
+		style.content_margin_left = 10
+		style.content_margin_top = 3
+		style.content_margin_right = 10
+		style.content_margin_bottom = 3
 		
 		lbl.add_theme_stylebox_override("normal", style)
 		_tag_container.add_child(lbl)
@@ -511,23 +495,19 @@ func _entrance_animation() -> void:
 	_button_container.modulate.a = 0
 	%FactPanel.modulate.a = 0
 	%TagContainer.modulate.a = 0
-	%DCPlaceholder.modulate.a = 0
 
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(_logo_label, "modulate:a", 1.0, 0.8)
-	tw.tween_property(_button_container, "modulate:a", 1.0, 0.8).set_delay(0.3)
-	tw.tween_property(%FactPanel, "modulate:a", 1.0, 0.8).set_delay(0.5)
-	tw.tween_property(%TagContainer, "modulate:a", 1.0, 0.8).set_delay(0.6)
-	# Daily Challenge card disabled - not an important part of the game currently
-	# tw.tween_property(%DCPlaceholder, "modulate:a", 1.0, 0.8).set_delay(0.7)
-	
-	# Staggered items
-	var delay = 0.4
+	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_logo_label, "modulate:a", 1.0, 0.7)
+	tw.tween_property(_button_container, "modulate:a", 1.0, 0.7).set_delay(0.25)
+	tw.tween_property(%FactPanel, "modulate:a", 1.0, 0.7).set_delay(0.4)
+	tw.tween_property(%TagContainer, "modulate:a", 1.0, 0.7).set_delay(0.55)
+
+	var delay = 0.35
 	for node in _menu_nodes:
 		node.modulate.a = 0
-		var twb := create_tween()
-		twb.tween_property(node, "modulate:a", 1.0 if node == _menu_nodes[_selected_index] else 0.4, 0.4).set_delay(delay)
-		delay += 0.08
+		var twb := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		twb.tween_property(node, "modulate:a", 1.0 if node == _menu_nodes[_selected_index] else 0.5, 0.35).set_delay(delay)
+		delay += 0.06
 
 # ── Fact Logic ────────────────────────────────────────────────────────────────
 
@@ -644,72 +624,76 @@ func _show_patch_notes() -> void:
 	
 	var dim := ColorRect.new()
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0, 0, 0, 0.65)
+	dim.color = Color(0, 0, 0, 0.55)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_patch_popup.add_child(dim)
-	
+
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -350.0
+	panel.offset_left = -360.0
 	panel.offset_top = -280.0
-	panel.offset_right = 350.0
+	panel.offset_right = 360.0
 	panel.offset_bottom = 280.0
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_patch_popup.add_child(panel)
-	
+
+	var dark := ThemeManager.is_dark_mode
 	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = ThemeManager.bg_color
-	panel_style.border_color = ThemeManager.border_color
+	panel_style.bg_color = Color(0.08, 0.08, 0.1, 0.92) if dark else Color(1, 1, 1, 0.95)
+	panel_style.border_color = Color(1, 1, 1, 0.1) if dark else Color(0, 0, 0, 0.08)
 	for s in ["left", "right", "top", "bottom"]:
 		panel_style.set("border_width_" + s, 1)
 	for c in ["top_left", "top_right", "bottom_left", "bottom_right"]:
-		panel_style.set("corner_radius_" + c, 12)
-	panel_style.shadow_color = Color(0, 0, 0, 0.5)
-	panel_style.shadow_size = 28
+		panel_style.set("corner_radius_" + c, 16)
+	panel_style.shadow_color = Color(0, 0, 0, 0.4)
+	panel_style.shadow_size = 32
 	panel_style.shadow_offset = Vector2(0, 8)
 	panel.add_theme_stylebox_override("panel", panel_style)
-	
+
 	var outer := MarginContainer.new()
-	outer.add_theme_constant_override("margin_left", 24)
-	outer.add_theme_constant_override("margin_right", 24)
-	outer.add_theme_constant_override("margin_top", 20)
-	outer.add_theme_constant_override("margin_bottom", 20)
+	outer.add_theme_constant_override("margin_left", 28)
+	outer.add_theme_constant_override("margin_right", 28)
+	outer.add_theme_constant_override("margin_top", 24)
+	outer.add_theme_constant_override("margin_bottom", 24)
 	panel.add_child(outer)
-	
+
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
+	vbox.add_theme_constant_override("separation", 16)
 	outer.add_child(vbox)
-	
+
 	var header := HBoxContainer.new()
 	vbox.add_child(header)
-	
+
 	var title := Label.new()
 	title.text = "📋 Latest Changes"
 	title.add_theme_font_override("font", _serif_font)
-	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_font_size_override("font_size", 20)
 	title.add_theme_color_override("font_color", ThemeManager.text_color)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
-	
+
 	var close_btn := Button.new()
 	close_btn.text = "✕"
-	close_btn.custom_minimum_size = Vector2(32, 32)
+	close_btn.custom_minimum_size = Vector2(30, 30)
 	close_btn.pressed.connect(_close_patch_popup)
 	header.add_child(close_btn)
-	
-	vbox.add_child(HSeparator.new())
-	
+
+	var sep := ColorRect.new()
+	sep.custom_minimum_size.y = 1
+	sep.color = Color(1, 1, 1, 0.08) if dark else Color(0, 0, 0, 0.06)
+	sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(sep)
+
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(scroll)
-	
+
 	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", 16)
+	content.add_theme_constant_override("separation", 12)
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(content)
-	
+
 	var notes := [
 		{"title": "🎨 UI & Graphics Overhaul", "items": [
 			"New full-screen race countdown (3 → 2 → 1 → GO)",
@@ -732,58 +716,44 @@ func _show_patch_notes() -> void:
 			"Daily Challenge card hidden from main menu"
 		]}
 	]
-	
+
 	for section in notes:
 		var section_title := Label.new()
 		section_title.text = section.title
 		section_title.add_theme_font_override("font", _serif_font)
-		section_title.add_theme_font_size_override("font_size", 16)
+		section_title.add_theme_font_size_override("font_size", 15)
 		section_title.add_theme_color_override("font_color", ThemeManager.text_color)
 		content.add_child(section_title)
-		
-		for item in section.items:
+
+		for item_text in section.items:
 			var item_lbl := Label.new()
-			item_lbl.text = "• " + item
+			item_lbl.text = "•  " + item_text
 			item_lbl.add_theme_font_override("font", _sans_font)
-			item_lbl.add_theme_font_size_override("font_size", 13)
+			item_lbl.add_theme_font_size_override("font_size", 12)
 			item_lbl.add_theme_color_override("font_color", ThemeManager.subtext_color)
 			item_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
 			content.add_child(item_lbl)
-		
-		if section != notes[-1]:
-			var spacer := Control.new()
-			spacer.custom_minimum_size = Vector2(0, 8)
-			content.add_child(spacer)
-	
+
 	var footer := HBoxContainer.new()
-	footer.add_theme_constant_override("separation", 12)
+	footer.add_theme_constant_override("separation", 8)
 	vbox.add_child(footer)
-	
-	var refresh_btn := Button.new()
-	refresh_btn.text = "↻ Refresh"
-	refresh_btn.pressed.connect(_on_patch_refresh_pressed)
-	footer.add_child(refresh_btn)
-	
+
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	footer.add_child(spacer)
-	
+
 	var ok_btn := Button.new()
 	ok_btn.text = "Close"
 	ok_btn.pressed.connect(_close_patch_popup)
 	footer.add_child(ok_btn)
-	
-	_style_patch_btn(close_btn, false)
-	_style_patch_btn(refresh_btn, false)
-	_style_patch_btn(ok_btn, true)
-	
+
 	_patch_popup.modulate.a = 0.0
 	panel.modulate.a = 0.0
-	panel.scale = Vector2(0.9, 0.9)
+	panel.scale = Vector2(0.92, 0.92)
 	var tw := create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_patch_popup, "modulate:a", 1.0, 0.25)
-	tw.parallel().tween_property(panel, "modulate:a", 1.0, 0.25)
-	tw.parallel().tween_property(panel, "scale", Vector2(1, 1), 0.25)
+	tw.tween_property(_patch_popup, "modulate:a", 1.0, 0.2)
+	tw.parallel().tween_property(panel, "modulate:a", 1.0, 0.2)
+	tw.parallel().tween_property(panel, "scale", Vector2(1, 1), 0.2)
 
 
 func _close_patch_popup() -> void:
@@ -801,25 +771,31 @@ func _on_patch_refresh_pressed() -> void:
 
 
 func _style_patch_btn(btn: Button, primary: bool) -> void:
+	var dark := ThemeManager.is_dark_mode
 	btn.add_theme_font_override("font", _sans_font)
-	btn.add_theme_font_size_override("font_size", 14)
+	btn.add_theme_font_size_override("font_size", 13)
+	var base := StyleBoxFlat.new()
+	base.set_corner_radius_all(8)
+	base.content_margin_left = 16
+	base.content_margin_right = 16
+	base.content_margin_top = 6
+	base.content_margin_bottom = 6
 	if primary:
+		base.bg_color = Color(1, 1, 1, 0.08) if dark else Color(0, 0, 0, 0.04)
+		base.border_width_left = 1; base.border_width_top = 1
+		base.border_width_right = 1; base.border_width_bottom = 1
+		base.border_color = Color(1, 1, 1, 0.12) if dark else Color(0, 0, 0, 0.08)
+		btn.add_theme_stylebox_override("normal", base)
+		var hover := base.duplicate() as StyleBoxFlat
+		hover.bg_color = Color(1, 1, 1, 0.14) if dark else Color(0, 0, 0, 0.08)
+		btn.add_theme_stylebox_override("hover", hover)
 		btn.add_theme_color_override("font_color", ThemeManager.text_color)
 		btn.add_theme_color_override("font_hover_color", ThemeManager.text_color)
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(1, 1, 1, 0.1) if ThemeManager.is_dark_mode else Color(0, 0, 0, 0.05)
-		style.set_corner_radius_all(6)
-		btn.add_theme_stylebox_override("normal", style)
-		var hover := style.duplicate() as StyleBoxFlat
-		hover.bg_color.a = 0.2 if ThemeManager.is_dark_mode else 0.1
-		btn.add_theme_stylebox_override("hover", hover)
 	else:
+		base.bg_color = Color(0, 0, 0, 0)
+		btn.add_theme_stylebox_override("normal", base)
 		btn.add_theme_color_override("font_color", ThemeManager.subtext_color)
 		btn.add_theme_color_override("font_hover_color", ThemeManager.text_color)
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0, 0, 0, 0)
-		style.set_corner_radius_all(6)
-		btn.add_theme_stylebox_override("normal", style)
 
 
 func _on_quit_pressed() -> void:

@@ -82,12 +82,16 @@ func add_edge_from_network(from: String, to: String) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _broadcast_edge(from: String, to: String) -> void:
+	if not NetworkManager.is_server():
+		return
 	add_edge_from_network(from, to)
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func _receive_bulk_edges(edges_packed: PackedStringArray) -> void:
 	## Receives a flat array of [from1, to1, from2, to2, ...] pairs.
+	if not NetworkManager.is_server():
+		return
 	for i: int in range(0, edges_packed.size() - 1, 2):
 		add_edge_from_network(edges_packed[i], edges_packed[i + 1])
 

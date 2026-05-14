@@ -218,7 +218,7 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 
 	#inject target into doors array
 	Log.debug("ExhibitLoader", "Full list of doors: %s" % [data.doors])
-	if(data.doors.has(destination)):
+	if data.doors.has(destination) and data.doors.size() > 2:
 		data.doors[2] = destination
 
 	Log.info("ExhibitLoader", "Room '%s' has %d doors" % [context.title, doors.size()])

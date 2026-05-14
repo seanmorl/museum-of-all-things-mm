@@ -1,17 +1,13 @@
 class_name DoubleJumpEvent
-extends RefCounted
-## Double Jump - Players can jump twice before landing
+extends EventBase
+## Double Jump - Players can jump again while airborne for 30-60 seconds
 
 static func apply() -> void:
-	# Tell all players to enable double jump
-	if RaceManager.has_method("set_double_jump_enabled"):
-		RaceManager.set_double_jump_enabled(true)
-	Log.info("DoubleJumpEvent", "Applied: Double jump enabled!")
+	RaceManager.set_double_jump_enabled(true)
+	Log.info("DoubleJumpEvent", "Applied: Double jump enabled")
 
 static func end() -> void:
-	# Disable double jump
-	if RaceManager.has_method("set_double_jump_enabled"):
-		RaceManager.set_double_jump_enabled(false)
+	RaceManager.set_double_jump_enabled(false)
 	Log.info("DoubleJumpEvent", "Double jump disabled")
 
 static func get_duration() -> float:
@@ -21,4 +17,4 @@ static func get_display_name() -> String:
 	return "Double Jump"
 
 static func get_description() -> String:
-	return "You can now jump twice before landing!"
+	return "Jump again while in the air!"

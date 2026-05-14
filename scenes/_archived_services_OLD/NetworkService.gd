@@ -73,10 +73,18 @@ func _sync_game_state(state_dict: Dictionary) -> void:
 
 # --- Player Position Sync ---
 
+var _last_position_sync_time: int = 0
+const _POSITION_SYNC_INTERVAL_MS: int = 100  # 100ms between syncs
+
 func sync_player_position(position: Vector3, rotation: Vector3, room: String) -> void:
 	"""Send player position to server (called by local player)."""
 	if not is_multiplayer_active():
 		return
+
+	var now = Time.get_ticks_msec()
+	if now - _last_position_sync_time < _POSITION_SYNC_INTERVAL_MS:
+		return
+	_last_position_sync_time = now
 
 	if is_server():
 		# Server updates locally
@@ -88,6 +96,10 @@ func sync_player_position(position: Vector3, rotation: Vector3, room: String) ->
 @rpc("any_peer", "call_local", "unreliable_ordered")
 func _sync_player_position(peer_id: int, position: Vector3, rotation: Vector3, room: String) -> void:
 	"""Receive player position update (server only)."""
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != peer_id:
+		Log.warn("Network", "Rejected spoofed player position: sender=%d claimed=%d" % [sender_id, peer_id])
+		return
 	if is_server():
 		_on_player_position_updated(peer_id, position, rotation, room)
 
@@ -121,6 +133,10 @@ func sync_room_change(peer_id: int, room: String) -> void:
 
 @rpc("any_peer", "call_local", "reliable")
 func _sync_room_change(peer_id: int, room: String) -> void:
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != peer_id:
+		Log.warn("Network", "Rejected spoofed room change: sender=%d claimed=%d" % [sender_id, peer_id])
+		return
 	if is_server():
 		_broadcast_room_change.rpc(peer_id, room)
 

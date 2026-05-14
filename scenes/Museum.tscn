@@ -5,18 +5,28 @@
 [ext_resource type="PackedScene" uid="uid://u4b0awts0vdi" path="res://scenes/Lobby.tscn" id="3_exsdv"]
 [ext_resource type="PackedScene" uid="uid://b67kdt23qph25" path="res://scenes/AmbienceController.tscn" id="3_udk7u"]
 [ext_resource type="PackedScene" uid="uid://dcr63oanyv85b" path="res://scenes/MusicController.tscn" id="4_uv22m"]
+[ext_resource type="GradientTexture1D" uid="uid://crkstqrlo80l0" path="res://assets/textures/sky/sun_zenith_gradient.tres" id="5_crkst"]
+[ext_resource type="GradientTexture1D" uid="uid://budx7b4jc0rpj" path="res://assets/textures/sky/view_zenith_gradient.tres" id="6_budx7"]
+[ext_resource type="GradientTexture1D" uid="uid://m211c7fva76r" path="res://assets/textures/sky/sun_view_gradient.tres" id="7_m211c"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_rjqla"]
 render_priority = 0
 shader = ExtResource("2_t1o6y")
+shader_parameter/sun_zenith_gradient = ExtResource("5_crkst")
+shader_parameter/view_zenith_gradient = ExtResource("6_budx7")
+shader_parameter/sun_view_gradient = ExtResource("7_m211c")
 
 [sub_resource type="Sky" id="Sky_xbixb"]
 sky_material = SubResource("ShaderMaterial_rjqla")
 
 [sub_resource type="Environment" id="Environment_g30yg"]
+background_mode = 1
+background_energy_multiplier = 1.0
 sky = SubResource("Sky_xbixb")
+sky_fog_fade_enabled = true
+ambient_light_source = 2
 ambient_light_color = Color(1, 1, 1, 1)
-ambient_light_energy = 3.0
+ambient_light_energy = 0.5
 ssr_enabled = true
 ssr_max_steps = 256
 ssr_fade_in = 0.522331

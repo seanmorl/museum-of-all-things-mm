@@ -719,6 +719,12 @@ func sync_audio_play(exhibit_title: String, audio_title: String) -> void:
 	var audio_item: Node = _find_placed_audio_by_title(exhibit_title, audio_title)
 	if audio_item and audio_item.has_method("play_audio"):
 		audio_item.play_audio()
+		return
+	
+	# Also sync original SoundItems
+	var sound_item: Node = _find_sound_item_by_audio_title(exhibit_title, audio_title)
+	if sound_item and sound_item.has_method("sync_play"):
+		sound_item.sync_play()
 
 
 func sync_audio_stop(exhibit_title: String, audio_title: String) -> void:
@@ -726,6 +732,12 @@ func sync_audio_stop(exhibit_title: String, audio_title: String) -> void:
 	var audio_item: Node = _find_placed_audio_by_title(exhibit_title, audio_title)
 	if audio_item and audio_item.has_method("stop_audio"):
 		audio_item.stop_audio()
+		return
+	
+	# Also sync original SoundItems
+	var sound_item: Node = _find_sound_item_by_audio_title(exhibit_title, audio_title)
+	if sound_item and sound_item.has_method("sync_stop"):
+		sound_item.sync_stop()
 
 
 func _find_placed_audio_by_title(exhibit_title: String, audio_title: String) -> Node:

@@ -2,15 +2,24 @@ extends StaticBody3D
 ## Plays .ogg audio files streamed from Wikimedia Commons.
 class_name Gramophone
 
+signal audio_play_requested(exhibit_title: String, audio_title: String)
+signal audio_stop_requested(exhibit_title: String, audio_title: String)
+
 var title: String = ""
 var text: String = ""
 var url: String = ""
-var is_playing: bool = false
 var _stream: AudioStream = null
+var _is_playing: bool = false
 var _loading: bool = false
 var _interact_queued: bool = false
+var _exhibit_title: String = ""
+var _file_title: String = ""
 
 @onready var _player: AudioStreamPlayer3D = $AudioPlayer
+
+var is_playing: bool:
+	get:
+		return _is_playing
 
 func _ready() -> void:
 	add_to_group("sound_item")
@@ -36,7 +45,9 @@ var _pending_file_title: String = ""
 
 
 func init(exhibit_title: String, item_text: String, audio_url: String, file_title: String = "") -> void:
-	title = exhibit_title
+	_exhibit_title = exhibit_title
+	_file_title = file_title if file_title != "" else exhibit_title
+	title = _file_title
 	text = item_text
 	url = audio_url
 	_loading = true
@@ -109,7 +120,8 @@ func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStrin
 			_player.stream = _stream
 			MuseumReverb.ensure_bus()
 			_player.bus = MuseumReverb.BUS_NAME
-			is_playing = false
+			_player.stream = _stream
+			_is_playing = false
 			Log.info("Gramophone", "Audio stream loaded successfully (museum reverb enabled)")
 			# Process queued interaction if any
 			if _interact_queued:
@@ -127,13 +139,14 @@ func _set_error_state(error_message: String) -> void:
 	"""Set gramophone to error state with user-friendly message"""
 	title = "Error: %s" % error_message
 	text = "This gramophone cannot play audio. The file may be corrupted or in an unsupported format."
-	is_playing = false
+	_is_playing = false
 	Log.error("Gramophone", "Error state set: %s" % error_message)
 
 func set_stolen(stolen: bool) -> void:
 	visible = not stolen
 	if stolen:
 		_player.stop()
+		_is_playing = false
 	elif is_playing and _stream:
 		_player.play()
 
@@ -157,16 +170,51 @@ func interact() -> void:
 
 func _play_audio() -> void:
 	"""Internal function to play the audio with fade-in"""
+	# Sync to other players via Main's audio RPC system
+	if _exhibit_title != "" and _file_title != "":
+		var main = _get_main_node()
+		if main and main.has_method("_request_audio_play_rpc"):
+			var audio_key = _exhibit_title + ":" + _file_title
+			if is_playing:
+				main._request_audio_stop_rpc.rpc_id(1, audio_key, _exhibit_title, _file_title)
+			else:
+				main._request_audio_play_rpc.rpc_id(1, audio_key, _exhibit_title, _file_title)
+	
+	# Play/stop locally
 	var tween = create_tween()
 	if is_playing:
-		is_playing = false
+		_is_playing = false
 		tween.tween_property(_player, "volume_db", -80.0, 1.5).set_trans(Tween.TRANS_SINE)
 		tween.finished.connect(_player.stop)
 	else:
-		is_playing = true
+		_is_playing = true
 		_player.volume_db = -80.0
 		_player.play()
 		tween.tween_property(_player, "volume_db", 0.0, 1.0).set_trans(Tween.TRANS_SINE)
+
+
+func sync_play() -> void:
+	if _loading or not _stream:
+		return
+	_is_playing = true
+	_player.volume_db = -80.0
+	_player.play()
+	var tween = create_tween()
+	tween.tween_property(_player, "volume_db", 0.0, 1.0).set_trans(Tween.TRANS_SINE)
+
+
+func sync_stop() -> void:
+	_is_playing = false
+	var tween = create_tween()
+	tween.tween_property(_player, "volume_db", -80.0, 1.5).set_trans(Tween.TRANS_SINE)
+	tween.finished.connect(_player.stop)
+
+
+func _get_main_node() -> Node:
+	var museum = get_tree().get_first_node_in_group("Museum")
+	if museum and museum.has_node(".."):
+		return museum.get_parent()
+	return null
 
 
 func _load_audio_stream(body: PackedByteArray, file_url: String) -> AudioStream:
@@ -241,7 +289,7 @@ func get_interaction_text() -> String:
 		if title.begins_with("Error:"):
 			return "🔇 " + title
 		return "🔇 Loading..."
-	return "⏹ Stop Music" if is_playing else "▶ Play Music"
+	return "⏹ Stop Music" if _is_playing else "▶ Play Music"
 
 
 func _exit_tree() -> void:
