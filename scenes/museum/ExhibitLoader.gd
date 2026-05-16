@@ -290,6 +290,11 @@ func _proceed_with_exhibit_generation(data: Dictionary, context: Dictionary, bac
 
 	# For rider_load without hall, use default hall_type
 	var hall_type: Array = hall.hall_type if is_instance_valid(hall) else [0, 0]
+	var prev_title: String
+	if rider_load:
+		prev_title = context.get("from_room", "")
+	else:
+		prev_title = hall.from_title if is_instance_valid(hall) else ""
 	if is_instance_valid(hall):
 		new_exhibit.exit_added.connect(_on_exit_added.bind(doors, backlink, new_exhibit, hall))
 	else:
@@ -352,8 +357,9 @@ func _proceed_with_exhibit_generation(data: Dictionary, context: Dictionary, bac
 				image_titles.append(item_data.title)
 			item_queue.append(_add_item.bind(new_exhibit, item_data))
 
-	if result.has("wikidata_entity"):
-		_museum._queue_item_front(context.title, ExhibitFetcher.fetch_wikidata.bind(result.wikidata_entity, {
+	var wikidata_entity: String = data.get("wikidata_entity", "")
+	if wikidata_entity != "":
+		_museum._queue_item_front(context.title, ExhibitFetcher.fetch_wikidata.bind(wikidata_entity, {
 			"exhibit": new_exhibit,
 			"title": context.title,
 			"hall": hall,
