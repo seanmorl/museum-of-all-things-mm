@@ -20,6 +20,12 @@ func request_multiplayer_transition(hall: Hall, backlink: bool) -> void:
 	if _transition_in_progress:
 		return
 
+	# Safeguard: Clients must receive session_seed before generating any exhibit
+	if NetworkManager.is_multiplayer_active() and not NetworkManager.is_server():
+		if NetworkManager.session_seed == 0:
+			Log.debug("MuseumSync", "Transition blocked — waiting for session seed")
+			return
+
 	var hall_info: Dictionary = {
 		"to_title": hall.to_title,
 		"from_title": hall.from_title,
@@ -57,6 +63,12 @@ func execute_transition(to_title: String, from_title: String, hall_info: Diction
 func _execute_multiplayer_transition(to_title: String, from_title: String, hall_info: Dictionary) -> void:
 	if _transition_in_progress:
 		return
+
+	# Final fail‑safe: Clients must have the session seed before generating exhibits
+	if NetworkManager.is_multiplayer_active() and not NetworkManager.is_server():
+		if NetworkManager.session_seed == 0:
+			Log.warn("MuseumSync", "Transition aborted — session seed not yet received")
+			return
 
 	_transition_in_progress = true
 
@@ -100,7 +112,13 @@ func sync_to_exhibit(exhibit_title: String) -> void:
 	# Called when a late-joining player needs to sync to the current exhibit
 	if exhibit_title == "Lobby" or exhibit_title == _museum._current_room_title:
 		return
-
+	
+	# Safeguard: Clients must have session seed before generating any exhibit
+	if NetworkManager.is_multiplayer_active() and not NetworkManager.is_server():
+		if NetworkManager.session_seed == 0:
+			Log.debug("MuseumSync", "Sync blocked — waiting for session seed")
+			return
+	
 	Log.info("MuseumSync", "Syncing to exhibit %s" % exhibit_title)
 
 	# The exhibit will be generated locally since generation is deterministic

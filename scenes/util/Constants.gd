@@ -13,7 +13,7 @@ const FLOOR_MARBLE := 12
 
 # Network
 const DEFAULT_PORT := 7777  # Primary port (as requested)
-const MAX_PLAYERS := 8
+const MAX_PLAYERS := 16  # Spec §4.2: Max 16 players per session
 
 # Grid
 const GRID_CELL_SIZE := 4.0

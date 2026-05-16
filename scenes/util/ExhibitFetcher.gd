@@ -10,6 +10,7 @@ signal wikidata_complete(ids: Variant, context: Variant)
 signal images_complete(files: Array, context: Variant)
 signal commons_images_complete(category: Array, context: Variant)
 signal backlinks_complete(backlinks: Array, context: Variant)  ## Array of backlink titles
+signal links_fetched(title: String, links: Array, normalized: String)
 
 const MAX_BATCH_SIZE: int = 50
 const REQUEST_DELAY_MS: int = 1000
@@ -62,6 +63,7 @@ const RANDOM_LEVEL4_ENDPOINT: String = "https://randomincategory.toolforge.org/?
 const TOOLFORGE_USER_CATEGORY_BASE: String = "https://randomincategory.toolforge.org/?server=en.wikipedia.org&cmnamespace=0&cmtype=page&returntype=subject&category="
 
 var wikitext_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=revisions|extracts|pageprops|categories&ppprop=wikibase_item&explaintext=true&rvprop=content&cllimit=50&clshow=!hidden&format=json&redirects=1&origin=*&titles="
+var links_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=links&pllimit=max&format=json&redirects=1&origin=*&titles="
 var images_endpoint: String = "https://" + lang + ".wikipedia.org/w/api.php?action=query&prop=imageinfo&iiprop=extmetadata|url&iiurlwidth=640&iiextmetadatafilter=LicenseShortName|Artist&format=json&redirects=1&origin=*&titles="
 var wikidata_endpoint: String = "https://www.wikidata.org/w/api.php?action=wbgetclaims&uselang=" + lang + "&format=json&origin=*&entity="
 
@@ -69,8 +71,7 @@ var wikimedia_commons_category_images_endpoint: String = "https://commons.wikime
 var wikimedia_commons_gallery_images_endpoint: String = "https://commons.wikimedia.org/w/api.php?action=query&uselang=" + lang + "&generator=images&gimlimit=max&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=640&iiextmetadatafilter=Artist|LicenseShortName&format=json&origin=*&titles="
 
 var _fs_lock := Mutex.new()
-var _results_lock := Mutex.new()
-var _cache_lock := Mutex.new()  # Separate lock for cache order array
+var _data_lock := Mutex.new()  # Single lock protecting both _results and _cache_order (prevents deadlock)
 var _results: Dictionary = {}
 ## LRU cache for results - prevents memory growth in long sessions
 const MAX_CACHE_SIZE: int = 500  # Max cached articles
@@ -132,6 +133,8 @@ func _network_request_item() -> void:
 		_fetch_wikidata(item[1], item[2])
 	elif item[0] == "fetch_continue":
 		_dispatch_request(item[1], item[2], item[3])
+	elif item[0] == "fetch_links":
+		_fetch_links(item[1], item[2])
 
 func set_language(language: String) -> void:
 	lang = language
@@ -145,6 +148,7 @@ func set_language(language: String) -> void:
 	wikidata_endpoint = "https://www.wikidata.org/w/api.php?action=wbgetclaims&uselang=" + language + "&format=json&entity="
 	wikimedia_commons_category_images_endpoint = "https://commons.wikimedia.org/w/api.php?action=query&uselang=" + language + "&generator=categorymembers&gcmtype=file&gcmlimit=max&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=640&iiextmetadatafilter=Artist|LicenseShortName&format=json&gcmtitle="
 	wikimedia_commons_gallery_images_endpoint = "https://commons.wikimedia.org/w/api.php?action=query&uselang=" + language + "&generator=images&gimlimit=max&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=640&iiextmetadatafilter=Artist|LicenseShortName&format=json&titles="
+	links_endpoint = "https://" + language + ".wikipedia.org/w/api.php?action=query&prop=links&pllimit=max&format=json&redirects=1&origin=*&titles="
 
 func fetch(titles: Array, ctx: Variant) -> void:
 	# queue wikitext fetch in front of queue to improve next exhibit load time
@@ -326,6 +330,13 @@ func fetch_backlinks(title: String, context: Variant = null) -> void:
 	}
 	_dispatch_request(url, ctx, context)
 
+func fetch_links(title: String, ctx: Variant) -> void:
+	WorkQueue.add_item(NETWORK_QUEUE, ["fetch_links", title, ctx], null, true)
+
+func _fetch_links(title: String, context: Variant) -> void:
+	var url := links_endpoint + title.uri_encode()
+	_dispatch_request(url, {"links": true, "title": title}, context)
+
 func _fetch_random_from_category(category_name: String, context: Variant) -> void:
 	## Uses Toolforge randomincategory with cmnamespace=0&cmtype=page — mainspace articles only.
 	## This prevents Category:, Portal:, and other namespace pages from appearing as candidates.
@@ -412,8 +423,7 @@ func _fetch_wikitext(titles: Array, context: Variant) -> void:
 
 func get_result(title: String) -> Variant:
 	var res: Variant = null
-	_results_lock.lock()
-	_cache_lock.lock()
+	_data_lock.lock()
 	if _results.has(title):
 		# Move to end of cache order (most recently used)
 		_cache_order.erase(title)
@@ -426,20 +436,18 @@ func get_result(title: String) -> Variant:
 				res = null
 		else:
 			res = result
-	_cache_lock.unlock()
-	_results_lock.unlock()
+	_data_lock.unlock()
 	return res
 
 func has_result(title: String) -> bool:
-	_results_lock.lock()
+	_data_lock.lock()
 	var has_it: bool = _results.has(title)
-	_results_lock.unlock()
+	_data_lock.unlock()
 	return has_it
 
 ## Cache a result with LRU eviction to prevent memory growth
 func _cache_result(title: String, data: Dictionary) -> void:
-	_results_lock.lock()
-	_cache_lock.lock()
+	_data_lock.lock()
 
 	# If already cached, update access order
 	if _results.has(title):
@@ -455,8 +463,7 @@ func _cache_result(title: String, data: Dictionary) -> void:
 	_results[title] = data
 	_cache_order.append(title)
 
-	_cache_lock.unlock()
-	_results_lock.unlock()
+	_data_lock.unlock()
 
 func _dispatch_request(url: String, ctx: Dictionary, caller_ctx: Variant) -> void:
 	ctx.url = url
@@ -474,27 +481,23 @@ func _dispatch_request(url: String, ctx: Dictionary, caller_ctx: Variant) -> voi
 		handle_result.call(RequestSync.request(url))
 
 func _set_page_field(title: String, field: String, value: Variant) -> void:
-	_results_lock.lock()
-	_cache_lock.lock()
+	_data_lock.lock()
 	if not _results.has(title):
 		_results[title] = {}
 		# Track in cache order for new entries
 		_cache_order.append(title)
 	_results[title][field] = value
-	_cache_lock.unlock()
-	_results_lock.unlock()
+	_data_lock.unlock()
 
 func _append_page_field(title: String, field: String, values: Array) -> void:
-	_results_lock.lock()
-	_cache_lock.lock()
+	_data_lock.lock()
 	if not _results.has(title):
 		_results[title] = {}
 		_cache_order.append(title)
 	if not _results[title].has(field):
 		_results[title][field] = []
 	_results[title][field].append_array(values)
-	_cache_lock.unlock()
-	_results_lock.unlock()
+	_data_lock.unlock()
 
 func _get_json(body: PackedByteArray) -> Variant:
 	var json := JSON.new()
@@ -618,6 +621,21 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
 				Log.warn("ExhibitFetcher", "backlinks request but no 'backlinks' in query response")
 				backlinks_complete.emit.call_deferred([], caller_ctx)
 				return true
+
+		if ctx.get("links", false):
+			var all_links: Array[String] = []
+			var normalized: String = ctx.get("title", "")
+			if query.has("pages"):
+				for page_id in query.pages:
+					var page = query.pages[page_id]
+					if page.has("title"):
+						normalized = page.title
+					if page.has("links"):
+						for link in page.links:
+							if link.has("title") and link.get("ns", -1) == 0:
+								all_links.append(link.title)
+			links_fetched.emit.call_deferred(normalized, all_links, normalized)
+			return true
 
 		# handle the canonical names
 		if query.has("normalized"):

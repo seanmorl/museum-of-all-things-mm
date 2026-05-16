@@ -7,6 +7,7 @@ signal on_player_toward_entry
 
 # Use GridConstants for cell types
 const WALL: int = GridConstants.WALL
+const CEILING: int = GridConstants.CEILING
 const INTERNAL_HALL: int = GridConstants.INTERNAL_HALL
 const INTERNAL_HALL_TURN: int = GridConstants.INTERNAL_HALL_TURN
 const HALL_STAIRS_UP: int = GridConstants.HALL_STAIRS_UP
@@ -32,6 +33,7 @@ const _GRID_WRAPPER: PackedScene = preload("res://scenes/util/GridWrapper.tscn")
 @onready var light: OmniLight3D = $HallLight
 
 var _disco_hue: float = randf()
+var _skip_ceiling: bool = false
 
 func _ready() -> void:
 	ThemeManager.disco_mode_changed.connect(_on_disco_mode_changed)
@@ -176,6 +178,7 @@ func init(grid: Variant, p_from_title: String, p_to_title: String, hall_start: V
 		_grid = grid
 
 	hall_type = _hall_type
+	_skip_ceiling = (p_from_title == "Lobby" and p_to_title == "Lobby")
 	_create_curve_hall(hall_start, hall_dir, hall_type[0], hall_type[1])
 
 	from_dir = hall_dir
@@ -234,9 +237,13 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 		_grid.set_cell_item(hall_start, INTERNAL_HALL, ori)
 		_grid.set_cell_item(hall_start - Vector3.UP, floor_type, 0)
 		_grid.set_cell_item(hall_start + Vector3.UP, WALL, 0)
+		if not _skip_ceiling:
+			_grid.set_cell_item(hall_start + Vector3.UP * 2, CEILING, 0)
 		_grid.set_cell_item(hall_corner, INTERNAL_HALL_TURN, corner_ori)
 		_grid.set_cell_item(hall_corner - Vector3.UP, floor_type, 0)
 		_grid.set_cell_item(hall_corner + Vector3.UP, WALL, 0)
+		if not _skip_ceiling:
+			_grid.set_cell_item(hall_corner + Vector3.UP * 2, CEILING, 0)
 		light.global_position = GridUtils.grid_to_world(hall_corner) + Vector3.UP * 4
 		light.rotation_degrees = Vector3(180, 0, 0)
 	elif level == UP:
@@ -269,6 +276,8 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 		_grid.set_cell_item(exit_hall, INTERNAL_HALL, exit_ori)
 		_grid.set_cell_item(exit_hall - Vector3.UP, floor_type, 0)
 		_grid.set_cell_item(exit_hall + Vector3.UP, WALL, 0)
+		if not _skip_ceiling:
+			_grid.set_cell_item(exit_hall + Vector3.UP * 2, CEILING, 0)
 		to_dir = exit_hall_dir
 		to_pos = exit_hall
 	elif level == UP:
@@ -290,24 +299,28 @@ func _create_curve_hall(hall_start: Vector3, hall_dir: Vector3, is_right: bool =
 
 
 func _exit_tree() -> void:
-	# Disconnect signals to prevent lambda capture errors
-	if is_instance_valid(self) and ExhibitFetcher.wikitext_failed.is_connected(_on_fetch_failed):
-		ExhibitFetcher.wikitext_failed.disconnect(_on_fetch_failed)
-	
-	if is_instance_valid(_detector) and _detector.direction_changed.is_connected(_on_direction_changed):
-		_detector.direction_changed.disconnect(_on_direction_changed)
-	
-	# Clean up ThemeManager signals
+	# Disconnect demonstration signals to prevent connection warnings
 	if ThemeManager.disco_mode_changed.is_connected(_on_disco_mode_changed):
 		ThemeManager.disco_mode_changed.disconnect(_on_disco_mode_changed)
 	if ThemeManager.reading_font_changed.is_connected(_on_font_changed):
 		ThemeManager.reading_font_changed.disconnect(_on_font_changed)
+	if is_instance_valid(_detector) and _detector.direction_changed.is_connected(_on_direction_changed):
+		_detector.direction_changed.disconnect(_on_direction_changed)
+	if ExhibitFetcher.wikitext_failed.is_connected(_on_fetch_failed):
+		ExhibitFetcher.wikitext_failed.disconnect(_on_fetch_failed)
 
 
 func _on_fetch_failed(titles: Array, message: String) -> void:
 	for title: String in titles:
 		if title == to_title:
 			exit_door.set_message("Error Loading Exhibit: " + message)
+
+
+## Disconnect all dynamic signal connections on this hall.
+## Called by ExhibitLoader before freeing to prevent dangling signal references.
+func clear_connections() -> void:
+	Util.clear_listeners(self, "on_player_toward_exit")
+	Util.clear_listeners(self, "on_player_toward_entry")
 
 
 func _on_direction_changed(direction: String) -> void:

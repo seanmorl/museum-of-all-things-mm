@@ -139,8 +139,12 @@ func generate(params: Dictionary) -> void:
 	# init rng
 	step_start = Time.get_ticks_msec()
 	_rng = RandomNumberGenerator.new()
-	# Session-based seed: same article varies each play session
-	var session_seed = Time.get_ticks_usec()
+	# Use synchronized session seed for multiplayer; fallback to local time for single-player
+	var session_seed: int
+	if NetworkManager.is_multiplayer_active() and NetworkManager.session_seed != 0:
+		session_seed = NetworkManager.session_seed
+	else:
+		session_seed = Time.get_ticks_usec()
 	_rng.seed = hash(title) ^ session_seed
 	_prev_title = prev_title
 	_floor = ExhibitStyle.gen_floor_mooded(title, _mood)
@@ -471,7 +475,6 @@ func _decorate_room(room: Dictionary) -> void:
 	if !Engine.is_editor_hint() and not _no_props:
 		_decorate_room_center(center, width, length)
 		_try_place_secret_room(room)
-	
 	Log.info("TiledExhibitGenerator", "  _decorate_room(): %dms" % (Time.get_ticks_msec() - step_start))
 
 
@@ -528,7 +531,7 @@ func _try_place_large_decoration(center: Vector3, width: int, length: int) -> bo
 		if _try_place_mood_centerpiece(true_center, width, length, bounds):
 			return true
 
-	# Standard decoration (pool, planter, skylight)
+	# Standard decoration (pool, planter, skylight, fountain)
 	var pool_weight: int = 2 if ExhibitMood.prefers_pool(_mood) else 1
 	var planter_weight: int = 2 if ExhibitMood.prefers_planter(_mood) else 1
 	var skylight_weight: int = 2 if _mood == ExhibitMood.Mood.ASTRO or _mood == ExhibitMood.Mood.NATURE else 1
@@ -857,6 +860,7 @@ func _decorate_wall_tile(pos: Vector3) -> void:
 
 			exits.append(new_hall)
 			exit_added.emit(new_hall)
+	
 		# put exhibit items everywhere else
 		else:
 			add_item_slot([slot, hall_dir])
@@ -866,6 +870,8 @@ func _decorate_wall_tile(pos: Vector3) -> void:
 
 ## Place decorative wall elements (sconces, banners, plaques) based on mood.
 ## These are world-space nodes that don't modify the grid — completely safe.
+
+
 func _try_place_wall_decoration(wall_pos: Vector3, slot_pos: Vector3, dir: Vector3) -> void:
 	# Only place decorations occasionally (20% chance per wall tile)
 	if _rng.randi_range(0, 99) >= 20:

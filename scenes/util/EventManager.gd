@@ -207,10 +207,8 @@ func _try_trigger_event() -> void:
 	_warning_shown = true
 	_rpc_show_warning.rpc(event)
 
-	# Wait 2 seconds then start
-	if is_inside_tree():
-		await get_tree().create_timer(2.0).timeout
-	_start_event(event, duration)
+	# Wait 2 seconds then start (use one-shot timer — cannot await inside _process)
+	get_tree().create_timer(2.0).timeout.connect(func(): _start_event(event, duration), CONNECT_ONE_SHOT)
 	_event_pending = false
 
 
@@ -413,9 +411,8 @@ func _try_trigger_event_manual(event: EventType) -> void:
 
 	_rpc_show_warning.rpc(event)
 
-	if is_inside_tree():
-		await get_tree().create_timer(2.0).timeout
-	_start_event(event, duration)
+	# Wait 2 seconds then start (use one-shot timer — cannot await inside _process)
+	get_tree().create_timer(2.0).timeout.connect(func(): _start_event(event, duration), CONNECT_ONE_SHOT)
 
 
 func _get_available_events() -> Array[EventType]:

@@ -1911,6 +1911,7 @@ func _fetch_and_cache_backlinks(target_article: String) -> void:
 								seen[title] = true
 								backlinks.append(title)
 					_hint_backlinks = backlinks
+					RaceManager.set_target_backlinks(backlinks)
 					Log.debug("Main", "Cached %d backlinks for hints" % backlinks.size())
 				else:
 					Log.debug("Main", "No backlinks found")
@@ -1919,68 +1920,9 @@ func _fetch_and_cache_backlinks(target_article: String) -> void:
 	http.request_completed.connect(request_completed)
 	http.request(url)
 
-func _validate_backlinks_and_cache(target_article: String, potential_backlinks: Array[String]) -> void:
-	"""Validate each backlink by fetching its content and checking if target appears."""
-	if potential_backlinks.is_empty():
-		var hint_manager = get_node_or_null("/root/HintManager")
-		if hint_manager:
-			hint_manager.set_backlinks(target_article, [])
-		return
-	
-	# Batch process - validate first 5 backlinks only (fast validation)
-	var to_validate = potential_backlinks.slice(0, min(5, potential_backlinks.size()))
-	
-	# Use a Dictionary to track state across closures
-	var state = {
-		"validated": [] as Array[String],
-		"pending": to_validate.size(),
-		"target": target_article,
-		"original_count": potential_backlinks.size()
-	}
-	
-	for backlink in to_validate:
-		# Wikipedia API: fetch page content (full extract, not just intro)
-		var url: String = "https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&explaintext=true&titles=" + backlink.uri_encode() + "&origin=*"
-		var http := HTTPRequest.new()
-		add_child(http)
-		
-		var on_complete = func(result_code, response_code, _headers, body):
-			if result_code == HTTPRequest.RESULT_SUCCESS and response_code == 200:
-				var json = JSON.new()
-				if json.parse(body.get_string_from_utf8()) == OK:
-					var data = json.get_data()
-					if data.has("query") and data.has("pages"):
-						var pages = data.query.pages
-						for page_id in pages:
-							var page = pages[page_id]
-							if page.has("extract"):
-								var extract = page.extract as String
-								# Check if target appears in the extract (main content)
-								var target_lower = state.target.to_lower()
-								var extract_lower = extract.to_lower()
-								# Also check for common variations (e.g., "the Outback", "Outback region")
-								var found = extract_lower.find(target_lower) != -1
-								if not found:
-									# Try with "the " prefix
-									found = extract_lower.find("the " + target_lower) != -1
-								if found:
-									state.validated.append(backlink)
-									Log.debug("Main", "VALIDATED backlink '%s' contains '%s'" % [backlink, state.target])
-			
-			state.pending -= 1
-			if state.pending == 0:
-				# All validations complete - cache results
-				var hint_manager = get_node_or_null("/root/HintManager")
-				if hint_manager:
-					hint_manager.set_backlinks(state.target, state.validated)
-					Log.info("Main", "Cached %d VALIDATED backlinks for '%s' (filtered from %d)" % [state.validated.size(), state.target, state.original_count])
-				# Clean up any remaining HTTP requests
-				for child in get_children():
-					if child is HTTPRequest:
-						child.queue_free()
-		
-		http.request_completed.connect(on_complete)
-		http.request(url)
+func _validate_backlinks_and_cache(_target_article: String, _potential_backlinks: Array[String]) -> void:
+	"""Validation is now handled by ExhibitLoader door injection — backlinks always produce doors."""
+	pass
 
 func _reveal_host_hint() -> void:
 	"""Host pressed I key - reveal a text hint to all players."""
@@ -1997,11 +1939,17 @@ func _reveal_host_hint() -> void:
 	
 	var hint: String = available_hints.pick_random()
 	_hints_revealed += 1
+
+	# Show target context so players know why this article matters
+	var race_target := ""
+	if RaceManager.has_method("get_target_article"):
+		race_target = RaceManager.get_target_article()
+	var hint_msg := hint
+	if race_target != "":
+		hint_msg = "%s \u2192 %s" % [hint, race_target]
 	
-	# Emit to RaceHUD via HintManager
-	var hint_manager = get_node_or_null("/root/HintManager")
-	if hint_manager and hint_manager.has_signal("hint_revealed"):
-		hint_manager.reveal_hint_to_all(hint, "backlink")
+	# Broadcast to all players via RaceManager (autoload, always available)
+	RaceManager.hint_revealed.emit(hint_msg, "backlink")
 
 	Log.info("Main", "Host revealed hint %d: '%s'" % [_hints_revealed, hint])
 

@@ -30,6 +30,9 @@ var is_hosting: bool = false
 var is_dedicated_server: bool = false
 var show_nameplates: bool = true  # Toggle for showing player nameplates/pronouns
 
+# Multiplayer session seed for deterministic procedural generation
+var session_seed: int = 0
+
 # Persistent player identity (saved between sessions)
 var _saved_player_names: Dictionary = {}  # peer_id -> last known name
 
@@ -65,12 +68,7 @@ func _process(delta: float) -> void:
 		_connection_watchdog_timer += delta
 		if _connection_watchdog_timer >= _CONNECTION_TIMEOUT:
 			Log.error("Network", "Connection attempt timed out after %.0fs" % _connection_watchdog_timer)
-			_connecting = false
-			_connection_watchdog_timer = 0.0
-			_cleanup_connection()
-			disconnected_with_reason.emit("Connection timed out — server unreachable")
-			if not connection_failed.is_connected(_noop):
-				connection_failed.emit()
+			_connection_cleanup_with_reason("Connection timed out — server unreachable", true)
 
 	if not is_multiplayer_active():
 		return
@@ -122,6 +120,10 @@ func host_game(port: int = DEFAULT_PORT, dedicated: bool = false) -> Error:
 	is_hosting = true
 	is_dedicated_server = dedicated
 	_host_port = port  # Store the port we're hosting on
+
+	# Generate and broadcast session seed for deterministic exhibit generation
+	session_seed = randi()
+	set_session_seed.rpc(session_seed)
 
 	if not dedicated:
 		player_info[1] = {
@@ -412,6 +414,12 @@ func _broadcast_player_info(peer_id: int, player_name: String, color_html: Strin
 	}
 	player_info_updated.emit(peer_id)
 
+@rpc("authority", "call_remote", "reliable")
+func set_session_seed(seed: int) -> void:
+	session_seed = seed
+	if OS.is_debug_build():
+		Log.debug("Network", "Session seed synchronized: %d" % seed)
+
 @rpc("any_peer", "reliable")
 func _request_player_info(from_peer: int) -> void:
 	if is_dedicated_server:
@@ -465,6 +473,11 @@ func _send_peer_info_rpcs(id: int) -> void:
 	# Guard: peer may have disconnected in the frame we waited.
 	if not peer or not multiplayer.get_peers().has(id):
 		return
+	
+	# Send session seed FIRST — must arrive before any exhibit generation
+	if session_seed != 0:
+		set_session_seed.rpc_id(id, session_seed)
+	
 	_request_player_info.rpc_id(id, multiplayer.get_unique_id())
 	if not is_dedicated_server:
 		_receive_player_info.rpc_id(id, multiplayer.get_unique_id(), local_player_name, local_player_color.to_html(), local_player_skin, local_player_pronouns)
@@ -521,32 +534,6 @@ func _apply_server_timeout() -> void:
 		server_peer.set_timeout(5000, 20000, 60000)
 		Log.debug("Network", "Set timeout on server peer")
 
-func _on_connection_failed() -> void:
-	Log.warn("Network", "Connection failed")
-	_connecting = false
-	_connection_watchdog_timer = 0.0
-	peer = null
-	multiplayer.multiplayer_peer = null
-	disconnected_with_reason.emit("Connection failed")
-	connection_failed.emit()
-
-func _on_server_disconnected() -> void:
-	Log.info("Network", "Server disconnected")
-	_connecting = false
-	_connection_watchdog_timer = 0.0
-
-	# Clients should NOT attempt self-migration — this is insecure.
-	# Host migration is only initiated by the server via _request_host_migration.
-	# When the server disconnects, clients just clean up.
-
-	peer = null
-	multiplayer.multiplayer_peer = null
-	player_info.clear()
-	is_hosting = false
-	is_dedicated_server = false
-	disconnected_with_reason.emit("Host disconnected")
-	server_disconnected.emit()
-
 func _elect_and_migrate_host(connected_peers: Array) -> void:
 	"""Elect a new host from connected peers and migrate"""
 	if connected_peers.is_empty():
@@ -570,16 +557,39 @@ func _get_connected_peers() -> Array:
 	return peers
 
 func _cleanup_connection() -> void:
-	"""Clean up connection and emit disconnect with reason"""
+	"""Internal peer close. Use _connection_cleanup_with_reason for full cleanup + signals."""
 	_connecting = false
 	_connection_watchdog_timer = 0.0
-	peer = null
+	if peer:
+		peer.close()
+		peer = null
 	multiplayer.multiplayer_peer = null
 	player_info.clear()
 	is_hosting = false
 	is_dedicated_server = false
-	disconnected_with_reason.emit("Connection cleaned up")
+
+
+func _connection_cleanup_with_reason(reason: String, emit_connection_failed: bool = false) -> void:
+	"""Full disconnect cleanup + reason signal. Centralized so every exit path
+	uses the same state cleanup, preventing accidental signal duplication."""
+	_cleanup_connection()
+	disconnected_with_reason.emit(reason)
 	server_disconnected.emit()
+	if emit_connection_failed:
+		connection_failed.emit()
+
+
+func _on_connection_failed() -> void:
+	"""ENet peer connection failed."""
+	Log.warn("Network", "Connection failed")
+	_connection_cleanup_with_reason("Connection failed")
+
+
+func _on_server_disconnected() -> void:
+	"""Server-side disconnect."""
+	Log.info("Network", "Server disconnected")
+	_connection_cleanup_with_reason("Host disconnected")
+
 
 @rpc("any_peer", "call_local", "reliable")
 func _request_host_migration() -> void:
@@ -593,6 +603,7 @@ func _request_host_migration() -> void:
 	# Validate: only accept migration requests from the elected peer (lowest ID)
 	var connected_peers = _get_connected_peers()
 	if connected_peers.is_empty():
+		Log.error("Network", "No peers available for host migration")
 		return
 	var expected_host = connected_peers[0]  # lowest ID = longest connected
 	if requesting_peer != expected_host:

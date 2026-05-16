@@ -60,7 +60,8 @@ func _on_race_started(_target: String, _start: String) -> void:
 	add_to_group("mouse_overlay")
 	_apply_theme()
 	# Connect to dark mode changes for theme updates
-	ThemeManager.dark_mode_changed.connect(_on_theme_changed)
+	if not ThemeManager.dark_mode_changed.is_connected(_on_theme_changed):
+		ThemeManager.dark_mode_changed.connect(_on_theme_changed)
 	
 	# Ensure we're completely inert when hidden
 	visible = false

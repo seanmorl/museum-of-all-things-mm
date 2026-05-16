@@ -108,6 +108,13 @@ func _on_audio_downloaded(result: int, response_code: int, _headers: PackedStrin
 	if result == HTTPRequest.RESULT_SUCCESS and response_code == 200:
 		Log.info("Gramophone", "Audio downloaded, %d bytes" % body.size())
 
+		if body.size() >= 6:
+			var head := body.slice(0, 6).get_string_from_utf8()
+			if head.begins_with("<!") or head.begins_with("<ht"):
+				Log.error("Gramophone", "Downloaded content is HTML, not audio — likely a Commons page URL instead of direct file URL")
+				_set_error_state("Commons page URL, not direct audio")
+				return
+
 		# Validate buffer has data
 		if body.size() == 0:
 			Log.error("Gramophone", "Downloaded audio buffer is empty for '%s'" % text)

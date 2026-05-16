@@ -8,6 +8,7 @@ signal race_ended(winner_peer_id: int, winner_name: String)
 signal race_cancelled
 ## Emitted every second while a race is active. Connect to update a HUD timer.
 signal race_timer_updated(elapsed_seconds: float)
+signal hint_revealed(hint: String, hint_type: String)
 
 ## Emitted on all peers when the host cancels the vote.
 signal vote_cancelled
@@ -31,6 +32,7 @@ var _vote_start_article: String = ""
 var _winner_peer_id: int = -1
 var _winner_name: String = ""
 var _winner_path: Array[String] = []  ## Path taken by the winner, sent from their client
+var _backlinks: Array[String] = []  ## Backlinks for the current race target (articles linking TO target)
 
 ## Global speed modifier for events (1.0 = normal, 1.5 = 50% faster, 0.6 = 40% slower)
 var _global_speed_modifier: float = 1.0
@@ -191,6 +193,15 @@ func get_winner_path() -> Array[String]:
 	## Returns the path the winner navigated, as received from their client.
 	## Empty array until a race ends.
 	return _winner_path
+
+func get_target_backlinks() -> Array[String]:
+	return _backlinks
+
+func set_target_backlinks(backlinks: Array[String]) -> void:
+	_backlinks = backlinks
+
+func clear_target_backlinks() -> void:
+	_backlinks.clear()
 
 func get_state() -> State:
 	return _state
@@ -436,6 +447,8 @@ func _receive_vote(peer_id: int, candidate_index: int) -> void:
 	_votes[peer_id] = candidate_index
 	Log.debug("RaceManager", "Vote from peer %d for %s" % [peer_id, _vote_candidates[candidate_index]])
 
+
+
 func start_race(target_article: String, start_article: String) -> void:
 	if not NetworkManager.is_server():
 		Log.error("RaceManager", "Only the host can start a race")
@@ -475,23 +488,33 @@ func _start_countdown(target_article: String, start_article: String) -> void:
 	EventBus.publish_countdown_started()
 	Log.debug("RaceManager", "Starting countdown: 3...")
 
-	while countdown >= 0:
-		# Always emit locally so single-player and the server itself receive the signal.
-		race_countdown.emit(countdown)
-		EventBus.publish_countdown_tick(countdown)
-		Log.debug("RaceManager", "Countdown emit: %d" % countdown)
-		# Only RPC to clients when multiplayer is actually running.
-		# (Previously race_countdown.emit + _sync_countdown.rpc(call_local) fired twice
-		# on the server in multiplayer — now we guard the rpc behind is_multiplayer_active.)
-		if NetworkManager.is_multiplayer_active():
-			_sync_countdown.rpc_id(0, countdown)
+	# Kick off the first tick immediately
+	_emit_countdown_tick(countdown, target_article, start_article, interval)
 
-		await get_tree().create_timer(interval).timeout
-		if countdown == 0:
-			break
-		countdown -= 1
 
-	# Now start the actual race
+func _emit_countdown_tick(countdown: int, target_article: String, start_article: String, interval: float) -> void:
+	## Emit one countdown tick and schedule the next (called via one-shot timer).
+	# Always emit locally so single-player and the server itself receive the signal.
+	race_countdown.emit(countdown)
+	EventBus.publish_countdown_tick(countdown)
+	Log.debug("RaceManager", "Countdown emit: %d" % countdown)
+	# Only RPC to clients when multiplayer is actually running.
+	if NetworkManager.is_multiplayer_active():
+		_sync_countdown.rpc_id(0, countdown)
+
+	if countdown == 0:
+		# Countdown finished — start the actual race
+		_start_race_after_countdown(target_article, start_article)
+	else:
+		# Schedule next tick
+		get_tree().create_timer(interval).timeout.connect(
+			func(): _emit_countdown_tick(countdown - 1, target_article, start_article, interval),
+			CONNECT_ONE_SHOT
+		)
+
+
+func _start_race_after_countdown(target_article: String, start_article: String) -> void:
+	## Called when countdown reaches 0. Starts the actual race.
 	if _state != State.IDLE:
 		Log.warn("RaceManager", "Race cancelled during countdown — aborting start")
 		return
@@ -528,30 +551,9 @@ func notify_article_reached(peer_id: int, article_title: String, visited_path: A
 		if _state != State.ACTIVE:
 			return
 
-		var raw_server_path: Array = _player_room_history.get(peer_id, [])
-		var server_path: Array[String] = []
-		for item in raw_server_path:
-			server_path.append(str(item))
+		var path: Array[String] = _build_authoritative_path(peer_id, visited_path)
 
-		var path: Array[String] = []
-
-		if server_path.size() > 0:
-			## Server has tracked this peer's rooms — use as source of truth
-			for item in server_path:
-				path.append(item)
-		elif visited_path.size() > 0:
-			## Client provided a path (server tracking unavailable, e.g. late join)
-			for item in visited_path:
-				path.append(str(item))
-			Log.debug("RaceManager", "Using client-provided path (server tracking unavailable)")
-		elif _local_visited_pages.size() > 0:
-			## Fallback to local path (single-player where broadcast doesn't run)
-			for item in _local_visited_pages:
-				path.append(str(item))
-			Log.debug("RaceManager", "Using local visited path (single-player fallback)")
-		else:
-			## Empty path — player claims to have won without visiting any rooms
-			## This can happen if a player falls into the void and claims a win
+		if path.is_empty():
 			Log.debug("RaceManager", "Blocked win — empty path for '%s'" % article_title)
 			return
 
@@ -670,6 +672,7 @@ func _sync_race_end(winner_peer_id: int, winner_name: String, final_time: float,
 
 	# Clear hint cache to prevent memory leak
 	_clear_hint_cache()
+	clear_target_backlinks()
 
 	if not NetworkManager.is_server():
 		race_ended.emit(winner_peer_id, winner_name)
@@ -686,6 +689,7 @@ func _sync_race_cancel() -> void:
 
 	# Clear hint cache to prevent memory leak
 	_clear_hint_cache()
+	clear_target_backlinks()
 
 	if not NetworkManager.is_server():
 		race_cancelled.emit()
@@ -720,6 +724,33 @@ func _sync_vote_state_to_peer(candidates: Array, timer: float) -> void:
 	_vote_timer_paused = false
 	vote_started.emit(candidates)
 
+## Build authoritative path for a peer using the best available source.
+## Priority: server-tracked room history > client-provided path > local fallback.
+## Returns an Array[String]. Returns empty array if no path data exists (caller should reject).
+func _build_authoritative_path(peer_id: int, client_path: Array = []) -> Array[String]:
+	var raw_server_path: Array = _player_room_history.get(peer_id, [])
+	var server_path: Array[String] = []
+	for item in raw_server_path:
+		server_path.append(str(item))
+
+	var path: Array[String] = []
+
+	if server_path.size() > 0:
+		## Server has tracked this peer's rooms — use as source of truth
+		for item in server_path:
+			path.append(item)
+	elif not client_path.is_empty():
+		## Fallback: client-provided path (server tracking unavailable, e.g. late join)
+		for item in client_path:
+			path.append(str(item))
+	elif _local_visited_pages.size() > 0:
+		## Fallback to local path (single-player where broadcast doesn't run)
+		for item in _local_visited_pages:
+			path.append(str(item))
+		Log.debug("RaceManager", "Using local visited path for peer %d (single-player fallback)" % peer_id)
+
+	return path
+
 ## Server-only RPC: validates a player's win claim.
 ## 1. Rejects wrong target / inactive race
 ## 2. Chooses the stronger available path (server-tracked vs. client-provided)
@@ -742,31 +773,7 @@ func _request_win_validation(peer_id: int, article_title: String, visited_path: 
 		return
 
 	## Build the authoritative path for validation
-	var server_path: Array[String] = []
-	var raw_server_path: Array = _player_room_history.get(peer_id, [])
-	for item in raw_server_path:
-		server_path.append(str(item))
-
-	var path: Array[String] = []
-
-	if server_path.size() > 0:
-		## Use server-tracked path — clients cannot fake this
-		for item in server_path:
-			path.append(str(item))
-	elif visited_path.size() > 0:
-		## Fallback: client provided path (server tracking unavailable)
-		for item in visited_path:
-			path.append(str(item))
-		Log.warn("RaceManager", "Using client-provided path for peer %d (server tracking unavailable)" % peer_id)
-	elif _local_visited_pages.size() > 0:
-		## Fallback to local path (single-player where broadcast doesn't run)
-		for item in _local_visited_pages:
-			path.append(str(item))
-		Log.debug("RaceManager", "Using local visited path for peer %d (single-player fallback)" % peer_id)
-	else:
-		## No path — reject immediately
-		Log.warn("RaceManager", "Win rejected for peer %d - no path data available" % peer_id)
-		return
+	var path: Array[String] = _build_authoritative_path(peer_id, visited_path)
 
 	## Empty path = instant-win exploit (e.g. player never left lobby)
 	if path.is_empty():

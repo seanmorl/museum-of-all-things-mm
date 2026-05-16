@@ -13,10 +13,13 @@ var _loading_exhibits: Dictionary = {}  # Track in-flight fetches to prevent dup
 var _pending_items_results: Dictionary = {}  # title -> Dictionary result (per-title items_complete)
 var _logged_slot_cap: bool = false
 
+# Reference count for concurrent loads (prevents premature hide)
+var _active_load_count: int = 0
+
 # Hint system disabled - these variables no longer needed
 # var _pending_backlink_rooms: Array[Dictionary] = []
 var _signals_connected: bool = false
-var destination: String = "Dog";
+var destination: String = ""
 
 var _starting_height: int = 40
 var _height_increment: int = 20
@@ -29,12 +32,16 @@ var _min_room_dimension: int = 2
 var _max_room_dimension: int = 5
 
 func _show_loading_indicator(text: String) -> void:
+	_active_load_count += 1
 	if LoadingScreen:
 		LoadingScreen.show_compact(text)
 
 func _hide_loading_indicator() -> void:
-	if LoadingScreen:
-		LoadingScreen.hide_loading()
+	if _active_load_count > 0:
+		_active_load_count -= 1
+		if _active_load_count == 0:
+			if LoadingScreen:
+				LoadingScreen.hide_loading()
 
 # Scenes
 var TiledExhibitGenerator: PackedScene = preload("res://scenes/TiledExhibitGenerator.tscn")
@@ -53,6 +60,10 @@ func init(museum: Node3D, config: Dictionary) -> void:
 	if not ItemProcessor.items_complete.is_connected(_on_items_complete):
 		ItemProcessor.items_complete.connect(_on_items_complete)
 	
+	# Failure handling for Wikipedia fetch errors (prevents stuck loading card)
+	if not ExhibitFetcher.wikitext_failed.is_connected(_on_wikitext_failed):
+		ExhibitFetcher.wikitext_failed.connect(_on_wikitext_failed)
+	
 	# Hint system disabled - don't connect to hints_loaded signal
 	# if not _signals_connected:
 	# 	var hint_manager = get_node_or_null("/root/HintManager")
@@ -66,22 +77,15 @@ func init(museum: Node3D, config: Dictionary) -> void:
 	# 	else:
 	# 		print("ExhibitLoader: WARNING - HintManager not found at /root/HintManager")
 		
-		# Connect to race_ended to clean up pending rooms
+		# Connect to race lifecycle signals
+		if not RaceManager.race_started.is_connected(_on_race_started):
+			RaceManager.race_started.connect(_on_race_started)
 		if not RaceManager.race_ended.is_connected(_on_race_ended):
 			RaceManager.race_ended.connect(_on_race_ended)
 		if not RaceManager.race_cancelled.is_connected(_on_race_cancelled):
 			RaceManager.race_cancelled.connect(_on_race_cancelled)
 
-		# subscribe for updates on races
-		EventBus.subscribe(EventBus.RaceStartedEvent, _on_race_started)
-		
 		_signals_connected = true
-
-func _on_race_started(event: EventBus.RaceStartedEvent) -> void:
-	Log.debug("ExhibitLoader", "_on_race_started_called!")
-	destination = event.target
-	if(destination == event.target):
-		Log.debug("ExhibitLoader", "Destination has been stored successfully")
 
 func get_exhibits() -> Dictionary:
 	return _exhibits
@@ -105,7 +109,7 @@ func release_exhibit_height(height: int) -> void:
 	_used_exhibit_heights.erase(height)
 
 
-func load_exhibit_from_entry(entry: Hall) -> void:
+func load_exhibit_from_entry(entry: Hall, silent: bool = false) -> void:
 	var prev_article: String = Util.coalesce(entry.from_title, "Fungus")
 
 	if entry.from_title == "Lobby":
@@ -116,7 +120,8 @@ func load_exhibit_from_entry(entry: Hall) -> void:
 		if is_instance_valid(exhibit):
 			return
 
-	_show_loading_indicator(prev_article)
+	if not silent:
+		_show_loading_indicator(prev_article)
 
 	# Fetch exhibit data
 	ExhibitFetcher.fetch([prev_article], {
@@ -126,7 +131,7 @@ func load_exhibit_from_entry(entry: Hall) -> void:
 	})
 
 
-func load_exhibit_from_exit(exit: Hall) -> void:
+func load_exhibit_from_exit(exit: Hall, silent: bool = false) -> void:
 	var next_article: String = Util.coalesce(exit.to_title, "Fungus")
 
 	if _exhibits.has(next_article):
@@ -148,7 +153,8 @@ func load_exhibit_from_exit(exit: Hall) -> void:
 		return
 	_loading_exhibits[next_article] = true
 
-	_show_loading_indicator(next_article)
+	if not silent:
+		_show_loading_indicator(next_article)
 
 	ExhibitFetcher.fetch([next_article], {
 		"title": next_article,
@@ -191,7 +197,6 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	# Handle secret room content
 	if context.get("secret_room", false):
 		_on_secret_room_fetch_complete(context)
-		_hide_loading_indicator()
 		return
 
 	var backlink: bool = context.has("backlink") and context.backlink
@@ -225,13 +230,55 @@ func on_fetch_complete(_titles: Array, context: Dictionary) -> void:
 	# Async item generation (runs on worker thread)
 	ItemProcessor.create_items(context.title, result, prev_title)
 
-	# Wait for items_complete signal with matching title
-	var data: Dictionary = await _wait_for_items_complete(context.title)
+	# Poll for items_complete — safe in signal handlers, no await needed.
+	var start_time := Time.get_ticks_msec()
+	var timeout_ms := 60000
+	_poll_items_for_fetch(context.title, start_time, timeout_ms, context, backlink, rider_load, hall)
 
-	var doors: Array = data.doors
-	var items: Array = data.items
-	var extra_text: Array = data.extra_text
+	# NOTE: _poll_items_for_fetch calls _proceed_with_exhibit_generation when done.
+	# Return now — generation is driven by the poll callback.
+	return
+
+func _poll_items_for_fetch(expected_title: String, start_time: int, timeout_ms: int, context: Dictionary, backlink: bool, rider_load: bool, hall: Hall) -> void:
+	if Time.get_ticks_msec() - start_time > timeout_ms:
+		Log.error("ExhibitLoader", "Timeout waiting for items_complete: %s" % expected_title)
+		return
+	if _pending_items_results.has(expected_title):
+		var data: Dictionary = _pending_items_results[expected_title]
+		_pending_items_results.erase(expected_title)
+		_proceed_with_exhibit_generation(data, context, backlink, rider_load, hall)
+		return
+	if is_inside_tree():
+		get_tree().create_timer(0.05).timeout.connect(
+			func(): _poll_items_for_fetch(expected_title, start_time, timeout_ms, context, backlink, rider_load, hall),
+			CONNECT_ONE_SHOT
+		)
+
+
+func _proceed_with_exhibit_generation(data: Dictionary, context: Dictionary, backlink: bool, rider_load: bool, hall: Hall) -> void:
+
+	var doors: Array = data.get("doors", [])
+	var items: Array = data.get("items", [])
+	var extra_text: Array = data.get("extra_text", [])
 	var mood: int = data.get("mood", ExhibitMood.Mood.DEFAULT)
+
+	# Inject race target door so the target is always reachable
+	if not destination.is_empty() and destination != context.title:
+		var dest_lower: String = destination.to_lower().replace(" ", "_")
+		var matched_idx: int = -1
+		for i in range(doors.size()):
+			var door_key: String = doors[i].to_lower().replace(" ", "_")
+			if door_key == dest_lower:
+				matched_idx = i
+				break
+		if matched_idx >= 0:
+			var matched_door: String = doors[matched_idx]
+			doors.remove_at(matched_idx)
+			doors.insert(1, matched_door)
+			Log.info("ExhibitLoader", "Moved target '%s' to position 1 for '%s'" % [destination, context.title])
+		elif _is_backlink(context.title):
+			doors.push_front(destination)
+			Log.info("ExhibitLoader", "Force-injected target '%s' into backlink exhibit '%s'" % [destination, context.title])
 
 	Log.info("ExhibitLoader", "Room '%s' has %d doors" % [context.title, doors.size()])
 
@@ -396,15 +443,30 @@ func _unused_hintsPlaceholder() -> void:
 func _unused_on_hints_loaded_placeholder(target: String) -> void:
 	pass
 
+func _on_race_started(_target_article: String, _start_article: String) -> void:
+	destination = _target_article
+	Log.info("ExhibitLoader", "Race started — target '%s' will be injected into compatible door lists" % _target_article)
+
 func _on_race_ended(_winner_peer_id: int, _winner_name: String) -> void:
-	"""Clean up pending backlink rooms when race ends."""
-	# Hint system disabled - no cleanup needed
-	pass
+	"""Race ended — destination can remain; next race_started will overwrite."""
 
 func _on_race_cancelled() -> void:
 	"""Clean up pending backlink rooms when race is cancelled."""
 	# Hint system disabled - no cleanup needed
 	pass
+
+
+func _is_backlink(article: String) -> bool:
+	## Returns true if the given article is a known backlink of the current race target.
+	## Backlinks are articles that link TO the target on Wikipedia.
+	var backlinks: Array[String] = RaceManager.get_target_backlinks()
+	if backlinks.is_empty():
+		return false
+	var article_key: String = article.to_lower().replace(" ", "_")
+	for bl: String in backlinks:
+		if bl.to_lower().replace(" ", "_") == article_key:
+			return true
+	return false
 
 
 func link_halls(entry: Hall, exit: Hall) -> void:
@@ -450,6 +512,18 @@ func _show_error_to_player(message: String) -> void:
 	Log.error("ExhibitLoader", message)
 
 
+func _on_wikitext_failed(titles: Array, message: String) -> void:
+	"""Handle fetch failures to prevent stuck loading card."""
+	for title: String in titles:
+		if _loading_exhibits.has(title):
+			_loading_exhibits.erase(title)
+			_hide_loading_indicator()  # Decrements count; hides if last load
+			_show_error_to_player("Failed to load room '%s': %s" % [title, message])
+			# Clear any rider-load timeout so it doesn't also try to revert
+			if _museum and _museum.has_method("clear_rider_loading"):
+				_museum.clear_rider_loading(title)
+
+
 func _on_items_complete(data: Dictionary) -> void:
 	"""Dispatcher: store result keyed by title for per-title waiting"""
 	var title: String = data.get("title", "")
@@ -484,9 +558,32 @@ func _on_secret_room_fetch_complete(context: Dictionary) -> void:
 
 	# Create items from the secret article (async)
 	ItemProcessor.create_items(context.title, result)
-	var data: Dictionary = await _wait_for_items_complete(context.title)
 
-	var items: Array = data.items
+	# Poll for items_complete — safe in signal handlers, no await needed.
+	var start_time := Time.get_ticks_msec()
+	var timeout_ms := 60000
+	_poll_secret_items(context.title, start_time, timeout_ms, secret_slots, exhibit, context)
+
+
+func _poll_secret_items(title: String, start_time: int, timeout_ms: int, secret_slots: Array, exhibit: Node3D, context: Dictionary) -> void:
+	if not is_inside_tree():
+		return
+	if Time.get_ticks_msec() - start_time > timeout_ms:
+		Log.error("ExhibitLoader", "Timeout waiting for secret room items: %s" % title)
+		return
+	if _pending_items_results.has(title):
+		var data: Dictionary = _pending_items_results[title]
+		_pending_items_results.erase(title)
+		_apply_secret_room_items(data, secret_slots, exhibit, context)
+		return
+	get_tree().create_timer(0.05).timeout.connect(
+		func(): _poll_secret_items(title, start_time, timeout_ms, secret_slots, exhibit, context),
+		CONNECT_ONE_SHOT
+	)
+
+
+func _apply_secret_room_items(data: Dictionary, secret_slots: Array, exhibit: Node3D, context: Dictionary) -> void:
+	var items: Array = data.get("items", [])
 	var slot_idx: int = 0
 	var image_titles: Array = []
 	for item_data: Dictionary in items:
@@ -497,11 +594,10 @@ func _on_secret_room_fetch_complete(context: Dictionary) -> void:
 			if (t == "image" or t == "audio") and item_data.has("title") and item_data.title != "":
 				image_titles.append(item_data.title)
 			var slot: Array = secret_slots[slot_idx]
-			_museum._queue_item(context.exhibit_title, _add_item_at_slot.bind(exhibit, item_data, slot))
+			_museum._queue_item(context.get("exhibit_title", ""), _add_item_at_slot.bind(exhibit, item_data, slot))
 			slot_idx += 1
-
 	if image_titles.size() > 0:
-		_museum._queue_item_front(context.exhibit_title, ExhibitFetcher.fetch_images.bind(image_titles, null))
+		_museum._queue_item_front(context.get("exhibit_title", ""), ExhibitFetcher.fetch_images.bind(image_titles, null))
 	
 	pass  # Ensure function has explicit end
 
@@ -518,6 +614,12 @@ func _add_item_at_slot(exhibit: Node3D, item_data: Dictionary, slot: Array) -> v
 func erase_exhibit(key: String) -> void:
 	if OS.is_debug_build():
 		Log.debug("ExhibitLoader", "erasing exhibit %s" % key)
+	# Clear hall signal connections before freeing to prevent dangling references
+	var exhibit_data: Dictionary = _exhibits.get(key, {})
+	if exhibit_data.has("entry"):
+		var entry_hall: Hall = exhibit_data.entry
+		if is_instance_valid(entry_hall):
+			entry_hall.clear_connections()
 	_exhibits[key].exhibit.queue_free()
 	release_exhibit_height(_exhibits[key].height)
 	_museum._global_item_queue_map.erase(key)

@@ -69,9 +69,9 @@ func _ready() -> void:
 	EventManager.event_started.connect(_on_event_started)
 	EventManager.event_ended.connect(_on_event_ended)
 	# Hint system integration
-	var hint_manager = get_node_or_null("/root/HintManager")
-	if hint_manager:
-		hint_manager.hint_revealed.connect(_on_hint_revealed)
+	if RaceManager.hint_revealed.is_connected(_on_hint_revealed):
+		RaceManager.hint_revealed.disconnect(_on_hint_revealed)
+	RaceManager.hint_revealed.connect(_on_hint_revealed)
 	_apply_initial_accessibility_settings()
 	# Apply saved HUD position
 	var hud_s: Variant = SettingsManager.get_settings("hud")
@@ -90,9 +90,8 @@ func _exit_tree() -> void:
 	SettingsEvents.accessibility_changed.disconnect(_on_accessibility_changed)
 	EventManager.event_started.disconnect(_on_event_started)
 	EventManager.event_ended.disconnect(_on_event_ended)
-	var hint_manager = get_node_or_null("/root/HintManager")
-	if hint_manager and hint_manager.hint_revealed.is_connected(_on_hint_revealed):
-		hint_manager.hint_revealed.disconnect(_on_hint_revealed)
+	if RaceManager.hint_revealed.is_connected(_on_hint_revealed):
+		RaceManager.hint_revealed.disconnect(_on_hint_revealed)
 
 
 # ── Accessibility ─────────────────────────────────────────────────────────────

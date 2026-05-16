@@ -156,7 +156,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 		_time += delta
 		var vp := _vp_size
-		if vp == Vector2.ZERO:
+		if vp == Vector2.ZERO or _v == null:
 				return
 
 		var spd: float = _v.ring_speed_mul
